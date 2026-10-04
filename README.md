@@ -24,7 +24,7 @@ The separate client demo remains untouched; its code and fixtures have not been 
 | `npm run dev:local` | Disposable local PostgreSQL, started, migrated and seeded automatically | Synthetic accounts below, password `Synthetic-only-2026!` |
 | `npm run dev:cloud` | Supabase, from `DATABASE_URL` in `.env` (copy `.env.example`) | Real accounts created by the platform administrator |
 
-Both start the API and web app together; open `http://127.0.0.1:5178` and press Ctrl+C to stop both. Cloud mode reads and writes the shared Supabase database, so apply migrations first (`npm run db:migrate:supabase`) and create the first administrator as described in [DEPLOYMENT.md](docs/DEPLOYMENT.md) (`DATABASE_TARGET=supabase npm run platform-admin -w backend -- "Full Name" you@example.com`). The deployed site always shows the cloud sign-in page; the synthetic hints appear only in local mode.
+Both start the API and web app together; open `http://127.0.0.1:5178` and press Ctrl+C to stop both. Cloud mode reads and writes the shared Supabase database, so apply migrations first (`npm run db:migrate:supabase`) and create the first administrator as described in [DEPLOYMENT.md](docs/DEPLOYMENT.md) (`DATABASE_TARGET=supabase npm run platform-admin -w backend -- "Full Name" you@example.com`). Anyone can create an account from the sign-in page ("Create an account"): it creates a new school and makes them its headteacher, with no email verification. This needs migration `030_self_registration.sql` applied to Supabase first. The deployed site always shows the cloud sign-in page; the synthetic hints appear only in local mode.
 
 ## Local development
 

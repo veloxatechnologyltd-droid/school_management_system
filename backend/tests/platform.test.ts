@@ -111,3 +111,17 @@ test('password sign-in is off unless AUTH_MODE=password or synthetic loopback de
     if(priorMode===undefined)delete process.env.AUTH_MODE;else process.env.AUTH_MODE=priorMode;
   }
 });
+
+test('anyone can register a school and become its headteacher, without verification',async()=>{
+  const email=`owner-${randomUUID().slice(0,8)}@example.test`,body={name:'Self Owner',schoolName:'Self Registered School',email,password:'Chosen-password-2026'};
+  assert.equal((await call('/auth/register',undefined,'POST',{...body,password:'short'})).status,400);
+  const response=await fetch(`${base}/auth/register`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  assert.equal(response.status,201);
+  const account={cookie:response.headers.get('set-cookie')!.split(';')[0],csrf:(await response.json()).csrfToken};
+  const session=(await call('/auth/session',account)).body;
+  assert.equal(session.mustChangePassword,false);assert.equal(session.platformAdmin,false);
+  assert.equal(session.schools.length,1);assert.equal(session.schools[0].name,'Self Registered School');assert.equal(session.schools[0].role,'headteacher');
+  assert.equal((await call('/platform/schools',account)).status,403);
+  assert.equal((await call('/auth/register',undefined,'POST',body)).status,409);
+  await login(email,body.password);
+});

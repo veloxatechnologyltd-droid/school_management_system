@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Req, Res, UnauthorizedException, ForbiddenException, BadRequestException, ConflictException, HttpException } from '@nestjs/common';
-import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { Request, Response } from 'express';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -16,6 +16,12 @@ class ChangePasswordDto {
   @IsString() @MinLength(12) @MaxLength(200) newPassword!: string;
 }
 class CodeDto { @IsString() @MinLength(6) @MaxLength(20) code!: string; }
+class RegisterDto {
+  @IsString() @MinLength(2) @MaxLength(120) name!: string;
+  @IsString() @MinLength(3) @MaxLength(120) @Matches(/\S.{1,}\S/) schoolName!: string;
+  @IsEmail() @MaxLength(200) email!: string;
+  @IsString() @MinLength(12) @MaxLength(200) password!: string;
+}
 class LoginDto {
   @IsEmail() @MaxLength(200) email!: string;
   @IsString() @MinLength(1) @MaxLength(200) password!: string;
@@ -47,13 +53,30 @@ export class IdentityController {
     const [salt,hash] = identity.rows[0]?.password_hash.split(':') ?? ['missing', '00'.repeat(64)];
     if (!timingSafeEqual(await scryptAsync(body.password,salt,64),Buffer.from(hash,'hex')) || !identity.rowCount) { failed(email); throw new UnauthorizedException('Sign-in details were not accepted'); }
     failures.delete(email);
+    return this.startSession(identity.rows[0].id,req,res);
+  }
+  private async startSession(userId: string, req: Request, res: Response) {
     const token = randomBytes(32).toString('hex'); const csrf = randomBytes(32).toString('hex');
     await this.db.transaction(async client => {
       if (sessionToken(req)) await client.query('UPDATE sessions SET revoked_at=now() WHERE token_hash=$1',[digest(sessionToken(req))]);
-      await client.query("INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '8 hours')",[digest(token),identity.rows[0].id,csrf]);
+      await client.query("INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '8 hours')",[digest(token),userId,csrf]);
     });
     res.cookie('school_session',token,{httpOnly:true,sameSite:'strict',secure:process.env.NODE_ENV==='production',path:'/api',maxAge:8*3600*1000});
     return {csrfToken:csrf};
+  }
+  // Open sign-up: creates a new school and its headteacher, then signs them in. No email verification (pilot decision).
+  @Post('register')
+  async register(@Body() body: RegisterDto, @Req() req: Request, @Res({passthrough:true}) res: Response) {
+    const syntheticLocal = process.env.DEV_AUTH === 'synthetic-local' && ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+    if (!syntheticLocal && process.env.AUTH_MODE !== 'password') throw new ForbiddenException('Sign-up is disabled');
+    let userId: string;
+    try {
+      userId = (await this.db.pool.query('SELECT self_register_school($1,$2,$3,$4) AS id',[body.schoolName.trim(),body.name.trim(),body.email.trim(),await hashPassword(body.password)])).rows[0].id;
+    } catch (error) {
+      if ((error as {code?:string}).code === '23505') throw new ConflictException('That email address already has an account. Sign in instead.');
+      throw error;
+    }
+    return this.startSession(userId,req,res);
   }
   @Get('session')
   async session(@Req() req: Request) {

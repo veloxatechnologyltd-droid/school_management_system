@@ -20,6 +20,7 @@ export async function createApp({env = process.env, log = (line: string) => cons
   app.getHttpAdapter().getInstance().set('trust proxy',config.trustProxy);
   app.use(helmet());
   const attempts = new Map<string,{count:number;until:number}>();
+  const signups = new Map<string,{count:number;until:number}>();
   app.use((req:Request,res:Response,next:NextFunction) => {
     const requestId = randomUUID(), started = process.hrtime.bigint();
     res.setHeader('x-request-id',requestId);
@@ -41,6 +42,12 @@ export async function createApp({env = process.env, log = (line: string) => cons
       for(const [key,value] of attempts)if(value.until<now)attempts.delete(key);
       const current=attempts.get(address)??{count:0,until:now+60_000};current.count++;attempts.set(address,current);
       if(current.count>30)return res.status(429).json({message:'Too many sign-in attempts. Try again in a minute'});
+    }
+    if (req.path === '/api/v1/auth/register' && req.method === 'POST') {
+      const address=req.ip??'unknown';const now=Date.now();
+      for(const [key,value] of signups)if(value.until<now)signups.delete(key);
+      const current=signups.get(address)??{count:0,until:now+3_600_000};current.count++;signups.set(address,current);
+      if(current.count>10)return res.status(429).json({message:'Too many sign-ups from this connection. Try again later'});
     }
     next();
   });
