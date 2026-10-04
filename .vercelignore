@@ -1,4 +1,4 @@
-# The frontend is the only thing Vercel needs. Never upload contact lists, local databases, secrets or the backend.
+# Vercel only builds the frontend. Never upload contact lists, local databases or secrets. backend/ must stay: npm workspaces need it.
 outreach
 .local
 .env
@@ -6,7 +6,5 @@ outreach
 e2e
 test-results
 playwright-report
-backend/*
-!backend/package.json
 docs
 *.md
