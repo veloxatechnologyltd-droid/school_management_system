@@ -1,5 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
+import { currentTerm } from '../lib/ui';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -42,6 +43,8 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
         request<Page<ClassOption>>(head ? `/schools/${schoolId}/teaching/class-options?limit=100` : `/schools/${schoolId}/teaching/classes?date=${today}&limit=100`),
       ]);
       setSubjects(s.items); setTerms(t.items); setPolicy(p.policy); setClasses(c.items);
+      // Open on something to look at: the first class and subject in the current term.
+      setClassId(prior => prior || c.items[0]?.id || ''); setTermId(prior => prior || currentTerm(t.items)?.id || ''); setSubjectId(prior => prior || s.items[0]?.id || '');
       if (p.policy) setPolicyForm({ caWeight: String(p.policy.ca_weight), examWeight: String(p.policy.exam_weight), bands: bandsToText(p.policy.bands), sourceNote: p.policy.source_note });
       if (head) setYears((await request<{ items: Year[] }>(`/schools/${schoolId}/academic-years?limit=100`)).items);
     } catch (e) { setError((e as Error).message); }
@@ -122,7 +125,7 @@ export function GuardianTerminalReports({ schoolId }: { schoolId: string }) {
   const [childId, setChildId] = useState('');
   const [reports, setReports] = useState<{ id: string; snapshot: Snapshot; published_at: string }[]>([]);
   const [error, setError] = useState('');
-  useEffect(() => { request<{ id: string; full_name: string; academic: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(rows => setChildren(rows.filter(r => r.academic))).catch(e => setError((e as Error).message)); }, [schoolId]);
+  useEffect(() => { request<{ id: string; full_name: string; academic: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(rows => { const academic = rows.filter(r => r.academic); setChildren(academic); setChildId(prior => prior || academic[0]?.id || ''); }).catch(e => setError((e as Error).message)); }, [schoolId]);
   useEffect(() => { setReports([]); if (!childId) return; request<{ items: typeof reports }>(`/schools/${schoolId}/guardian/children/${childId}/terminal-reports`).then(r => setReports(r.items)).catch(e => setError((e as Error).message)); }, [schoolId, childId]);
   return <section aria-label="Terminal reports">
     <h2>Terminal reports</h2>{error && <p role="alert">{error}</p>}

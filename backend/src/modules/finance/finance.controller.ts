@@ -10,7 +10,7 @@ export class FinanceController {
   constructor(private readonly access: Access, private readonly finance: FinanceService) {}
   @Get('finance/terms')
   terms(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string) {
-    return this.access.school(req,schoolId,money,async client => ({items:(await client.query('SELECT t.id,t.name,y.name AS year_name FROM terms t JOIN academic_years y ON y.school_id=t.school_id AND y.id=t.academic_year_id WHERE t.school_id=$1 ORDER BY t.start_date DESC,t.id',[schoolId])).rows}));
+    return this.access.school(req,schoolId,money,async client => ({items:(await client.query('SELECT t.id,t.name,t.start_date::text,t.end_date::text,y.name AS year_name FROM terms t JOIN academic_years y ON y.school_id=t.school_id AND y.id=t.academic_year_id WHERE t.school_id=$1 ORDER BY t.start_date DESC,t.id',[schoolId])).rows}));
   }
   @Get('finance/classes')
   classes(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string) {

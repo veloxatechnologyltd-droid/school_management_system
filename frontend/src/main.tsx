@@ -5,8 +5,10 @@ import { request } from './lib/api';
 import { Mfa } from './modules/Mfa';
 import { PlatformAdmin } from './modules/PlatformAdmin';
 import { Icon, PageHeader } from './lib/ui';
-// Local synthetic hints show only on the dev server unless it runs against the cloud database (npm run dev:cloud).
-const LOCAL=import.meta.env.DEV&&import.meta.env.VITE_APP_MODE!=='cloud';
+// Local synthetic hints show only on the dev server, not against the cloud database (dev:cloud) or the demo school (dev:demo).
+const LOCAL=import.meta.env.DEV&&!['cloud','demo'].includes(import.meta.env.VITE_APP_MODE);
+// Demo mode (npm run dev:demo) shows the production sign-in, prefilled with the demo headteacher.
+const DEMO=import.meta.env.DEV&&import.meta.env.VITE_APP_MODE==='demo';
 const lazyModule=<T extends Record<string,React.ComponentType<any>>,K extends keyof T>(load:()=>Promise<T>,name:K)=>lazy(()=>load().then(m=>({default:m[name]})));
 const AuditExport=lazyModule(()=>import('./modules/AuditExport'),'AuditExport');
 const Admissions=lazyModule(()=>import('./modules/Admissions'),'Admissions');
@@ -63,7 +65,7 @@ function App() {
   const [school,setSchool] = useState<School|null>(null);
   const [audit,setAudit] = useState<Audit[]>([]);
   const [auditTotal,setAuditTotal] = useState(0);
-  const [email,setEmail] = useState(LOCAL?'head@example.test':'');
+  const [email,setEmail] = useState(LOCAL?'head@example.test':DEMO?'headteacher@sunrise.demo':'');
   const [password,setPassword] = useState('');
   const [newPassword,setNewPassword] = useState('');
   const [name,setName] = useState('');

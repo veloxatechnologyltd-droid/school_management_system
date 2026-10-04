@@ -1,8 +1,8 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
-import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat } from '../lib/ui';
+import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, currentTerm } from '../lib/ui';
 
-type Term = { id: string; name: string; year_name: string };
+type Term = { id: string; name: string; year_name: string; start_date?: string; end_date?: string };
 type ClassOption = { id: string; name: string; level: string; year_name: string };
 type FeeItem = { id: string; name: string; level: string | null; amount_pesewas: number };
 type Invoice = { id: string; full_name: string; admission_number: string; class_name: string; total_pesewas: number; paid_pesewas: number; balance_pesewas: number };
@@ -29,7 +29,7 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
 
   useEffect(() => {
     Promise.all([request<{ items: Term[] }>(`/schools/${schoolId}/finance/terms`), request<{ items: ClassOption[] }>(`/schools/${schoolId}/finance/classes`)])
-      .then(([t, c]) => { setTerms(t.items); setClasses(c.items); if (t.items[0]) setTermId(prior => prior || t.items[0].id); }).catch(e => setError((e as Error).message));
+      .then(([t, c]) => { setTerms(t.items); setClasses(c.items); const term = currentTerm(t.items); if (term) setTermId(prior => prior || term.id); }).catch(e => setError((e as Error).message));
   }, [schoolId]);
   const load = useCallback(async () => {
     if (!termId) { setItems([]); setInvoices([]); setSummary(null); return; }
@@ -83,7 +83,7 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
           <div className="toolbar">
             <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
             <button className="secondary" disabled={busy || !classId} onClick={generate}>Generate invoices for this class</button>
-            <span className="count">{invoices.length} invoices</span>
+            <span className="count">{invoices.length === 100 ? 'First 100 invoices · choose a class to see all' : `${invoices.length} invoices`}</span>
           </div>
           {invoices.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">Billed</th><th className="num">Paid</th><th className="num">Balance</th><th></th></tr></thead><tbody>{invoices.map(inv => <tr key={inv.id}>
             <td>{inv.full_name}<span className="sub">{inv.admission_number} · {inv.class_name}</span></td>
@@ -117,7 +117,7 @@ type Statement = { id: string; term_name: string; total_pesewas: number; paid_pe
 export function GuardianStatement({ schoolId }: { schoolId: string }) {
   const [children, setChildren] = useState<{ id: string; full_name: string; billing: boolean }[]>([]);
   const [childId, setChildId] = useState(''); const [rows, setRows] = useState<Statement[]>([]); const [error, setError] = useState('');
-  useEffect(() => { request<{ id: string; full_name: string; billing: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(r => setChildren(r.filter(c => c.billing))).catch(e => setError((e as Error).message)); }, [schoolId]);
+  useEffect(() => { request<{ id: string; full_name: string; billing: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(r => { const billing = r.filter(c => c.billing); setChildren(billing); setChildId(prior => prior || billing[0]?.id || ''); }).catch(e => setError((e as Error).message)); }, [schoolId]);
   useEffect(() => { setRows([]); if (childId) request<{ items: Statement[] }>(`/schools/${schoolId}/guardian/children/${childId}/statement`).then(r => setRows(r.items)).catch(e => setError((e as Error).message)); }, [schoolId, childId]);
   if (!children.length) return null;
   return <section aria-label="School fees statement"><h2>School fees statement</h2>{error && <p role="alert">{error}</p>}

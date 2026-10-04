@@ -13,7 +13,8 @@ const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/A
 
 export function Attendance({ schoolId, csrfToken, role, accessRefresh }: Props) {
   const head = role === 'headteacher';
-  const [day, setDay] = useState(today());
+  // On a weekend the page opens on Friday's registers.
+  const [day, setDay] = useState(() => { const d = new Date(`${today()}T00:00:00Z`), back = d.getUTCDay() === 6 ? 1 : d.getUTCDay() === 0 ? 2 : 0; return new Date(d.getTime() - back * 864e5).toISOString().slice(0, 10); });
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [classId, setClassId] = useState('');
   const [classSearchInput, setClassSearchInput] = useState('');
@@ -84,7 +85,13 @@ export function Attendance({ schoolId, csrfToken, role, accessRefresh }: Props) 
   async function post(path: string, payload: Record<string, unknown>, key: string) {
     setBusy(true); setError(''); setNotice('');
     try {
-      const result = await request<Partial<Register>>(path, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ ...payload, operationId: operationId(key) }) });
+      const send = (body: Record<string, unknown>, opKey: string) => request<Partial<Register>>(path, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ ...body, operationId: operationId(opKey) }) });
+      // Only a saved draft can be submitted, so a register that was never saved is saved first.
+      if (payload.action === 'submit' && !register?.id) {
+        const draft = await send({ ...payload, action: 'save' }, `${key}:draft`); operations.current.delete(`${key}:draft`);
+        setRegister(current => current ? { ...current, ...draft } : null); payload = { ...payload, version: draft.version };
+      }
+      const result = await send(payload, key);
       operations.current.delete(key); setRegister(current => current ? { ...current, ...result } : null);
       const labels: Record<string, string> = { save: 'saved as draft', submit: 'submitted', lock: 'locked', correct: 'corrected' };
       setNotice(`Attendance ${labels[String(payload.action)] ?? 'saved'}.`);
@@ -120,7 +127,7 @@ export function Attendance({ schoolId, csrfToken, role, accessRefresh }: Props) 
         </div>
         {!register ? <Empty title={!classId ? 'Choose a class' : error ? 'This register cannot open' : 'Loading register…'} hint={!classId ? 'Pick a class and date to open its register.' : error || undefined}/> : <>
           <div className="card-head"><div><h3>{register.className} · {register.date}</h3><p className="card-hint">Status: {register.status}. {register.status==='draft'?'Every currently enrolled learner appears once.':'The roster captured for this register is retained.'}</p></div>
-            <div className="actions"><Pill tone={statusTone[register.status]}>{register.status}</Pill>{!locked && register.items.length > 0 && <button type="button" className="secondary" disabled={busy} onClick={() => setRegister({ ...register, items: register.items.map(item => item.mark === 'unmarked' ? { ...item, mark: 'present' } : item) })}>Mark the rest present</button>}</div></div>
+            <div className="actions"><Pill tone={statusTone[register.status]}>{register.status}</Pill>{!locked && count('unmarked') > 0 && <button type="button" className="secondary" disabled={busy} onClick={() => setRegister({ ...register, items: register.items.map(item => item.mark === 'unmarked' ? { ...item, mark: 'present' } : item) })}>Mark the rest present</button>}</div></div>
           {register.rosterSource==='legacy_marks'&&<p role="status">This older roster was recovered from saved marks. Review it against school records; original submission-time names and membership may be incomplete.</p>}
           {!register.items.length ? <Empty title="No learners in this register"/> : <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Mark</th></tr></thead><tbody>{register.items.map(row => <tr key={row.id}>
             <td><span>{row.full_name}</span><span className="sub">{row.admission_number}</span></td>

@@ -215,7 +215,7 @@ export function Admissions({ schoolId, csrfToken, role, view }: Props) {
       actions={<><button type="button" disabled={loading || !classes.length} onClick={() => { setError(''); setNotice(''); setDialog('application'); }}><Icon name="person_add"/>New application</button><button type="button" className="secondary" onClick={() => setDialog('import')}><Icon name="upload_file"/>Import existing learners</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void loadWorkspace(true)}>Refresh records</button></>}/>
     {!dialog && !selectedLearner && messages}
     {loading ? <p role="status">Loading admissions and learner records…</p> : <>
-      <div className="actions"><Tabs label="Learner lists" value={tab} onChange={setTab} options={[{ id: 'roll', label: `Learner roll (${learnersTotal})` }, { id: 'applications', label: `Applications (${admissionsTotal})` }]}/></div>
+      <div className="actions"><Tabs label="Learner lists" value={tab} onChange={setTab} options={[{ id: 'roll', label: `Learner roll (${learnersTotal})` }, { id: 'applications', label: `Admissions (${admissionsTotal})` }]}/></div>
       {tab === 'roll' ? <Card flush>
         <div className="toolbar">
           <form onSubmit={event => { event.preventDefault(); setLearnersOffset(0); setLearnersSearch(learnersSearchInput.trim()); }}>

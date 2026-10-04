@@ -67,3 +67,12 @@ export function Dialog({ title, onClose, children, wide = false, drawer = false 
     </div>
   </div>;
 }
+
+export const todayInAccra = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
+// The term a page should open on: the one running today, else the latest one already started, else the first listed.
+export function currentTerm<T extends { start_date?: string; end_date?: string }>(terms: T[]): T | undefined {
+  const today = todayInAccra();
+  return terms.find(t => t.start_date && t.end_date && t.start_date <= today && today <= t.end_date)
+    ?? [...terms].filter(t => t.start_date && t.start_date <= today).sort((a, b) => b.start_date!.localeCompare(a.start_date!))[0]
+    ?? terms[0];
+}

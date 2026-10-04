@@ -10,6 +10,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "migrate:supabase": "node --env-file-if-exists=../.env --import tsx scripts/migrate-supabase.ts",
     "seed": "tsx scripts/seed.ts",
+    "demo:seed": "tsx scripts/demo-seed.ts",
     "platform-admin": "tsx scripts/create-platform-admin.ts",
     "ai:eval": "tsx scripts/ai-eval.ts",
     "test": "npm run build && NODE_ENV=test DATABASE_TARGET=local tsx --test --test-concurrency=1 tests/*.test.ts"

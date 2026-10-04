@@ -80,7 +80,7 @@ export function Guardians({ schoolId, csrfToken, role }: Props) {
       } else {
         const childRows = await request<Child[]>(`/schools/${schoolId}/guardian/children`);
         if (!alive.current || baseEpoch.current !== epoch) return;
-        setChildren(childRows);
+        setChildren(childRows); setSelectedChild(prior => prior || childRows[0]?.id || '');
       }
     } catch (e) { if (alive.current && baseEpoch.current === epoch) setError((e as Error).message); }
     finally { if (alive.current && baseEpoch.current === epoch && initial) setBaseLoading(false); }
@@ -210,7 +210,7 @@ export function Guardians({ schoolId, csrfToken, role }: Props) {
       </form>
     </> : <>
       {children.length ? <>
-        <label>Linked child<select value={selectedChild} onChange={event => { detailEpoch.current++; selectedChildRef.current = event.target.value; setChildDetail(null); setDetailLoading(Boolean(event.target.value)); setSelectedChild(event.target.value); }}><option value="">Choose a child</option>{children.map(child => <option key={child.id} value={child.id}>{child.full_name} · {child.admission_number}</option>)}</select></label>
+        <label>Linked child<select value={selectedChild} onChange={event => { if (event.target.value === selectedChild) return; detailEpoch.current++; selectedChildRef.current = event.target.value; setChildDetail(null); setDetailLoading(Boolean(event.target.value)); setSelectedChild(event.target.value); }}><option value="">Choose a child</option>{children.map(child => <option key={child.id} value={child.id}>{child.full_name} · {child.admission_number}</option>)}</select></label>
         {selectedChild && (() => {
           const child = children.find(row => row.id === selectedChild);
           if (!child) return null;
