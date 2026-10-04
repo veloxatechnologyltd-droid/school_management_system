@@ -4,7 +4,7 @@ services:
   - type: web
     name: school-api
     runtime: docker
-    plan: starter            # the free plan sleeps after 15 idle minutes; a school needs it awake
+    plan: free               # pre-launch: sleeps after 15 idle minutes. Switch to starter before real school use
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
@@ -17,13 +17,14 @@ services:
       - { key: TRUST_PROXY, value: "2" }          # Render's load balancer + the Vercel proxy in front of it
       - { key: ALLOWED_HOSTS, value: school-api.onrender.com }
       - { key: ALLOWED_ORIGINS, sync: false }     # https://<your-vercel-domain>
-  - type: worker
-    name: school-worker
-    runtime: docker
-    plan: starter
-    dockerCommand: node backend/dist/jobs/worker.js
-    autoDeploy: true
-    envVars:
-      - { key: NODE_ENV, value: production }
-      - { key: DATABASE_TARGET, value: supabase }
-      - { key: WORKER_DATABASE_URL, sync: false } # school_worker URL, same TLS options
+# Disabled while on the free plan (workers have no free tier). Re-enable with plan: starter before real school use.
+#  - type: worker
+#    name: school-worker
+#    runtime: docker
+#    plan: starter
+#    dockerCommand: node backend/dist/jobs/worker.js
+#    autoDeploy: true
+#    envVars:
+#      - { key: NODE_ENV, value: production }
+#      - { key: DATABASE_TARGET, value: supabase }
+#      - { key: WORKER_DATABASE_URL, sync: false } # school_worker URL, same TLS options
