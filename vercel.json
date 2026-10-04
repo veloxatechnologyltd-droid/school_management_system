@@ -4,7 +4,7 @@
   "buildCommand": "npm run build -w frontend",
   "outputDirectory": "frontend/dist",
   "rewrites": [
-    { "source": "/api/v1/:path*", "destination": "https://school-api.onrender.com/api/v1/:path*" },
+    { "source": "/api/v1/:path*", "destination": "https://school-api-jkjm.onrender.com/api/v1/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [

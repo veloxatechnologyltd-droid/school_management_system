@@ -15,7 +15,7 @@ services:
       - { key: MFA_REQUIRED, value: "false" }     # pilot decision; see docs/DEPLOYMENT.md
       - { key: MFA_ENCRYPTION_KEY, generateValue: true }
       - { key: TRUST_PROXY, value: "2" }          # Render's load balancer + the Vercel proxy in front of it
-      - { key: ALLOWED_HOSTS, value: school-api.onrender.com }
+      - { key: ALLOWED_HOSTS, value: school-api-jkjm.onrender.com }
       - { key: ALLOWED_ORIGINS, sync: false }     # https://<your-vercel-domain>
 # Disabled while on the free plan (workers have no free tier). Re-enable with plan: starter before real school use.
 #  - type: worker
