@@ -1,0 +1,23 @@
+[
+  {
+    "lead_id": "VSS-0009",
+    "recipient": "genesiscrecheandearlychilhood@mail.com",
+    "reason": "550 5.1.1 address not found",
+    "bounce_message_id": "1a0ec69bc9fe4745",
+    "recorded_at_utc": "2026-09-29 09:07:18 UTC"
+  },
+  {
+    "lead_id": "VSS-0011",
+    "recipient": "lizbernec@gmail.com",
+    "reason": "550 5.1.1 address not found",
+    "bounce_message_id": "1a0ec69c7b45e085",
+    "recorded_at_utc": "2026-09-29 09:07:18 UTC"
+  },
+  {
+    "lead_id": "VSS-0023",
+    "recipient": "pofosuhene@gmail.com",
+    "reason": "550 5.1.1 address not found",
+    "bounce_message_id": "1a0ec6a5a3f8af27",
+    "recorded_at_utc": "2026-09-29 09:07:18 UTC"
+  }
+]

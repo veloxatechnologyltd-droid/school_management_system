@@ -1,0 +1,18 @@
+{
+  "selected": 500,
+  "by_region": {
+    "Eastern": 98,
+    "Volta": 63,
+    "Central": 192,
+    "Ashanti": 147
+  },
+  "by_priority": {
+    "Private SHS": 17,
+    "Private basic school": 483
+  },
+  "with_phone": 3,
+  "with_named_proprietor": 143,
+  "with_school_page_decision_maker": 1,
+  "held": 1199,
+  "details_checked": 1708
+}

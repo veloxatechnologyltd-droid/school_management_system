@@ -1,0 +1,618 @@
+[
+  {
+    "school_name": "Akosombo International Senior High School",
+    "town": "Akosombo",
+    "levels": "Senior High (VRA Schools also operates basic-level schools; contact is group-level)",
+    "email": "vraschools@vra.com",
+    "phones": [
+      "+233 55 324 8000"
+    ],
+    "website": "https://www.vraschools.com/",
+    "decision_maker": {
+      "name": "Mrs. Sarah Freda Adei",
+      "title": "Head (SHS)",
+      "source": "https://www.vraschools.com/history",
+      "caveat": "Official VRA Schools history page says she succeeded the previous SHS head in 2023; reconfirm current role before personalizing outreach."
+    },
+    "sources": [
+      "https://www.vraschools.com/contact",
+      "https://www.vraschools.com/history",
+      "https://www.nasia.gov.gh/wp-content/uploads/AKOSOMBO-INT-SCHOOL_9.2.21-V.0.3.pdf",
+      "https://www.cssps.gov.gh/vacancies"
+    ],
+    "private_status_evidence": "NaSIA inspection report identifies school ownership as Private (inspection dated 2021); current official VRA Schools website describes its institutional operation. Current category/code corroboration is in third-party school directories.",
+    "verification_caveat": "Phone/email route to VRA Schools, not explicitly to the SHS office. NaSIA report is dated 2021."
+  },
+  {
+    "school_name": "Legacy Girls' College",
+    "town": "Akuse",
+    "levels": "Senior High; girls' boarding school",
+    "email": "info@lgc.edu.gh",
+    "phones": [
+      "0303 965533",
+      "0303 974226",
+      "0593 867133"
+    ],
+    "website": "https://www.lgc.edu.gh/",
+    "decision_maker": {
+      "name": "Ms. Grace Yaaba Edziyie",
+      "title": "Head of School",
+      "source": "https://www.lgc.edu.gh/administration/",
+      "caveat": "Current official school management page; reconfirm before personal outreach."
+    },
+    "sources": [
+      "https://www.lgc.edu.gh/contact/",
+      "https://www.lgc.edu.gh/about-us/",
+      "https://www.lgc.edu.gh/administration/"
+    ],
+    "private_status_evidence": "Current school-owned website identifies Legacy Girls College as Ghana's first all-girls private SHS and describes active 2026/2027 admissions; official contact and management pages give direct details.",
+    "verification_caveat": "No current NaSIA record was independently matched in this subtask; confirm licensing in the official dashboard."
+  },
+  {
+    "school_name": "Bright Senior High School",
+    "town": "Kukurantumi",
+    "levels": "Senior High (school directory lists day and boarding)",
+    "email": "info@brightseniorhigh.edu.gh",
+    "phones": [
+      "0242 071185",
+      "0277 147727"
+    ],
+    "website": "http://www.brightseniorhigh.edu.gh/",
+    "decision_maker": {
+      "name": "Dominic Acquah",
+      "title": "Headmaster",
+      "source": "https://www.gbcghanaonline.com/news/gja-eastern-region-commends-bright-senior-high-school-for-their-stellar-performance-for-the-past-years/2026/3/",
+      "caveat": "Named in a GBC report dated 2026-01-15; confirm current role before use."
+    },
+    "sources": [
+      "https://ghanahighschools.com/ghs_schools/bright-senior-high/",
+      "https://www.gbcghanaonline.com/news/gja-eastern-region-commends-bright-senior-high-school-for-their-stellar-performance-for-the-past-years/2026/3/",
+      "https://www.schoolandcollegelistings.com/GH/Kukurantumi/107815760627009/Bright-Senior-HIGH-School--Kukurantumi",
+      "https://www.cssps.gov.gh/vacancies"
+    ],
+    "private_status_evidence": "2026 GES register copy lists it among pilot-private SHS; 2026 GBC report calls it a private SHS. The listed email is on a school profile; phone numbers are from the school's current social listing, not an official contact page.",
+    "verification_caveat": "Directory lists school code 0021311; confirm the website and phone numbers are school-controlled before outreach."
+  },
+  {
+    "school_name": "Only Believe Senior High School",
+    "town": "Kukurantumi",
+    "levels": "Senior High / Secondary Technical; private Christian school",
+    "email": null,
+    "phones": [
+      "+233 24 020 2148",
+      "024 546 5703",
+      "024 767 0736",
+      "024 722 9224",
+      "054 401 3317",
+      "026 856 3595"
+    ],
+    "website": "https://www.onlybelieveshs.com/",
+    "decision_maker": {
+      "name": "Hon. Charles Darko Yeboah",
+      "title": "Proprietor",
+      "source": "https://www.onlybelieveshs.com/",
+      "caveat": "The school-owned homepage identifies him as proprietor; reconfirm his current role and preferred contact route."
+    },
+    "sources": [
+      "https://www.onlybelieveshs.com/",
+      "https://www.onlybelieveshs.com/about"
+    ],
+    "private_status_evidence": "School-owned website explicitly describes Only Believe as a private SHS in Kukurantumi, provides current admissions/contact information and states it was founded in 1998.",
+    "verification_caveat": "School website provides no email address; phone list includes direct admissions line plus other published numbers. Confirm NaSIA licensing record against the official dashboard."
+  },
+  {
+    "school_name": "Aspire Educational Complex",
+    "town": "Koforidua (Okorase)",
+    "levels": [
+      "Pre-Kindergarten",
+      "Nursery",
+      "KG",
+      "Primary",
+      "JHS"
+    ],
+    "emails": [
+      "aspireeducationalcomplex@gmail.com",
+      "info@aspireeducationalcomplex.com"
+    ],
+    "phones": [
+      "+233 30 397 2913",
+      "+233 53 170 1011"
+    ],
+    "whatsapp": [],
+    "website": "https://aspireeducationalcomplex.com/",
+    "decision_maker": {
+      "name": null,
+      "role": null,
+      "source_url": null
+    },
+    "sources": [
+      {
+        "url": "https://aspireeducationalcomplex.com/contact/",
+        "supports": "School contact page, Koforidua/Okorase address, phone and email."
+      },
+      {
+        "url": "https://aspireeducationalcomplex.com/",
+        "supports": "School describes Pre-Kindergarten through JHS and identifies itself as a private school."
+      }
+    ],
+    "caveats": [
+      "The homepage's welcome is attributed only to 'the Manager'; no name is given."
+    ]
+  },
+  {
+    "school_name": "St. Mary's Schools Ghana",
+    "town": "Koforidua (Okorase)",
+    "levels": [
+      "Pre-School",
+      "Basic School",
+      "JHS"
+    ],
+    "emails": [
+      "info@stmarys.edu.gh",
+      "felicia@stmarys.edu.gh",
+      "paul@stmarys.edu.gh"
+    ],
+    "phones": [
+      "+233 24 482 2678",
+      "+233 20 202 031",
+      "+233 54 853 8967"
+    ],
+    "whatsapp": [],
+    "website": "https://stmarys.edu.gh/",
+    "decision_maker": {
+      "name": "Miriam Ofosu-Appiah",
+      "role": "Managing Director",
+      "source_url": "https://stmarys.edu.gh/"
+    },
+    "sources": [
+      {
+        "url": "https://stmarys.edu.gh/",
+        "supports": "School-owned site lists campuses, levels, contacts, named Managing Director and school administrators including Headmistress/Headmaster."
+      },
+      {
+        "url": "https://stmarys.edu.gh/contact-us/",
+        "supports": "School-owned contact page confirms Koforidua and public office contact details."
+      }
+    ],
+    "caveats": [
+      "School site publishes both general and staff contacts; general inbox is the least personal first contact."
+    ]
+  },
+  {
+    "school_name": "Madonna School, Koforidua",
+    "town": "Koforidua",
+    "levels": [
+      "KG",
+      "Primary",
+      "JHS"
+    ],
+    "emails": [
+      "madonnaschoolgh@gmail.com"
+    ],
+    "phones": [
+      "+233 34 202 2770"
+    ],
+    "whatsapp": [],
+    "website": "https://www.madonnaschoolghana.org/",
+    "decision_maker": {
+      "name": "Sr. Perpetual Owiredu",
+      "role": "Headmistress",
+      "source_url": "https://www.madonnaschoolghana.org/"
+    },
+    "sources": [
+      {
+        "url": "https://www.madonnaschoolghana.org/",
+        "supports": "School-owned site identifies the school, basic levels and Headmistress."
+      },
+      {
+        "url": "https://madonnaschoolghana.org/admission",
+        "supports": "School-owned admissions page lists KG, Primary and JHS and contact details."
+      }
+    ],
+    "caveats": [
+      "A current second phone number appears on the school's public social feed but is omitted here because the official site lists only the landline."
+    ]
+  },
+  {
+    "school_name": "MicJaden International School",
+    "town": "Nsawam (Kwafokrom)",
+    "levels": [
+      "Basic education; JHS graduates are explicitly mentioned, exact entry levels not stated on the contact/home page"
+    ],
+    "emails": [
+      "micjadeninternationalschool@gmail.com"
+    ],
+    "phones": [
+      "+233 59 250 0593"
+    ],
+    "whatsapp": [],
+    "website": "https://home.micjadenschool.com/",
+    "decision_maker": {
+      "name": null,
+      "role": null,
+      "source_url": null
+    },
+    "sources": [
+      {
+        "url": "https://home.micjadenschool.com/",
+        "supports": "School-owned site calls itself private and says it graduates JHS pupils; contact details and Kwafokrom-Nsawam address are on the homepage/footer."
+      },
+      {
+        "url": "https://home.micjadenschool.com/contact/",
+        "supports": "School-owned contact page confirms phone, email and location."
+      }
+    ],
+    "caveats": [
+      "Website includes obvious template/testimonial text and does not specify full level coverage; reconfirm school identity, levels and contact channel before use."
+    ]
+  },
+  {
+    "school_name": "Good Foundation International School",
+    "town": "Nsawam",
+    "levels": [
+      "Nursery",
+      "JHS 1-3"
+    ],
+    "emails": [
+      "info@gfis.school"
+    ],
+    "phones": [
+      "+233 20 710 9917"
+    ],
+    "whatsapp": [],
+    "website": "https://www.gfis.school/",
+    "decision_maker": {
+      "name": null,
+      "role": null,
+      "source_url": null
+    },
+    "sources": [
+      {
+        "url": "https://www.gfis.school/",
+        "supports": "School-owned site states Nursery-to-JHS 3, Nsawam, and publishes the phone and general email."
+      }
+    ],
+    "caveats": [
+      "The site has a suspiciously inconsistent staff directory and zeroed-out counters. Use only its published general contact details and verify with the school before treating any other site claims as dependable."
+    ]
+  },
+  {
+    "school_name": "A Child's Place Montessori School",
+    "town": "Nsawam",
+    "levels": [
+      "Creche",
+      "Nursery",
+      "KG",
+      "Primary",
+      "JHS"
+    ],
+    "emails": [
+      "contact@childplaceschool.com",
+      "mail@childsplaceschool.com"
+    ],
+    "phones": [
+      "+233 55 250 4381",
+      "+233 59 700 8981",
+      "+233 26 448 3006",
+      "+233 24 732 3626"
+    ],
+    "whatsapp": [],
+    "website": "https://www.childsplaceschool.com/",
+    "decision_maker": {
+      "name": null,
+      "role": null,
+      "source_url": null
+    },
+    "sources": [
+      {
+        "url": "https://www.childsplaceschool.com/",
+        "supports": "School-owned site states Creche through JHS and lists general contacts/location opposite Nsawam Prisons."
+      },
+      {
+        "url": "https://www.childsplaceschool.com/mission-vision/",
+        "supports": "School-owned page confirms Nsawam location and general contact details."
+      }
+    ],
+    "caveats": [
+      "The site contains generic template content in its facilities section. Confirm the school and numbers when initiating any future contact."
+    ]
+  },
+  {
+    "school_name": "KAS Christian International School",
+    "town": "Nsawam-Akwamu",
+    "levels": [
+      "Creche",
+      "KG",
+      "Primary",
+      "JHS"
+    ],
+    "emails": [
+      "info@kaschristian.com"
+    ],
+    "phones": [
+      "+233 24 602 6257"
+    ],
+    "whatsapp": [],
+    "website": "https://kaschristian.com/",
+    "decision_maker": {
+      "name": "Francis Baffoe",
+      "role": "School Growth Coordinator",
+      "source_url": "https://kaschristian.com/"
+    },
+    "sources": [
+      {
+        "url": "https://kaschristian.com/",
+        "supports": "School site identifies KAS Christian, basic levels, Nsawam-Akwamu, a named School Growth Coordinator and general contact details."
+      }
+    ],
+    "caveats": [
+      "The page uses both 'KAS Christian International School' and 'KAS Christian Foundation'; confirm the operating school's legal/NaSIA name during candidate matching."
+    ]
+  },
+  {
+    "school_name": "Ambassadors for Christ International School (AfCIS)",
+    "town": "Nsawam",
+    "levels": [
+      "Primary",
+      "Ages 3-15 stated; exact grades not fully specified"
+    ],
+    "emails": [
+      "afcisghana@gmail.com"
+    ],
+    "phones": [
+      "+233 24 284 2833"
+    ],
+    "whatsapp": [],
+    "website": "https://ambassadorsforchristschool.org/",
+    "decision_maker": {
+      "name": "Emmanuel Ametepey",
+      "role": "Founder",
+      "source_url": "https://ambassadorsforchristschool.org/"
+    },
+    "sources": [
+      {
+        "url": "https://ambassadorsforchristschool.org/",
+        "supports": "School-owned site identifies AfCIS as a primary school in Nsawam, describes GES accreditation and names its founder; general email/phone/address are published on the page."
+      },
+      {
+        "url": "https://ambassadorsforchristschool.org/news/",
+        "supports": "School-owned news page repeats school contact details and primary-school description."
+      }
+    ],
+    "caveats": [
+      "The school reports a scholarship/nonprofit service model for vulnerable children; it may not be a conventional fee-funded prospect."
+    ]
+  },
+  {
+    "school_name": "Jahnabil International School",
+    "town": "Aburi (Agyementi-Berekuso Road)",
+    "levels": [
+      "Creche",
+      "Nursery",
+      "KG",
+      "Primary 1-6"
+    ],
+    "emails": [],
+    "phones": [
+      "+233 53 701 5661",
+      "+233 53 700 6662"
+    ],
+    "whatsapp": [],
+    "website": "https://www.jahnabilschool.com/",
+    "decision_maker": {
+      "name": null,
+      "role": null,
+      "source_url": null
+    },
+    "sources": [
+      {
+        "url": "https://www.jahnabilschool.com/",
+        "supports": "School-owned site lists Aburi location, levels and two telephone numbers."
+      }
+    ],
+    "caveats": [
+      "School website's indexed email is masked/obfuscated; left blank. NaSIA licence is a claim on the school's own site and awaits independent match to the NaSIA source."
+    ]
+  },
+  {
+    "school_name": "Lamasa & Patience International School",
+    "town": "Koforidua (Okoroase)",
+    "levels": [
+      "Pre-School",
+      "Primary",
+      "JHS"
+    ],
+    "emails": [
+      "info@lampatschool.com"
+    ],
+    "phones": [
+      "+233 55 183 3784"
+    ],
+    "whatsapp": [],
+    "website": "https://lampatschool.com/",
+    "decision_maker": {
+      "name": "Rev. Lamasa Adams",
+      "role": "Named founder/vision holder (title not explicitly stated)",
+      "source_url": "https://lampatschool.com/"
+    },
+    "sources": [
+      {
+        "url": "https://lampatschool.com/",
+        "supports": "School-owned site lists Pre-School/Primary/JHS, Koforidua address, phone and email; names Rev. Lamasa Adams and Mrs. Patience Adams as the school's vision holders."
+      }
+    ],
+    "caveats": [
+      "Phone is published as a contact number; the school does not explicitly label it WhatsApp."
+    ]
+  },
+  {
+    "school_name": "Hecta International School",
+    "town": "Akim Oda",
+    "levels": [
+      "KG",
+      "Primary",
+      "JHS"
+    ],
+    "emails": [
+      "hectainternationalschool@yahoo.com"
+    ],
+    "phones": [
+      "+233 34 292 2551",
+      "+233 20 833 9266",
+      "+233 24 456 2605",
+      "+233 20 808 9276"
+    ],
+    "whatsapp": [],
+    "website": "https://hectainternationalschool.weebly.com/",
+    "decision_maker": {
+      "name": null,
+      "role": null,
+      "source_url": null
+    },
+    "sources": [
+      {
+        "url": "https://hectainternationalschool.weebly.com/contact-us.html",
+        "supports": "School-owned Weebly contact page publishes Akim Oda address and phone/email."
+      },
+      {
+        "url": "https://hecta2011.wordpress.com/",
+        "supports": "School's older Wordpress page describes KG, Primary and JHS departments."
+      }
+    ],
+    "caveats": [
+      "School web pages appear old; confirm current use of the contact channels. The listed +233 20 811 6584 number is explicitly for Accra and omitted from the Akim Oda school phones."
+    ]
+  },
+  {
+    "school_name": "Countess Amelia Academy",
+    "town": "Obosomase (Akuapem North)",
+    "levels": [
+      "Creche",
+      "Primary 1-6"
+    ],
+    "emails": [],
+    "phones": [
+      "+233 27 744 5305",
+      "+233 20 754 9095"
+    ],
+    "whatsapp": [],
+    "website": "https://countessamelia.wordpress.com/",
+    "decision_maker": {
+      "name": "Countess Amelia Obaatampa",
+      "role": "Named on school page; formal role not stated",
+      "source_url": "https://countessamelia.wordpress.com/about/"
+    },
+    "sources": [
+      {
+        "url": "https://countessamelia.wordpress.com/about/",
+        "supports": "School-owned page states Obosomase/Akuapem North location, creche-to-Primary 6, and contact phone numbers."
+      }
+    ],
+    "caveats": [
+      "WordPress page is dated/undated and has minimal recent activity; verify current operation and contact details."
+    ]
+  },
+  {
+    "school_name": "Cita Preparatory School",
+    "town": "Akim Oda",
+    "levels": [
+      "Nursery",
+      "Primary",
+      "JSS/JHS; school's old page also says 'high school' without defining it"
+    ],
+    "emails": [],
+    "phones": [
+      "+233 54 923 1471"
+    ],
+    "whatsapp": [],
+    "website": "https://citaschool.wordpress.com/",
+    "decision_maker": {
+      "name": null,
+      "role": null,
+      "source_url": null
+    },
+    "sources": [
+      {
+        "url": "https://citaschool.wordpress.com/2011/06/09/the-cita-preparatory-school/",
+        "supports": "School-authored Wordpress post identifies the Akim Oda school and publishes its contact number; an about post says nursery-to-high-school."
+      }
+    ],
+    "caveats": [
+      "Only old 2011 school-authored posts were found. Level wording is ambiguous and phone must be reconfirmed; use as a low-priority candidate only."
+    ]
+  },
+  {
+    "school_name": "Carol Gray International School",
+    "town": "Somanya",
+    "levels": [
+      "Nursery",
+      "KG"
+    ],
+    "emails": [
+      "info@carolgreyschool.com",
+      "admissions@carolgreyschool.com",
+      "academics@carolgreyschool.com"
+    ],
+    "phones": [
+      "+233 59 826 1708",
+      "+233 24 824 8008",
+      "+233 54 396 4658",
+      "+233 24 591 1536"
+    ],
+    "whatsapp": [],
+    "website": "https://www.carolgrayschool.com/",
+    "decision_maker": {
+      "name": null,
+      "role": null,
+      "source_url": null
+    },
+    "sources": [
+      {
+        "url": "https://www.carolgrayschool.com/contact-us.php",
+        "supports": "School-owned contact page states Somanya address, phone and email contacts."
+      },
+      {
+        "url": "https://www.carolgrayschool.com/pre-school.php",
+        "supports": "School-owned page defines Nursery 1/2 and Kindergarten ages."
+      }
+    ],
+    "caveats": [
+      "Strong identity/data-integrity concerns: site gives an Eastern Region address but its directions text says East Legon/Accra and includes generic staff names/profile copy. Do not use these contacts until independently confirmed by Evans or NaSIA match."
+    ]
+  },
+  {
+    "school_name": "Frihans Educational Complex",
+    "town": "Koforidua (Asokore)",
+    "levels": [
+      "Creche",
+      "Nursery",
+      "KG",
+      "Primary",
+      "JHS"
+    ],
+    "emails": [],
+    "phones": [
+      "+233 20 670 6138",
+      "+233 20 818 6327",
+      "+233 20 988 8918",
+      "+233 54 715 8218",
+      "+233 54 080 8612"
+    ],
+    "whatsapp": [],
+    "website": null,
+    "decision_maker": {
+      "name": null,
+      "role": null,
+      "source_url": null
+    },
+    "sources": [
+      {
+        "url": "https://www.schoolandcollegelistings.com/XX/Unknown/107727815302206/Frihans--Educational-Complex",
+        "supports": "Directory mirror of the school's social posts: an 14 Aug 2024 admission post names levels, Asokore-Koforidua location and enquiry numbers."
+      }
+    ],
+    "caveats": [
+      "Contact evidence is only available through a third-party mirror of school social posts; direct school-owned profile could not be opened, so all numbers need direct verification before future outreach."
+    ]
+  }
+]
