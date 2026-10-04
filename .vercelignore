@@ -6,6 +6,7 @@ outreach
 e2e
 test-results
 playwright-report
-backend
+backend/*
+!backend/package.json
 docs
 *.md
