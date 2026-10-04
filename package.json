@@ -10,6 +10,8 @@
     "frontend"
   ],
   "scripts": {
+    "dev:local": "bash scripts/dev.sh local",
+    "dev:cloud": "bash scripts/dev.sh cloud",
     "test:browser": "bash scripts/with-test-db.sh npx playwright test",
     "dev:worker": "npm run worker -w backend",
     "build": "npm run build --workspaces",

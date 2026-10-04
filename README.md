@@ -17,6 +17,15 @@ For agents: [AGENTS.md](AGENTS.md) gives a short reading path. Agents should **n
 
 The separate client demo remains untouched; its code and fixtures have not been imported. Original agent instructions remain preserved. Evans authorized P1–P4 implementation and disposable local migrations, followed by feature pushes to GitHub. Deployment, shared databases and real communications require separate authorization.
 
+## Run it: local or cloud
+
+| Command | Database | Sign in with |
+| --- | --- | --- |
+| `npm run dev:local` | Disposable local PostgreSQL, started, migrated and seeded automatically | Synthetic accounts below, password `Synthetic-only-2026!` |
+| `npm run dev:cloud` | Supabase, from `DATABASE_URL` in `.env` (copy `.env.example`) | Real accounts created by the platform administrator |
+
+Both start the API and web app together; open `http://127.0.0.1:5178` and press Ctrl+C to stop both. Cloud mode reads and writes the shared Supabase database, so apply migrations first (`npm run db:migrate:supabase`) and create the first administrator as described in [DEPLOYMENT.md](docs/DEPLOYMENT.md) (`DATABASE_TARGET=supabase npm run platform-admin -w backend -- "Full Name" you@example.com`). The deployed site always shows the cloud sign-in page; the synthetic hints appear only in local mode.
+
 ## Local development
 
 Requires Node.js 22.22.3, npm and PostgreSQL binaries (`pg_config` on PATH). The tooling creates only `.local/postgres`, a disposable cluster with a private Unix socket and no TCP listener. It never accepts a shared database URL. Local trust authentication is confined to this synthetic cluster and is not a production setup.

@@ -4,6 +4,8 @@ import './style.css';
 import { request } from './lib/api';
 import { Mfa } from './modules/Mfa';
 import { PlatformAdmin } from './modules/PlatformAdmin';
+// Local synthetic hints show only on the dev server unless it runs against the cloud database (npm run dev:cloud).
+const LOCAL=import.meta.env.DEV&&import.meta.env.VITE_APP_MODE!=='cloud';
 const lazyModule=<T extends Record<string,React.ComponentType<any>>,K extends keyof T>(load:()=>Promise<T>,name:K)=>lazy(()=>load().then(m=>({default:m[name]})));
 const AuditExport=lazyModule(()=>import('./modules/AuditExport'),'AuditExport');
 const Admissions=lazyModule(()=>import('./modules/Admissions'),'Admissions');
@@ -39,7 +41,7 @@ function App() {
   const [school,setSchool] = useState<School|null>(null);
   const [audit,setAudit] = useState<Audit[]>([]);
   const [auditTotal,setAuditTotal] = useState(0);
-  const [email,setEmail] = useState('head@example.test');
+  const [email,setEmail] = useState(LOCAL?'head@example.test':'');
   const [password,setPassword] = useState('');
   const [newPassword,setNewPassword] = useState('');
   const [name,setName] = useState('');
@@ -104,7 +106,7 @@ function App() {
     catch(error){setStatus((error as Error).message);}finally{setBusy(false);}
   }
   if(loading)return <main><p role="status">Loading workspace…</p></main>;
-  if(!session)return <main className="login"><p className="eyebrow">School workspace · Local development</p><h1>Welcome back</h1><p>Use a synthetic staff account to open your school.</p><form onSubmit={signIn}><label>Email<input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label><button disabled={busy}>{busy?'Signing in…':'Sign in'}</button></form><p role="status">{status}</p><p className="muted">Synthetic data only. Managed identity is pending provider selection.</p></main>;
+  if(!session)return <main className="login"><p className="eyebrow">{LOCAL?'School workspace · Local development':'School workspace'}</p><h1>Welcome back</h1><p>{LOCAL?'Use a synthetic staff account to open your school.':'Sign in with the account your school administrator created for you.'}</p><form onSubmit={signIn}><label>Email<input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label><button disabled={busy}>{busy?'Signing in…':'Sign in'}</button></form><p role="status">{status}</p><p className="muted">{LOCAL?'Synthetic data only. Password: Synthetic-only-2026!':'Forgot your password? Ask your school administrator to reset it.'}</p></main>;
   if(session.mustChangePassword)return <main className="login"><p className="eyebrow">School workspace</p><h1>Choose a new password</h1><p>Your account was created with a temporary password. Choose your own to continue (at least 12 characters).</p><form onSubmit={changePassword}><label>Temporary password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label><label>New password<input type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={e=>setNewPassword(e.target.value)} required/></label><button disabled={busy}>{busy?'Saving…':'Save new password'}</button></form><p role="status">{status}</p></main>;
   if(session.mfaRequired&&!session.mfaVerified)return <Mfa csrfToken={session.csrfToken} enrolled={session.mfaEnrolled} onDone={restore} onSignOut={()=>void signOut()}/>;
   const schoolDetails=school&&<><section><h2>School details</h2>{school.role==='headteacher'?<form onSubmit={save}><label>School name<input value={name} minLength={3} maxLength={120} onChange={e=>setName(e.target.value)} required/></label><div className="actions"><button disabled={busy||name===school.name}>{busy?'Saving…':'Save details'}</button><button className="secondary" type="button" disabled={busy} onClick={()=>selectSchool(school.id).catch(error=>setStatus(error.message))}>Reload details</button></div><p className="muted">{name!==school.name?'Unsaved changes':`Saved version ${school.version}`}</p></form>:<p>School details are maintained by the headteacher.</p>}<p role="status" aria-live="polite">{status}</p></section></>;
