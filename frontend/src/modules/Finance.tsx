@@ -1,5 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
+import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat } from '../lib/ui';
 
 type Term = { id: string; name: string; year_name: string };
 type ClassOption = { id: string; name: string; level: string; year_name: string };
@@ -28,7 +29,7 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
 
   useEffect(() => {
     Promise.all([request<{ items: Term[] }>(`/schools/${schoolId}/finance/terms`), request<{ items: ClassOption[] }>(`/schools/${schoolId}/finance/classes`)])
-      .then(([t, c]) => { setTerms(t.items); setClasses(c.items); }).catch(e => setError((e as Error).message));
+      .then(([t, c]) => { setTerms(t.items); setClasses(c.items); if (t.items[0]) setTermId(prior => prior || t.items[0].id); }).catch(e => setError((e as Error).message));
   }, [schoolId]);
   const load = useCallback(async () => {
     if (!termId) { setItems([]); setInvoices([]); setSummary(null); return; }
@@ -52,27 +53,63 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
     setPay(null); setMessage(`Payment recorded. Receipt no. ${r.receiptNumber}.`); setReceipt(await request<Receipt>(`/schools/${schoolId}/finance/payments/${r.id}/receipt`));
   }); };
 
-  return <section aria-label="Fees and receipts">
-    <h2>{view === 'setup' ? 'Fee items' : 'Fees and receipts'}</h2>
-    {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
-    <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
-    {summary && view !== 'setup' && <p>Billed {cedis(summary.billedPesewas)} · collected {cedis(summary.collectedPesewas)} · outstanding <strong>{cedis(summary.outstandingPesewas)}</strong> ({summary.invoices} invoices)</p>}
-    {termId && <><h3>Fee items for this term</h3>
-      <ul className="history">{items.map(i => <li key={i.id}><strong>{i.name}</strong><span>{cedis(i.amount_pesewas)} · {i.level ?? 'all levels'}</span></li>)}</ul>
-      {view !== 'work' && <form onSubmit={addItem}><label>Item name<input value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} required minLength={2} placeholder="Tuition"/></label>
-        <label>Amount (GH₵)<input inputMode="decimal" value={newItem.amount} onChange={e => setNewItem({ ...newItem, amount: e.target.value })} required placeholder="450.00"/></label>
-        <label>Applies to<select value={newItem.level} onChange={e => setNewItem({ ...newItem, level: e.target.value })}><option value="">All levels</option>{['Nursery', 'KG', 'Primary', 'JHS'].map(l => <option key={l} value={l}>{l}</option>)}</select></label><button disabled={busy}>Add fee item</button></form>}
-      {view !== 'setup' && <><label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
-      <button className="secondary" disabled={busy || !classId} onClick={generate}>Generate invoices for this class</button>
-      <h3>Invoices</h3>{invoices.length ? <ul className="history">{invoices.map(inv => <li key={inv.id}><strong>{inv.full_name} · {inv.class_name}</strong><span>Total {cedis(inv.total_pesewas)} · paid {cedis(inv.paid_pesewas)} · balance {cedis(inv.balance_pesewas)}</span>
-        {inv.balance_pesewas > 0 && <button type="button" className="secondary" onClick={() => setPay({ invoiceId: inv.id, amount: '', method: 'cash', reference: '', receivedOn: today })}>Record payment</button>}
-        {pay?.invoiceId === inv.id && <form onSubmit={record}><label>Amount (GH₵)<input inputMode="decimal" value={pay.amount} onChange={e => setPay({ ...pay, amount: e.target.value })} required/></label>
-          <label>Method<select value={pay.method} onChange={e => setPay({ ...pay, method: e.target.value })}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option></select></label>
-          <label>Reference (optional)<input value={pay.reference} onChange={e => setPay({ ...pay, reference: e.target.value })} maxLength={80}/></label>
-          <label>Date received<input type="date" value={pay.receivedOn} onChange={e => setPay({ ...pay, receivedOn: e.target.value })} required/></label><button disabled={busy}>Save payment</button></form>}</li>)}</ul> : <p>No invoices yet.</p>}</>}</>}
-    {receipt && view !== 'setup' && <div className="print-sheet-inline"><h3>Receipt no. {receipt.receipt_number}</h3><p>{receipt.school_name}<br/>Received from the guardian of {receipt.full_name} ({receipt.admission_number}) for {receipt.term_name}<br/>Amount {cedis(receipt.amount_pesewas)} by {receipt.method.replace('_', ' ')}{receipt.reference ? ` (ref ${receipt.reference})` : ''} on {receipt.received_on}</p>
-      <button className="secondary" onClick={() => window.print()}>Print receipt</button> <button className="secondary" onClick={() => setReceipt(null)}>Close</button></div>}
-    {role === 'headteacher' && view !== 'setup' && <p className="muted">To correct a wrong payment, a headteacher can reverse it with a reason; nothing is ever deleted.</p>}
+  const termPicker = <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>;
+  const itemList = items.length ? <div className="table-wrap"><table><thead><tr><th>Item</th><th>Applies to</th><th className="num">Amount</th></tr></thead><tbody>{items.map(i => <tr key={i.id}><td>{i.name}</td><td>{i.level ?? 'All levels'}</td><td className="num">{cedis(i.amount_pesewas)}</td></tr>)}</tbody></table></div> : <Empty title="No fee items for this term"/>;
+  const messages = <>{error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}</>;
+
+  if (view === 'setup') return <section aria-label="Fees and receipts" className="page">
+    {messages}
+    <Card title="Fee items" hint="What each learner is billed for in a term." action={termPicker} flush>
+      {!terms.length ? <Empty title="No terms yet" hint="Add terms under Subjects, terms & grading first."/> : termId && <>{itemList}
+        <form onSubmit={addItem} className="card-body"><h4>Add a fee item</h4><div className="grid"><label>Item name<input value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} required minLength={2} placeholder="Tuition"/></label>
+          <label>Amount (GH₵)<input inputMode="decimal" value={newItem.amount} onChange={e => setNewItem({ ...newItem, amount: e.target.value })} required placeholder="450.00"/></label>
+          <label>Applies to<select value={newItem.level} onChange={e => setNewItem({ ...newItem, level: e.target.value })}><option value="">All levels</option>{['Nursery', 'KG', 'Primary', 'JHS'].map(l => <option key={l} value={l}>{l}</option>)}</select></label></div><button disabled={busy}>Add fee item</button></form></>}
+    </Card>
+  </section>;
+
+  const paidShare = summary && summary.billedPesewas ? Math.round(summary.collectedPesewas / summary.billedPesewas * 100) : 0;
+  const payingFor = pay && invoices.find(inv => inv.id === pay.invoiceId);
+  return <section aria-label="Fees and receipts" className="page">
+    <PageHeader eyebrow="Money" title="Fees" blurb="Bills, payments and receipts for each term. Nothing is ever deleted." actions={termPicker}/>
+    {!pay && !receipt && messages}
+    {!terms.length ? <Card><Empty title="No terms yet" hint="The headteacher adds terms and fee items in Settings."/></Card> : !termId ? <Card><Empty title="Choose a term"/></Card> : <>
+      {summary && <div className="stats">
+        <Stat label="Billed" value={cedis(summary.billedPesewas)} caption={`${summary.invoices} invoices`} icon="request_quote"/>
+        <Stat label="Collected" value={cedis(summary.collectedPesewas)} caption={`${paidShare}% of what was billed`} tone="positive" icon="payments"/>
+        <Stat label="Outstanding" value={cedis(summary.outstandingPesewas)} caption="Still owed this term" tone={summary.outstandingPesewas ? 'critical' : 'neutral'} icon="pending_actions"/>
+      </div>}
+      <div>
+        <Card flush>
+          <div className="toolbar">
+            <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
+            <button className="secondary" disabled={busy || !classId} onClick={generate}>Generate invoices for this class</button>
+            <span className="count">{invoices.length} invoices</span>
+          </div>
+          {invoices.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">Billed</th><th className="num">Paid</th><th className="num">Balance</th><th></th></tr></thead><tbody>{invoices.map(inv => <tr key={inv.id}>
+            <td>{inv.full_name}<span className="sub">{inv.admission_number} · {inv.class_name}</span></td>
+            <td className="num">{cedis(inv.total_pesewas)}</td><td className="num">{cedis(inv.paid_pesewas)}</td>
+            <td className="num">{inv.balance_pesewas > 0 ? <strong className="tone-critical">{cedis(inv.balance_pesewas)}</strong> : <Pill tone="positive">Settled</Pill>}</td>
+            <td className="num">{inv.balance_pesewas > 0 && <button type="button" className="secondary" onClick={() => { setError(''); setMessage(''); setPay({ invoiceId: inv.id, amount: '', method: 'cash', reference: '', receivedOn: today }); }}>Record payment</button>}</td>
+          </tr>)}</tbody></table></div> : <Empty title="No invoices yet" hint={classId ? 'Generate this class’s invoices from the fee items.' : 'Choose a class, then generate its invoices.'}/>}
+        </Card>
+        <Card title="Fee items" hint="Set by the headteacher in Settings." flush>{itemList}</Card>
+        {role === 'headteacher' && <p className="muted">To correct a wrong payment, a headteacher can reverse it with a reason; nothing is ever deleted.</p>}
+      </div>
+    </>}
+    {pay && <Dialog title={payingFor ? `Payment from ${payingFor.full_name}` : 'Record payment'} onClose={() => setPay(null)}>
+      {messages}
+      {payingFor && <p className="muted">Balance {cedis(payingFor.balance_pesewas)} · {payingFor.class_name}</p>}
+      <form onSubmit={record}><div className="grid"><label>Amount (GH₵)<input inputMode="decimal" value={pay.amount} onChange={e => setPay({ ...pay, amount: e.target.value })} required/></label>
+        <label>Method<select value={pay.method} onChange={e => setPay({ ...pay, method: e.target.value })}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option></select></label>
+        <label>Reference (optional)<input value={pay.reference} onChange={e => setPay({ ...pay, reference: e.target.value })} maxLength={80}/></label>
+        <label>Date received<input type="date" value={pay.receivedOn} onChange={e => setPay({ ...pay, receivedOn: e.target.value })} required/></label></div>
+        <div className="actions"><button disabled={busy}>Save payment</button><button type="button" className="secondary" onClick={() => setPay(null)}>Cancel</button></div></form>
+    </Dialog>}
+    {receipt && <Dialog title={`Receipt no. ${receipt.receipt_number}`} onClose={() => setReceipt(null)}>
+      {messages}
+      <div className="receipt"><h3>Receipt no. {receipt.receipt_number}</h3><p>{receipt.school_name}<br/>Received from the guardian of {receipt.full_name} ({receipt.admission_number}) for {receipt.term_name}<br/>Amount <strong>{cedis(receipt.amount_pesewas)}</strong> by {receipt.method.replace('_', ' ')}{receipt.reference ? ` (ref ${receipt.reference})` : ''} on {receipt.received_on}</p></div>
+      <div className="actions"><button onClick={() => window.print()}><Icon name="print"/>Print receipt</button><button className="secondary" onClick={() => setReceipt(null)}>Close</button></div>
+    </Dialog>}
   </section>;
 }
 

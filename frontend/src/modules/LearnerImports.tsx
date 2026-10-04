@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 
-type Props = { schoolId: string; csrfToken: string; role: string; onCommitted: () => Promise<unknown> };
+type Props = { schoolId: string; csrfToken: string; role: string; onCommitted: () => Promise<unknown>; inDialog?: boolean };
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
 type ImportClass = { id: string; name: string; year_name: string; start_date: string; end_date: string; capacity: number };
 type ImportRow = {
@@ -27,9 +27,9 @@ function readAs(sample: RegExpExecArray, format: 'dmy' | 'mdy') {
   return `${Number(day)} ${months[Number(month) - 1] ?? '(invalid month)'} ${year}`;
 }
 
-export function LearnerImports({ schoolId, csrfToken, role, onCommitted }: Props) {
+export function LearnerImports({ schoolId, csrfToken, role, onCommitted, inDialog = false }: Props) {
   const headteacher = role === 'headteacher';
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(inDialog);
   const [classes, setClasses] = useState<ImportClass[]>([]);
   const [classSearchInput, setClassSearchInput] = useState('');
   const [classSearch, setClassSearch] = useState('');
@@ -203,7 +203,7 @@ export function LearnerImports({ schoolId, csrfToken, role, onCommitted }: Props
   const selectedValidCount = batch?.rows.filter(row => selectedRows.includes(row.row_number) && canSelect(row)).length ?? 0;
 
   return <div className="learner-imports">
-    <button type="button" className="secondary" aria-expanded={open} onClick={() => setOpen(value => !value)}>Import existing learners</button>
+    {!inDialog && <button type="button" className="secondary" aria-expanded={open} onClick={() => setOpen(value => !value)}>Import existing learners</button>}
     {open && <div>
       <p className="muted">Stage a CSV, validate identities, review duplicate matches, and approve selected rows. Imports create learners and dated class enrolments only; they do not merge identities or create logins or invoices.</p>
       <div className="actions"><button type="button" className="secondary" onClick={downloadTemplate}>Download CSV header template</button></div>

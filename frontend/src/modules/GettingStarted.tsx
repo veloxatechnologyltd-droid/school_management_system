@@ -1,5 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
+import { Icon, PageHeader, Stat } from '../lib/ui';
 
 type Page = { total: number };
 type Year = { id: string; name: string };
@@ -7,7 +8,7 @@ type Progress = { years: Year[]; classes: number; teachers: number; assignments:
 const levels = ['Nursery', 'KG', 'Primary', 'JHS'];
 
 // Headteacher overview: key counts, plus a setup guide until the school is set up. Daily follow-up appears once classes exist.
-export function GettingStarted({ schoolId, schoolName, csrfToken, children }: { schoolId: string; schoolName: string; csrfToken: string; children: React.ReactNode }) {
+export function GettingStarted({ schoolId, schoolName, displayName, csrfToken, children }: { schoolId: string; schoolName: string; displayName: string; csrfToken: string; children: React.ReactNode }) {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -44,9 +45,20 @@ export function GettingStarted({ schoolId, schoolName, csrfToken, children }: { 
     { done: progress.learners > 0, title: 'Add your learners', why: 'Upload your class lists from Excel (CSV), or record learners one at a time.', href: '#/learners', go: 'Add learners' },
   ];
   const doneCount = steps.filter(s => s.done).length, next = steps.findIndex(s => !s.done);
-  const stats = <div className="stats">{[[progress.learners, 'Learners'], [progress.classes, 'Classes'], [progress.teachers, 'Teachers with a sign-in'], [progress.assignments, 'Teacher assignments']].map(([n, label]) => <div className="stat" key={label}><strong>{n}</strong><span>{label}</span></div>)}</div>;
-  if (next === -1) return <>{stats}{children}</>;
+  const hour = Number(new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Accra', hour: '2-digit', hour12: false }));
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const dateLine = new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Accra', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const header = <PageHeader eyebrow={dateLine} title={`${greeting}, ${displayName.split(' ')[0]}`} blurb={`${schoolName}${progress.years[0] ? ` · ${progress.years[0].name}` : ''}`}
+    actions={next === -1 ? <><a className="button" href="#/attendance"><Icon name="event_available"/>Take attendance</a><a className="button secondary" href="#/fees"><Icon name="payments"/>Record payment</a><a className="button secondary" href="#/notices"><Icon name="send"/>Send notice</a></> : undefined}/>;
+  const stats = <div className="stats">
+    <Stat label="Learners" value={progress.learners} caption="Enrolled in your school" icon="groups"/>
+    <Stat label="Classes" value={progress.classes} caption={progress.years[0] ? progress.years[0].name : 'No academic year yet'} icon="meeting_room"/>
+    <Stat label="Teachers" value={progress.teachers} caption="With a sign-in" icon="badge"/>
+    <Stat label="Assignments" value={progress.assignments} caption="Teacher to class" icon="assignment_ind" tone={progress.assignments ? 'neutral' : 'caution'}/>
+  </div>;
+  if (next === -1) return <>{header}{stats}{children}</>;
   return <>
+    {header}
     {progress.classes > 0 && stats}
     <section aria-labelledby="setup-title" className="setup">
       <p className="progress-label">Getting started · {doneCount} of {steps.length} done</p>

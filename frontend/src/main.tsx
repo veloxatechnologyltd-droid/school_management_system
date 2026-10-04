@@ -4,6 +4,7 @@ import './style.css';
 import { request } from './lib/api';
 import { Mfa } from './modules/Mfa';
 import { PlatformAdmin } from './modules/PlatformAdmin';
+import { Icon, PageHeader } from './lib/ui';
 // Local synthetic hints show only on the dev server unless it runs against the cloud database (npm run dev:cloud).
 const LOCAL=import.meta.env.DEV&&import.meta.env.VITE_APP_MODE!=='cloud';
 const lazyModule=<T extends Record<string,React.ComponentType<any>>,K extends keyof T>(load:()=>Promise<T>,name:K)=>lazy(()=>load().then(m=>({default:m[name]})));
@@ -30,18 +31,29 @@ type NavItem={id:string;label:string;icon:string};
 const nav=(id:string,label:string,icon:string):NavItem=>({id,label,icon});
 const navByRole:Record<string,{group:string;items:NavItem[]}[]>={
   headteacher:[
-    {group:'',items:[nav('today','Home','home'),nav('attendance','Attendance','fact_check'),nav('learners','Learners','groups'),nav('guardians','Guardians','family_restroom'),nav('collection','Pickup','directions_walk')]},
-    {group:'Teaching',items:[nav('assessment','Assessment','grading'),nav('early-years','Early years','child_care')]},
-    {group:'Office',items:[nav('fees','Fees','payments'),nav('notices','Notices','campaign'),nav('promotion','Promotion','trending_up')]},
-    {group:'',items:[nav('settings','Settings','settings')]}],
-  teacher:[{group:'',items:[nav('today','Today','today'),nav('assessment','Assessment','grading'),nav('early-years','Early years','child_care')]}],
-  accountant:[{group:'',items:[nav('fees','Fees','payments')]}],
-  frontdesk:[{group:'',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
-  guardian:[{group:'',items:[nav('children','My children','child_care'),nav('fees','Fees','payments'),nav('notices','Notices','campaign')]}]
+    {group:'Overview',items:[nav('today','Home','space_dashboard')]},
+    {group:'People',items:[nav('attendance','Attendance','event_available'),nav('learners','Learners','groups'),nav('guardians','Guardians','family_restroom'),nav('collection','Pickup','directions_walk')]},
+    {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('early-years','Early years','child_care')]},
+    {group:'Office',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign'),nav('promotion','Promotion','trending_up')]},
+    {group:'Administration',items:[nav('settings','Settings','settings')]}],
+  teacher:[{group:'My work',items:[nav('today','Today','today'),nav('assessment','Assessment','school'),nav('early-years','Early years','child_care')]}],
+  accountant:[{group:'Money',items:[nav('fees','Fees','receipt_long')]}],
+  frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
+  guardian:[{group:'My family',items:[nav('children','My children','child_care'),nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]}]
+};
+// Page headers for modules that do not draw their own (Home, Learners, Attendance and Fees do).
+const pageMeta:Record<string,{eyebrow:string;title:string;blurb:string}>={
+  guardians:{eyebrow:'People',title:'Guardians',blurb:'Who may see each child’s records, pay fees and receive notices.'},
+  collection:{eyebrow:'Daily safety',title:'Pickup',blurb:'Hand each child only to an authorised collector, and keep a record.'},
+  assessment:{eyebrow:'Teaching',title:'Assessment',blurb:'Class scores, terminal results and published report cards.'},
+  'early-years':{eyebrow:'Teaching',title:'Early years',blurb:'Nursery and KG observations and progress reports for families.'},
+  notices:{eyebrow:'Communication',title:'Notices',blurb:'Messages to guardians, approved before anything is sent.'},
+  promotion:{eyebrow:'End of year',title:'Promotion',blurb:'Move each class into next year, one reviewed decision per learner.'},
+  settings:{eyebrow:'Administration',title:'Settings',blurb:'Set up your school once, in this order. Daily pages stay for daily work.'},
+  children:{eyebrow:'Guardian portal',title:'My children',blurb:'Attendance, reports and school records for your children.'},
 };
 // Section addresses from the earlier tab layout keep working.
 const legacyIds:Record<string,string>={learning:'assessment',school:'settings',teaching:'settings',accounts:'settings'};
-const Icon=({name}:{name:string})=><span className="icon" aria-hidden="true">{name}</span>;
 type School = {id:string;name:string;role:string;version:number};
 type Session = {displayName:string;csrfToken:string;schools:School[];platformAdmin:boolean;mustChangePassword:boolean;mfaRequired:boolean;mfaEnrolled:boolean;mfaVerified:boolean};
 type AuditPage = {items:Audit[];total:number};
@@ -147,7 +159,7 @@ function App() {
   ];
   const [tabId,subId]=tab.split('/'),setting=settingsSteps.find(step=>step.id===subId)??settingsSteps[0];
   const views:Record<string,()=>React.ReactNode>={
-    today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} csrfToken={csrf}><AttendanceFollowUp key={`followup:${sid}`} schoolId={sid}/></GettingStarted>:<>{attendanceView}{teachingView}</>,
+    today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} displayName={session.displayName} csrfToken={csrf}><AttendanceFollowUp key={`followup:${sid}`} schoolId={sid}/></GettingStarted>:<>{attendanceView}{teachingView}</>,
     attendance:()=>attendanceView,
     collection:()=><Collection key={'collection:'+sid} schoolId={sid} csrfToken={csrf} role={role}/>,
     learners:()=><Admissions key={sid} schoolId={sid} csrfToken={csrf} role={role} view={role==='headteacher'?'work':undefined}/>,
@@ -162,16 +174,19 @@ function App() {
   };
   const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];
   const roleName=role==='frontdesk'?'Front desk':role.charAt(0).toUpperCase()+role.slice(1);
+  const meta=current&&pageMeta[current.id];
+  const initials=(school?.name??'V').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]!.toUpperCase()).join('');
   return <div className="shell">
     <aside className={menuOpen?'sidebar open':'sidebar'}>
-      <a href="#/" className="brand"><span className="logo" aria-hidden="true">V</span>Veloxa <b>SmartSchool</b></a>
-      {session.schools.length>1?<label className="school-picker">School<select value={school?.id??''} disabled={busy} onChange={e=>{setBusy(true);selectSchool(e.target.value).catch(error=>setStatus(error.message)).finally(()=>setBusy(false));}}>{!school&&<option value="">Loading…</option>}{session.schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>:school&&<p className="sidebar-school">{school.name}</p>}
+      <a href="#/" className="brand"><span className="logo" aria-hidden="true">{initials}</span><span className="brand-text"><strong>{school?.name??'Veloxa SmartSchool'}</strong><span>{roleName||'Signed in'}</span></span></a>
+      {session.schools.length>1&&<label className="school-picker">School<select value={school?.id??''} disabled={busy} onChange={e=>{setBusy(true);selectSchool(e.target.value).catch(error=>setStatus(error.message)).finally(()=>setBusy(false));}}>{!school&&<option value="">Loading…</option>}{session.schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
       {school&&<nav aria-label="Sections">{groups.map(g=><div key={g.items[0].id} className="nav-section">{g.group&&<p className="nav-group">{g.group}</p>}{g.items.map(item=><a key={item.id} href={`#/${item.id}`} aria-current={item.id===current?.id?'page':undefined}><Icon name={item.icon}/><span className="label">{item.label}</span></a>)}</div>)}</nav>}
+      <p className="sidebar-foot">Veloxa SmartSchool</p>
     </aside>
     {menuOpen&&<div className="scrim" onClick={()=>setMenuOpen(false)}/>}
     <div className="content">
-      <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}<div className="user"><span className="name">{session.displayName}</span><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span></div><button className="secondary" disabled={busy} onClick={signOut}>Sign out</button></header>
-      <main>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{school&&<>{current?.id==='today'&&role!=='teacher'?<h2 className="page-title">Welcome, {session.displayName.split(' ')[0]}</h2>:current?.id==='settings'&&<h2 className="page-title">Settings</h2>}<Suspense fallback={<p role="status">Loading…</p>}>{current&&views[current.id]()}</Suspense></>}{!school&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted">Local foundation build · Synthetic schools</p>}</main>
+      <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
+      <main>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{school&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{current&&views[current.id]()}</Suspense></>}{!school&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
     </div>
   </div>;
 }

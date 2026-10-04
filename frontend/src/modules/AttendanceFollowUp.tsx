@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
+import { Card, Empty, Pill, type Tone } from '../lib/ui';
 
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
 type FollowClass = { class_id: string; name: string; level: string; learners: number; register_status: string };
@@ -9,6 +10,7 @@ type ClassOption = { id: string; name: string; level: string; year_name: string 
 type RosterLearner = { id: string; full_name: string; admission_number: string };
 
 const label: Record<string, string> = { missing: 'Not started', draft: 'Draft, not submitted', submitted: 'Submitted', locked: 'Locked' };
+const tone: Record<string, Tone> = { missing: 'critical', draft: 'caution', submitted: 'positive', locked: 'neutral' };
 
 export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
   const [follow, setFollow] = useState<FollowUp | null>(null);
@@ -46,18 +48,27 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
     } catch (e) { setError((e as Error).message); }
   }
 
-  return <section aria-label="Attendance follow-up">
-    <h2>Attendance follow-up</h2>
+  return <section aria-label="Attendance follow-up" className="page">
     {error && <p role="alert">{error}</p>}
-    {follow && (follow.open
-      ? <><p>Registers for {follow.day}: <strong>{follow.outstanding}</strong> outstanding.</p>
-        <ul className="history">{follow.classes.map(c => <li key={c.class_id}><strong>{c.name}</strong><span>{c.learners} learners · {label[c.register_status] ?? c.register_status}</span></li>)}</ul></>
-      : <p className="muted">{follow.day} is not an open school day, so no registers are due.</p>)}
-    <h3>Learners often absent (3 or more absences in the last 14 days)</h3>
-    {absent.length ? <ul className="history">{absent.map(a => <li key={a.learner_id}><strong>{a.full_name}</strong><span>{a.class_name} · {a.absences} absences · last {a.last_absent_day}</span></li>)}</ul> : <p>No learners have reached the threshold.</p>}
-    <h3>Printable register (power or network outage)</h3>
-    <label>Class<select value={printClass} onChange={e => setPrintClass(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
-    <button type="button" className="secondary" disabled={!printClass} onClick={() => void printBlank()}>Print blank register</button>
+    <div className="columns">
+      <Card title="Attendance follow-up" hint={follow ? (follow.open ? `Registers for ${follow.day} · ${follow.outstanding} outstanding` : `${follow.day} is not an open school day`) : 'Loading…'} action={<a className="button secondary" href="#/attendance">Open registers</a>} flush>
+        {follow && (follow.open
+          ? (follow.classes.length ? <div className="table-wrap"><table><thead><tr><th>Class</th><th className="num">Learners</th><th>Register</th></tr></thead>
+            <tbody>{follow.classes.map(c => <tr key={c.class_id}><td>{c.name}<span className="sub">{c.level}</span></td><td className="num">{c.learners}</td><td><Pill tone={tone[c.register_status] ?? 'neutral'}>{label[c.register_status] ?? c.register_status}</Pill></td></tr>)}</tbody></table></div>
+            : <Empty title="No classes to mark today"/>)
+          : <Empty title="No registers are due" hint="Today is not an open school day."/>)}
+      </Card>
+      <div>
+        <Card title="Learners often absent" hint="3 or more absences in the last 14 days" flush>
+          {absent.length ? <div className="table-wrap"><table><tbody>{absent.map(a => <tr key={a.learner_id}><td>{a.full_name}<span className="sub">{a.class_name} · last {a.last_absent_day}</span></td><td className="num"><Pill tone="critical">{a.absences} absent</Pill></td></tr>)}</tbody></table></div>
+            : <p className="muted">No learners have reached the threshold.</p>}
+        </Card>
+        <Card title="Printable register" hint="For a power or network outage">
+          <label>Class<select value={printClass} onChange={e => setPrintClass(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
+          <button type="button" className="secondary" disabled={!printClass} onClick={() => void printBlank()}>Print blank register</button>
+        </Card>
+      </div>
+    </div>
     {sheet && <div className="print-sheet"><h2>{sheet.title}</h2><p>Register for the week starting ____________ (roster as at {sheet.date})</p>
       <table><thead><tr><th>Name</th><th>No.</th>{['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(d => <th key={d}>{d}</th>)}</tr></thead>
         <tbody>{sheet.learners.map(l => <tr key={l.id}><td>{l.full_name}</td><td>{l.admission_number}</td>{[0, 1, 2, 3, 4].map(i => <td key={i}/>)}</tr>)}</tbody></table>
