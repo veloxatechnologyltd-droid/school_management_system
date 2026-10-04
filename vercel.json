@@ -1,7 +1,7 @@
 {
   "framework": null,
   "installCommand": "npm ci --ignore-scripts",
-  "buildCommand": "pwd && ls && npm config get workspaces && env | grep -i npm_config; npm ls --workspaces --depth=0; npm run build -w frontend",
+  "buildCommand": "npm run build -w @school/web",
   "outputDirectory": "frontend/dist",
   "rewrites": [
     { "source": "/api/v1/:path*", "destination": "https://school-api-jkjm.onrender.com/api/v1/:path*" },
