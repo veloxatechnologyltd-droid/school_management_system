@@ -6,7 +6,7 @@ type Year = { id: string; name: string };
 type Progress = { years: Year[]; classes: number; teachers: number; assignments: number; learners: number };
 const levels = ['Nursery', 'KG', 'Primary', 'JHS'];
 
-// Headteacher setup guide for a new school. Today's daily work appears only once classes exist.
+// Headteacher overview: key counts, plus a setup guide until the school is set up. Daily follow-up appears once classes exist.
 export function GettingStarted({ schoolId, schoolName, csrfToken, children }: { schoolId: string; schoolName: string; csrfToken: string; children: React.ReactNode }) {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState('');
@@ -39,20 +39,21 @@ export function GettingStarted({ schoolId, schoolName, csrfToken, children }: { 
   const steps = [
     { done: progress.years.length > 0, title: 'Add your academic year', why: 'Classes, terms and reports all belong to a school year.' },
     { done: progress.classes > 0, title: 'Create your classes', why: 'For example Nursery 1, KG 2, Primary 4 or JHS 1. Add every class you run.' },
-    { done: progress.teachers > 0, title: 'Give your teachers a sign-in', why: 'Each teacher gets a temporary password to share with them privately.', href: '#/school', go: 'Open School → Staff and family accounts' },
-    { done: progress.assignments > 0, title: 'Assign teachers to classes', why: 'A teacher only sees the classes you assign to them.', href: '#/learning', go: 'Open Learning → Assign a teacher' },
-    { done: progress.learners > 0, title: 'Add your learners', why: 'Upload your class lists from Excel (CSV), or record learners one at a time.', href: '#/learners', go: 'Open Learners' },
+    { done: progress.teachers > 0, title: 'Give your teachers a sign-in', why: 'Each teacher gets a temporary password to share with them privately.', href: '#/settings/staff', go: 'Add staff' },
+    { done: progress.assignments > 0, title: 'Assign teachers to classes', why: 'A teacher only sees the classes you assign to them.', href: '#/settings/assignments', go: 'Assign teachers' },
+    { done: progress.learners > 0, title: 'Add your learners', why: 'Upload your class lists from Excel (CSV), or record learners one at a time.', href: '#/learners', go: 'Add learners' },
   ];
   const doneCount = steps.filter(s => s.done).length, next = steps.findIndex(s => !s.done);
-  if (next === -1) return <>{children}</>;
+  const stats = <div className="stats">{[[progress.learners, 'Learners'], [progress.classes, 'Classes'], [progress.teachers, 'Teachers with a sign-in'], [progress.assignments, 'Teacher assignments']].map(([n, label]) => <div className="stat" key={label}><strong>{n}</strong><span>{label}</span></div>)}</div>;
+  if (next === -1) return <>{stats}{children}</>;
   return <>
+    {progress.classes > 0 && stats}
     <section aria-labelledby="setup-title" className="setup">
-      <p className="eyebrow">Getting started · {doneCount} of {steps.length} done</p>
+      <p className="progress-label">Getting started · {doneCount} of {steps.length} done</p>
       <h2 id="setup-title">Let's get {schoolName} ready</h2>
-      <p className="muted">Follow these steps in order. Daily attendance, reports and fees start working once your classes and learners are in.</p>
       {error && <p role="alert">{error}</p>}
       <ol className="steps">{steps.map((s, i) => <li key={s.title} className={s.done ? 'done' : i === next ? 'current' : ''} aria-current={i === next ? 'step' : undefined}>
-        <strong>{s.done ? '✓ ' : ''}{s.title}</strong>
+        <strong>{s.title}</strong>
         {!s.done && <span className="muted">{s.why}</span>}
         {i === next && i === 0 && <form onSubmit={addYear}>
           <label>Year name<input value={year.name} onChange={e => setYear({ ...year, name: e.target.value })} required maxLength={80} placeholder="2026/2027"/></label>
@@ -69,7 +70,7 @@ export function GettingStarted({ schoolId, schoolName, csrfToken, children }: { 
           {added.length > 0 && <p role="status">Added: {added.join(', ')}. Add the next class, or move on to step 3.</p>}
         </form>}
         {i === next && s.href && <a className="button" href={s.href}>{s.go}</a>}
-        {i === next && i > 1 && <button type="button" className="secondary" disabled={busy} onClick={() => void load()}>I've done this, check again</button>}
+        {i === next && i > 1 && <button type="button" className="secondary" disabled={busy} onClick={() => void load()}>Check again</button>}
       </li>)}</ol>
     </section>
     {progress.classes > 0 && children}

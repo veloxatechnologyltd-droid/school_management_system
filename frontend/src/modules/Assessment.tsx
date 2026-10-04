@@ -16,7 +16,9 @@ function parseBands(text: string): Band[] {
   return text.split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [min, grade, ...remark] = line.split(','); return { min: Number(min), grade: (grade ?? '').trim(), remark: remark.join(',').trim() }; });
 }
 
-export function Assessment({ schoolId, csrfToken, role }: { schoolId: string; csrfToken: string; role: string }) {
+// Settings shows the setup forms directly; elsewhere they sit in a collapsible block.
+const SetupWrap = ({ open, children }: { open: boolean; children: React.ReactNode }) => open ? <div>{children}</div> : <details><summary>Setup: subjects, terms and grading policy</summary>{children}</details>;
+export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: string; csrfToken: string; role: string; view?: 'setup' | 'work' }) {
   const head = role === 'headteacher';
   const headers = { 'x-csrf-token': csrfToken };
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -85,9 +87,9 @@ export function Assessment({ schoolId, csrfToken, role }: { schoolId: string; cs
     }); };
 
   return <section aria-label="Assessment and terminal reports">
-    <h2>Assessment and terminal reports</h2>
+    <h2>{view === 'setup' ? 'Subjects, terms and grading' : 'Assessment and terminal reports'}</h2>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
-    {head && <details><summary>Setup: subjects, terms and grading policy</summary>
+    {head && view !== 'work' && <SetupWrap open={view === 'setup'}>
       <form onSubmit={addSubject}><label>New subject<input value={newSubject} onChange={e => setNewSubject(e.target.value)} required minLength={2} maxLength={80}/></label><button disabled={busy}>Add subject</button></form>
       <p className="muted">Subjects: {subjects.map(s => s.name).join(', ') || 'none yet'}</p>
       <form onSubmit={addTerm}><label>Year for this term<select value={newTerm.academicYearId} onChange={e => setNewTerm({ ...newTerm, academicYearId: e.target.value })} required><option value="">Choose a year</option>{years.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}</select></label>
@@ -98,8 +100,8 @@ export function Assessment({ schoolId, csrfToken, role }: { schoolId: string; cs
         <label>Continuous assessment weight (%)<input type="number" min={0} max={100} value={policyForm.caWeight} onChange={e => setPolicyForm({ ...policyForm, caWeight: e.target.value, examWeight: String(100 - Number(e.target.value)) })} required/></label>
         <label>Exam weight (%)<input type="number" value={policyForm.examWeight} readOnly/></label>
         <label>Grade bands (one per line: minimum score, grade, remark)<textarea value={policyForm.bands} onChange={e => setPolicyForm({ ...policyForm, bands: e.target.value })} required/></label>
-        <label>Where this policy comes from<input value={policyForm.sourceNote} onChange={e => setPolicyForm({ ...policyForm, sourceNote: e.target.value })} required minLength={3} placeholder="e.g. School policy memo, September 2026"/></label><button disabled={busy}>Save policy</button></form></details>}
-    {!policy && <p className="muted">{head ? 'Set the grading policy above before scores can be recorded.' : 'The headteacher has not set the grading policy yet.'}</p>}
+        <label>Where this policy comes from<input value={policyForm.sourceNote} onChange={e => setPolicyForm({ ...policyForm, sourceNote: e.target.value })} required minLength={3} placeholder="e.g. School policy memo, September 2026"/></label><button disabled={busy}>Save policy</button></form></SetupWrap>}
+    {view !== 'setup' && <>{!policy && <p className="muted">{head ? 'Set the grading policy above before scores can be recorded.' : 'The headteacher has not set the grading policy yet.'}</p>}
     <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
     <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
     <label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">Choose a subject</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
@@ -109,6 +111,7 @@ export function Assessment({ schoolId, csrfToken, role }: { schoolId: string; cs
       <div className="actions"><button disabled={busy || !policy} onClick={saveScores}>Save scores</button>{head && <button className="secondary" disabled={busy} onClick={preview}>Preview results</button>}</div></>}
     {results.length > 0 && <><h3>Results preview</h3><ul className="history">{results.map(r => <li key={r.learnerId}><strong>{r.fullName}{r.position ? ` · position ${r.position}` : ''}</strong><span>{r.complete ? `Average ${r.average}` : 'Missing scores'} · {r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</span></li>)}</ul>
       <button disabled={busy} onClick={publish}>Publish terminal reports</button></>}
+    </>}
   </section>;
 }
 

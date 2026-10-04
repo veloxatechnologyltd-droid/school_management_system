@@ -146,3 +146,8 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Backend on Render from the existing Docker image (web service plus background worker), frontend on Vercel with `/api/v1/*` proxied to Render. The Vercel function/cron packaging was removed. DigitalOcean remains the later move.
 **Why:** Evans's preference; keeps the always-on worker (no cron limits) and the first-party cookie (`SameSite=Strict`) works because the browser only sees the Vercel domain.
 **What was rejected:** Calling the Render URL directly from the browser (cross-site cookie would not be sent), Vercel serverless functions plus a daily cron.
+
+## 2026-10-04, Google-style app shell with setup in Settings
+**What was decided:** At Evans's request the web app uses a Google-platform look (Roboto, Material Symbols, blue #1a73e8 primary with red #d93025 accent, white icon sidebar, compact pill buttons, bounded input widths, minimal page text). All headteacher setup lives in Settings as ordered steps; daily pages carry only daily work, via a `view: 'setup' | 'work'` prop on modules that mix both.
+**Why:** The tabbed single-column layout looked like a demo and mixed configuration with daily tasks; the target users are teachers reluctant to use software.
+**What was rejected:** Duplicating setup forms in new components, keeping six combined tabs, a dark sidebar.

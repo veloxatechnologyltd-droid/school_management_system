@@ -15,7 +15,7 @@ export function toPesewas(text: string) {
   return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
 }
 
-export function Finance({ schoolId, csrfToken, role }: { schoolId: string; csrfToken: string; role: string }) {
+export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string; csrfToken: string; role: string; view?: 'setup' | 'work' }) {
   const headers = { 'x-csrf-token': csrfToken };
   const [terms, setTerms] = useState<Term[]>([]); const [classes, setClasses] = useState<ClassOption[]>([]);
   const [termId, setTermId] = useState(''); const [classId, setClassId] = useState('');
@@ -53,26 +53,26 @@ export function Finance({ schoolId, csrfToken, role }: { schoolId: string; csrfT
   }); };
 
   return <section aria-label="Fees and receipts">
-    <h2>Fees and receipts</h2>
+    <h2>{view === 'setup' ? 'Fee items' : 'Fees and receipts'}</h2>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
-    {summary && <p>Billed {cedis(summary.billedPesewas)} · collected {cedis(summary.collectedPesewas)} · outstanding <strong>{cedis(summary.outstandingPesewas)}</strong> ({summary.invoices} invoices)</p>}
+    {summary && view !== 'setup' && <p>Billed {cedis(summary.billedPesewas)} · collected {cedis(summary.collectedPesewas)} · outstanding <strong>{cedis(summary.outstandingPesewas)}</strong> ({summary.invoices} invoices)</p>}
     {termId && <><h3>Fee items for this term</h3>
       <ul className="history">{items.map(i => <li key={i.id}><strong>{i.name}</strong><span>{cedis(i.amount_pesewas)} · {i.level ?? 'all levels'}</span></li>)}</ul>
-      <form onSubmit={addItem}><label>Item name<input value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} required minLength={2} placeholder="Tuition"/></label>
+      {view !== 'work' && <form onSubmit={addItem}><label>Item name<input value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} required minLength={2} placeholder="Tuition"/></label>
         <label>Amount (GH₵)<input inputMode="decimal" value={newItem.amount} onChange={e => setNewItem({ ...newItem, amount: e.target.value })} required placeholder="450.00"/></label>
-        <label>Applies to<select value={newItem.level} onChange={e => setNewItem({ ...newItem, level: e.target.value })}><option value="">All levels</option>{['Nursery', 'KG', 'Primary', 'JHS'].map(l => <option key={l} value={l}>{l}</option>)}</select></label><button disabled={busy}>Add fee item</button></form>
-      <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
+        <label>Applies to<select value={newItem.level} onChange={e => setNewItem({ ...newItem, level: e.target.value })}><option value="">All levels</option>{['Nursery', 'KG', 'Primary', 'JHS'].map(l => <option key={l} value={l}>{l}</option>)}</select></label><button disabled={busy}>Add fee item</button></form>}
+      {view !== 'setup' && <><label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
       <button className="secondary" disabled={busy || !classId} onClick={generate}>Generate invoices for this class</button>
       <h3>Invoices</h3>{invoices.length ? <ul className="history">{invoices.map(inv => <li key={inv.id}><strong>{inv.full_name} · {inv.class_name}</strong><span>Total {cedis(inv.total_pesewas)} · paid {cedis(inv.paid_pesewas)} · balance {cedis(inv.balance_pesewas)}</span>
         {inv.balance_pesewas > 0 && <button type="button" className="secondary" onClick={() => setPay({ invoiceId: inv.id, amount: '', method: 'cash', reference: '', receivedOn: today })}>Record payment</button>}
         {pay?.invoiceId === inv.id && <form onSubmit={record}><label>Amount (GH₵)<input inputMode="decimal" value={pay.amount} onChange={e => setPay({ ...pay, amount: e.target.value })} required/></label>
           <label>Method<select value={pay.method} onChange={e => setPay({ ...pay, method: e.target.value })}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option></select></label>
           <label>Reference (optional)<input value={pay.reference} onChange={e => setPay({ ...pay, reference: e.target.value })} maxLength={80}/></label>
-          <label>Date received<input type="date" value={pay.receivedOn} onChange={e => setPay({ ...pay, receivedOn: e.target.value })} required/></label><button disabled={busy}>Save payment</button></form>}</li>)}</ul> : <p>No invoices yet.</p>}</>}
-    {receipt && <div className="print-sheet-inline"><h3>Receipt no. {receipt.receipt_number}</h3><p>{receipt.school_name}<br/>Received from the guardian of {receipt.full_name} ({receipt.admission_number}) for {receipt.term_name}<br/>Amount {cedis(receipt.amount_pesewas)} by {receipt.method.replace('_', ' ')}{receipt.reference ? ` (ref ${receipt.reference})` : ''} on {receipt.received_on}</p>
+          <label>Date received<input type="date" value={pay.receivedOn} onChange={e => setPay({ ...pay, receivedOn: e.target.value })} required/></label><button disabled={busy}>Save payment</button></form>}</li>)}</ul> : <p>No invoices yet.</p>}</>}</>}
+    {receipt && view !== 'setup' && <div className="print-sheet-inline"><h3>Receipt no. {receipt.receipt_number}</h3><p>{receipt.school_name}<br/>Received from the guardian of {receipt.full_name} ({receipt.admission_number}) for {receipt.term_name}<br/>Amount {cedis(receipt.amount_pesewas)} by {receipt.method.replace('_', ' ')}{receipt.reference ? ` (ref ${receipt.reference})` : ''} on {receipt.received_on}</p>
       <button className="secondary" onClick={() => window.print()}>Print receipt</button> <button className="secondary" onClick={() => setReceipt(null)}>Close</button></div>}
-    {role === 'headteacher' && <p className="muted">To correct a wrong payment, a headteacher can reverse it with a reason; nothing is ever deleted.</p>}
+    {role === 'headteacher' && view !== 'setup' && <p className="muted">To correct a wrong payment, a headteacher can reverse it with a reason; nothing is ever deleted.</p>}
   </section>;
 }
 

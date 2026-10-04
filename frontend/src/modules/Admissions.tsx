@@ -10,13 +10,13 @@ type Learner = { id: string; full_name: string; admission_number: string; date_o
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
 type Enrolment = { id: string; class_id: string; class_name: string; start_date: string; end_date?: string | null; end_reason?: string | null; superseded_at?:string | null; supersession_reason?:string | null };
 type LearnerDetail = Learner & { enrolments: Enrolment[] };
-type Props = { schoolId: string; csrfToken: string; role: Role };
+type Props = { schoolId: string; csrfToken: string; role: Role; view?: 'setup' | 'work' };
 
 const levels: SchoolClass['level'][] = ['Nursery', 'KG', 'Primary', 'JHS'];
 const statusNames: Record<string, string> = { application: 'Application', review: 'Under review', offered: 'Offered a place', waitlisted: 'Waitlisted', declined: 'Declined', accepted: 'Accepted', enrolled: 'Enrolled' };
 const dateToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
 
-export function Admissions({ schoolId, csrfToken, role }: Props) {
+export function Admissions({ schoolId, csrfToken, role, view }: Props) {
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [yearsTotal, setYearsTotal] = useState(0);
@@ -34,7 +34,7 @@ export function Admissions({ schoolId, csrfToken, role }: Props) {
   const [detail, setDetail] = useState<LearnerDetail | null>(null);
   const [selectedLearner, setSelectedLearner] = useState('');
   const [loading, setLoading] = useState(true);
-  const [setupOpen,setSetupOpen]=useState(false);
+  const [setupOpen,setSetupOpen]=useState(view==='setup');
   const selectedLearnerRef=useRef('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -183,13 +183,11 @@ export function Admissions({ schoolId, csrfToken, role }: Props) {
   }
 
   return <section aria-labelledby="admissions-title">
-    <p className="eyebrow">Learner services</p>
-    <h2 id="admissions-title">Admissions and learners</h2>
-    <p className="muted">Review applications, record decisions, and keep dated class history for each learner.</p>
+    <h2 id="admissions-title">{view === 'setup' ? 'Academic years and classes' : 'Admissions and learners'}</h2>
     <div className="actions"><button type="button" className="secondary" disabled={busy || loading} onClick={() => void loadWorkspace(true)}>Refresh records</button></div>
     {error && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}
     {loading ? <p role="status">Loading admissions and learner records…</p> : <>
-      <h3>Applications</h3>
+      {view !== 'setup' && <><h3>Applications</h3>
       <form className="actions" onSubmit={event => { event.preventDefault(); setAdmissionsOffset(0); setAdmissionsSearch(admissionsSearchInput.trim()); }}>
         <label>Search applications<input type="search" value={admissionsSearchInput} onChange={event => setAdmissionsSearchInput(event.target.value)} placeholder="Learner name or admission number"/></label>
         <button type="submit" disabled={busy}>Search</button>
@@ -239,8 +237,7 @@ export function Admissions({ schoolId, csrfToken, role }: Props) {
         </form>}</> : <p>No open enrolment. Previous learner and class records are retained.</p>}
       </div>}
 
-      {role === 'headteacher' && <div><button type="button" className="secondary" aria-expanded={setupOpen} onClick={()=>setSetupOpen(!setupOpen)}>School setup: academic years and classes</button>{setupOpen&&<div>
-        <p className="muted">Class end dates are exclusive. Only headteachers can change school setup.</p>
+      </>}{role === 'headteacher' && view !== 'work' && <div>{view !== 'setup' && <button type="button" className="secondary" aria-expanded={setupOpen} onClick={()=>setSetupOpen(!setupOpen)}>School setup: academic years and classes</button>}{setupOpen&&<div>
         <h3>Academic years</h3>{years.length ? <ul className="history">{years.map(y => <li key={y.id}><strong>{y.name}</strong><span>{y.start_date} to {y.end_date} (end date exclusive)</span></li>)}</ul> : <p>No academic years recorded.</p>}{years.length < yearsTotal && <p>Showing {years.length} of {yearsTotal} academic years. <button type="button" className="secondary" onClick={() => void loadMore('academic-years')}>Show more years</button></p>}
         <form onSubmit={createYear}><h4>Add academic year</h4><label>Year name<input value={newYear.name} onChange={e => setNewYear({ ...newYear, name: e.target.value })} required maxLength={80} placeholder="2026/2027"/></label><label>Start date<input type="date" value={newYear.startDate} onChange={e => setNewYear({ ...newYear, startDate: e.target.value })} required/></label><label>End date (exclusive)<input type="date" value={newYear.endDate} onChange={e => setNewYear({ ...newYear, endDate: e.target.value })} required/></label><button disabled={busy}>Add academic year</button></form>
         <h3>Classes</h3>{classes.length ? <ul className="history">{classes.map(c => <li key={c.id}><strong>{c.name} · {c.level}</strong><span>{c.year_name} · Capacity {c.capacity} · {c.start_date} to {c.end_date}</span></li>)}</ul> : <p>No classes recorded.</p>}{classes.length < classesTotal && <p>Showing {classes.length} of {classesTotal} classes, newest year first. <button type="button" className="secondary" onClick={() => void loadMore('classes')}>Show more classes</button></p>}
