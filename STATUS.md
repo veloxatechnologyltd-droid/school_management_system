@@ -49,3 +49,5 @@ Pre-pilot review and hardening (2026-09-29): main agent only (the configured cri
 Run modes (2026-10-04): `npm run dev:local` (disposable DB, seeded synthetic accounts; verified sign-in) and `npm run dev:cloud` (Supabase from `.env`, password sign-in; not run by the agent). Deployed/production builds show the cloud sign-in copy; synthetic hints appear only in local dev mode.
 
 Self-service sign-up (2026-10-04): `POST /auth/register` creates a school and its headteacher with no verification, rate limited to 10/hour per IP; new migration 030 is applied locally only and still needs reviewed hosted apply. 170/170 backend tests and a browser sign-up check pass locally.
+
+Onboarding (2026-10-04): a headteacher's Today tab now opens with a "Getting started" guide until the school is set up: academic year and classes are added in the guide itself, then teacher sign-ins, teacher assignments and learners link to their tabs. Daily attendance screens stay hidden until a class exists. The school picker shows only for accounts with more than one school. No migration. Local: build OK, 15/15 browser tests (new sign-up → setup test). Main agent only.
