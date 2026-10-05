@@ -118,7 +118,7 @@ export function Attendance({ schoolId, csrfToken, role, accessRefresh }: Props) 
       <Stat label="Absent" value={count('absent')} caption={count('excused') ? `${count('excused')} excused` : undefined} tone="critical"/>
       <Stat label="Not marked" value={count('unmarked')} tone={count('unmarked') ? 'caution' : 'neutral'}/>
     </div>}
-    <div className="columns">
+    <div className={head ? 'columns' : undefined}>
       <Card flush>
         <div className="toolbar">
           <label>Date<input type="date" value={day} onChange={e => { setDay(e.target.value); setClassId(''); setSchoolDayVersion(undefined); setDayLoading(true); }} /></label>

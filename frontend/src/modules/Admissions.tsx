@@ -11,7 +11,7 @@ type Learner = { id: string; full_name: string; admission_number: string; date_o
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
 type Enrolment = { id: string; class_id: string; class_name: string; start_date: string; end_date?: string | null; end_reason?: string | null; superseded_at?:string | null; supersession_reason?:string | null };
 type LearnerDetail = Learner & { enrolments: Enrolment[] };
-type Props = { schoolId: string; csrfToken: string; role: Role; view?: 'setup' | 'work' };
+type Props = { schoolId: string; csrfToken: string; role: Role; view?: 'setup' | 'work'; initialTab?: 'roll' | 'applications' };
 
 const levels: SchoolClass['level'][] = ['Nursery', 'KG', 'Primary', 'JHS'];
 const statusNames: Record<string, string> = { application: 'Application', review: 'Under review', offered: 'Offered a place', waitlisted: 'Waitlisted', declined: 'Declined', accepted: 'Accepted', enrolled: 'Enrolled' };
@@ -19,7 +19,7 @@ const statusTone: Record<string, Tone> = { application: 'info', review: 'info', 
 const actionNames: Record<string, string> = { review: 'Start review', offer: 'Offer place', waitlist: 'Waitlist', decline: 'Decline', accept: 'Record acceptance', enrol: 'Enrol learner' };
 const dateToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
 
-export function Admissions({ schoolId, csrfToken, role, view }: Props) {
+export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll' }: Props) {
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [yearsTotal, setYearsTotal] = useState(0);
@@ -37,7 +37,7 @@ export function Admissions({ schoolId, csrfToken, role, view }: Props) {
   const [detail, setDetail] = useState<LearnerDetail | null>(null);
   const [selectedLearner, setSelectedLearner] = useState('');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'roll' | 'applications'>('roll');
+  const [tab, setTab] = useState<'roll' | 'applications'>(initialTab);
   const [dialog, setDialog] = useState<'' | 'application' | 'import'>('');
   const selectedLearnerRef=useRef('');
   const [busy, setBusy] = useState(false);

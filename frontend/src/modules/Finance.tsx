@@ -116,11 +116,23 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
 type Statement = { id: string; term_name: string; total_pesewas: number; paid_pesewas: number; balance_pesewas: number };
 export function GuardianStatement({ schoolId }: { schoolId: string }) {
   const [children, setChildren] = useState<{ id: string; full_name: string; billing: boolean }[]>([]);
-  const [childId, setChildId] = useState(''); const [rows, setRows] = useState<Statement[]>([]); const [error, setError] = useState('');
-  useEffect(() => { request<{ id: string; full_name: string; billing: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(r => { const billing = r.filter(c => c.billing); setChildren(billing); setChildId(prior => prior || billing[0]?.id || ''); }).catch(e => setError((e as Error).message)); }, [schoolId]);
+  const [childId, setChildId] = useState(''); const [rows, setRows] = useState<Statement[]>([]); const [error, setError] = useState(''); const [loaded, setLoaded] = useState(false);
+  useEffect(() => { request<{ id: string; full_name: string; billing: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(r => { const billing = r.filter(c => c.billing); setChildren(billing); setChildId(prior => prior || billing[0]?.id || ''); }).catch(e => setError((e as Error).message)).finally(() => setLoaded(true)); }, [schoolId]);
   useEffect(() => { setRows([]); if (childId) request<{ items: Statement[] }>(`/schools/${schoolId}/guardian/children/${childId}/statement`).then(r => setRows(r.items)).catch(e => setError((e as Error).message)); }, [schoolId, childId]);
-  if (!children.length) return null;
-  return <section aria-label="School fees statement"><h2>School fees statement</h2>{error && <p role="alert">{error}</p>}
-    <label>Child<select value={childId} onChange={e => setChildId(e.target.value)}><option value="">Choose a child</option>{children.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label>
-    {childId && (rows.length ? <ul className="history">{rows.map(r => <li key={r.id}><strong>{r.term_name}</strong><span>Total {cedis(r.total_pesewas)} · paid {cedis(r.paid_pesewas)} · balance {cedis(r.balance_pesewas)}</span></li>)}</ul> : <p>No invoices yet.</p>)}</section>;
+  const totals = rows.reduce((sum, r) => ({ billed: sum.billed + r.total_pesewas, paid: sum.paid + r.paid_pesewas, balance: sum.balance + r.balance_pesewas }), { billed: 0, paid: 0, balance: 0 });
+  return <section aria-label="School fees statement" className="page">
+    <PageHeader eyebrow="My family" title="Fees" blurb="What the school has billed for each term and what has been paid."
+      actions={children.length > 0 && <label className="inline-field">Child<select value={childId} onChange={e => setChildId(e.target.value)}><option value="">Choose a child</option>{children.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label>}/>
+    {error && <p role="alert">{error}</p>}
+    {!children.length ? (loaded && <Card><Empty title="No fee statements" hint="Statements appear for children whose fees the school has linked to your account."/></Card>) : !childId ? <Card><Empty title="Choose a child"/></Card> : <>
+      <div className="stats">
+        <Stat label="Billed" value={cedis(totals.billed)} caption={`${rows.length} term${rows.length === 1 ? '' : 's'}`} icon="request_quote"/>
+        <Stat label="Paid" value={cedis(totals.paid)} caption="Receipts issued by the school" tone="positive" icon="payments"/>
+        <Stat label="Balance" value={cedis(totals.balance)} caption={totals.balance > 0 ? 'Still owed' : 'Nothing owed'} tone={totals.balance > 0 ? 'critical' : 'positive'} icon="pending_actions"/>
+      </div>
+      <Card title="School fees statement" flush>
+        {rows.length ? <div className="table-wrap"><table><thead><tr><th>Term</th><th className="num">Billed</th><th className="num">Paid</th><th className="num">Balance</th></tr></thead><tbody>{rows.map(r => <tr key={r.id}><td>{r.term_name}</td><td className="num">{cedis(r.total_pesewas)}</td><td className="num">{cedis(r.paid_pesewas)}</td><td className="num">{r.balance_pesewas > 0 ? <strong className="tone-critical">{cedis(r.balance_pesewas)}</strong> : <Pill tone="positive">Settled</Pill>}</td></tr>)}</tbody></table></div> : <Empty title="No invoices yet"/>}
+      </Card>
+    </>}
+  </section>;
 }

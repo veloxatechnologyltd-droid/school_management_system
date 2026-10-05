@@ -4,7 +4,7 @@ import './style.css';
 import { request } from './lib/api';
 import { Mfa } from './modules/Mfa';
 import { PlatformAdmin } from './modules/PlatformAdmin';
-import { Icon, PageHeader } from './lib/ui';
+import { Icon, PageHeader, Tabs } from './lib/ui';
 // Local synthetic hints show only on the dev server, not against the cloud database (dev:cloud) or the demo school (dev:demo).
 const LOCAL=import.meta.env.DEV&&!['cloud','demo'].includes(import.meta.env.VITE_APP_MODE);
 // Demo mode (npm run dev:demo) shows the production sign-in, prefilled with the demo headteacher.
@@ -43,17 +43,26 @@ const navByRole:Record<string,{group:string;items:NavItem[]}[]>={
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
   guardian:[{group:'My family',items:[nav('children','My children','child_care'),nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]}]
 };
-// Page headers for modules that do not draw their own (Home, Learners, Attendance and Fees do).
+// Page headers for modules that do not draw their own (the other pages do).
 const pageMeta:Record<string,{eyebrow:string;title:string;blurb:string}>={
-  guardians:{eyebrow:'People',title:'Guardians',blurb:'Who may see each child’s records, pay fees and receive notices.'},
-  collection:{eyebrow:'Daily safety',title:'Pickup',blurb:'Hand each child only to an authorised collector, and keep a record.'},
   assessment:{eyebrow:'Teaching',title:'Assessment',blurb:'Class scores, terminal results and published report cards.'},
-  'early-years':{eyebrow:'Teaching',title:'Early years',blurb:'Nursery and KG observations and progress reports for families.'},
-  notices:{eyebrow:'Communication',title:'Notices',blurb:'Messages to guardians, approved before anything is sent.'},
-  promotion:{eyebrow:'End of year',title:'Promotion',blurb:'Move each class into next year, one reviewed decision per learner.'},
   settings:{eyebrow:'Administration',title:'Settings',blurb:'Set up your school once, in this order. Daily pages stay for daily work.'},
-  children:{eyebrow:'Guardian portal',title:'My children',blurb:'Attendance, reports and school records for your children.'},
 };
+type ModuleProps={schoolId:string;csrfToken:string;role:string};
+// Guardian portal: the child chosen at the top drives the report cards below it.
+function MyChildren({schoolId,csrfToken,role}:ModuleProps) {
+  const [childId,setChildId]=useState('');
+  return <><Guardians schoolId={schoolId} csrfToken={csrfToken} role={role} onChildChange={setChildId}/>{childId&&<><EarlyYearsReports schoolId={schoolId} csrfToken={csrfToken} role={role} childId={childId}/><GuardianTerminalReports schoolId={schoolId} childId={childId}/></>}</>;
+}
+// Early years: observations and progress reports on tabs; headteachers open on the reports they review.
+function EarlyYearsWork({schoolId,csrfToken,role}:ModuleProps) {
+  const [tab,setTab]=useState<'observations'|'reports'>(role==='headteacher'?'reports':'observations');
+  return <>
+    <PageHeader eyebrow="Teaching" title="Early years" blurb="Nursery and KG observations, and the progress reports families receive."/>
+    <div className="actions"><Tabs label="Early years" value={tab} onChange={setTab} options={[{id:'observations',label:'Observations'},{id:'reports',label:'Progress reports'}]}/></div>
+    {tab==='observations'?<EarlyYears schoolId={schoolId} csrfToken={csrfToken} role={role} view="work"/>:<EarlyYearsReports schoolId={schoolId} csrfToken={csrfToken} role={role}/>}
+  </>;
+}
 // Section addresses from the earlier tab layout keep working.
 const legacyIds:Record<string,string>={learning:'assessment',school:'settings',teaching:'settings',accounts:'settings'};
 type School = {id:string;name:string;role:string;version:number};
@@ -164,14 +173,14 @@ function App() {
     today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} displayName={session.displayName} csrfToken={csrf}><AttendanceFollowUp key={`followup:${sid}`} schoolId={sid}/></GettingStarted>:<>{attendanceView}{teachingView}</>,
     attendance:()=>attendanceView,
     collection:()=><Collection key={'collection:'+sid} schoolId={sid} csrfToken={csrf} role={role}/>,
-    learners:()=><Admissions key={sid} schoolId={sid} csrfToken={csrf} role={role} view={role==='headteacher'?'work':undefined}/>,
+    learners:()=><Admissions key={sid} schoolId={sid} csrfToken={csrf} role={role} view={role==='headteacher'?'work':undefined} initialTab={subId==='applications'?'applications':'roll'}/>,
     guardians:()=><Guardians key={`guardians:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     promotion:()=><Promotion key={`promotion:${sid}`} schoolId={sid} csrfToken={csrf}/>,
     assessment:()=><Assessment key={`assessment:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
-    'early-years':()=><><EarlyYears key={`early-years:${sid}:${role}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/><EarlyYearsReports key={`early-years-reports:${sid}:${role}`} schoolId={sid} csrfToken={csrf} role={role}/></>,
+    'early-years':()=><EarlyYearsWork key={`early-years:${sid}:${role}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     fees:()=>role==='guardian'?<GuardianStatement key={`statement:${sid}`} schoolId={sid}/>:<Finance key={`finance:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
     notices:()=>role==='guardian'?<GuardianNotices key={`gnotices:${sid}`} schoolId={sid}/>:<Notices key={`notices:${sid}`} schoolId={sid} csrfToken={csrf}/>,
-    children:()=><><Guardians key={`guardians:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/><EarlyYearsReports key={`early-years-reports:${sid}:${role}`} schoolId={sid} csrfToken={csrf} role={role}/><GuardianTerminalReports key={`terminal:${sid}`} schoolId={sid}/></>,
+    children:()=><MyChildren key={`children:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     settings:()=><div className="settings"><nav className="setting-steps" aria-label="Settings">{settingsSteps.map((step,index)=><a key={step.id} href={`#/settings/${step.id}`} aria-current={step.id===setting.id?'page':undefined}><b aria-hidden="true">{index+1}</b>{step.label}</a>)}</nav><div className="setting-body">{setting.render()}</div></div>,
   };
   const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];

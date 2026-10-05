@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
-import { Card, Empty, Pill, type Tone } from '../lib/ui';
+import { Card, Empty, Icon, Pill, currentTerm, type Tone } from '../lib/ui';
+import { cedis } from './Finance';
 
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
 type FollowClass = { class_id: string; name: string; level: string; learners: number; register_status: string };
@@ -8,6 +9,9 @@ type FollowUp = { day: string; open: boolean; classes: FollowClass[]; outstandin
 type Absent = { learner_id: string; full_name: string; admission_number: string; class_name: string; absences: number; last_absent_day: string };
 type ClassOption = { id: string; name: string; level: string; year_name: string };
 type RosterLearner = { id: string; full_name: string; admission_number: string };
+type Term = { id: string; name: string; start_date?: string; end_date?: string };
+type FeeSummary = { term: string; billedPesewas: number; outstandingPesewas: number };
+type Attention = { icon: string; tone: Tone; text: string; detail: string; href: string; go: string };
 
 const label: Record<string, string> = { missing: 'Not started', draft: 'Draft, not submitted', submitted: 'Submitted', locked: 'Locked' };
 const tone: Record<string, Tone> = { missing: 'critical', draft: 'caution', submitted: 'positive', locked: 'neutral' };
@@ -18,6 +22,9 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [printClass, setPrintClass] = useState('');
   const [sheet, setSheet] = useState<{ title: string; learners: RosterLearner[]; date: string } | null>(null);
+  const [absentTotal, setAbsentTotal] = useState(0);
+  const [fees, setFees] = useState<FeeSummary | null>(null);
+  const [waiting, setWaiting] = useState(0);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -28,10 +35,27 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
         request<Page<Absent>>(`/schools/${schoolId}/attendance/repeated-absence?limit=50`),
         request<Page<ClassOption>>(`/schools/${schoolId}/teaching/class-options?limit=100`),
       ]);
-      setFollow(f); setAbsent(a.items); setClasses(c.items);
+      setFollow(f); setAbsent(a.items); setAbsentTotal(a.total); setClasses(c.items); setPrintClass(prior => prior || c.items[0]?.id || '');
     } catch (e) { setError((e as Error).message); }
   }, [schoolId]);
   useEffect(() => { void load(); }, [load]);
+  // Fees and admissions for the "Needs attention" card; either may be unavailable without hiding the rest of the page.
+  useEffect(() => {
+    request<{ items: Term[] }>(`/schools/${schoolId}/finance/terms`).then(async t => {
+      const term = currentTerm(t.items); if (!term) return;
+      const s = await request<{ billedPesewas: number; outstandingPesewas: number }>(`/schools/${schoolId}/finance/summary?termId=${term.id}`);
+      setFees({ term: term.name, billedPesewas: s.billedPesewas, outstandingPesewas: s.outstandingPesewas });
+    }).catch(() => undefined);
+    (async () => {
+      let count = 0;
+      for (let offset = 0; offset < 1000; offset += 100) {
+        const page = await request<Page<{ status: string }>>(`/schools/${schoolId}/admissions?limit=100&offset=${offset}`);
+        count += page.items.filter(a => a.status === 'application' || a.status === 'review').length;
+        if (offset + page.items.length >= page.total || !page.items.length) break;
+      }
+      setWaiting(count);
+    })().catch(() => undefined);
+  }, [schoolId]);
 
   async function printBlank() {
     const chosen = classes.find(c => c.id === printClass); if (!chosen) return;
@@ -48,8 +72,26 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
     } catch (e) { setError((e as Error).message); }
   }
 
+  const missing = follow?.open ? follow.classes.filter(c => c.register_status === 'missing').length : 0;
+  const drafts = follow?.open ? follow.classes.filter(c => c.register_status === 'draft').length : 0;
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const attention: Attention[] = [
+    ...(missing ? [{ icon: 'event_busy', tone: 'critical' as Tone, text: `${plural(missing, 'class has', 'classes have')} no register today`, detail: follow!.classes.filter(c => c.register_status === 'missing').slice(0, 4).map(c => c.name).join(', ') + (missing > 4 ? '…' : ''), href: '#/attendance', go: 'Open registers' }] : []),
+    ...(drafts ? [{ icon: 'edit_note', tone: 'caution' as Tone, text: `${plural(drafts, 'register is', 'registers are')} saved but not submitted`, detail: 'Teachers still need to submit today’s marks.', href: '#/attendance', go: 'Open registers' }] : []),
+    ...(absentTotal ? [{ icon: 'person_alert', tone: 'caution' as Tone, text: `${plural(absentTotal, 'learner is', 'learners are')} often absent`, detail: `3 or more absences in the last 14 days${absent[0] ? `, including ${absent[0].full_name}` : ''}`, href: '#/attendance', go: 'Check registers' }] : []),
+    ...(fees && fees.outstandingPesewas > 0 ? [{ icon: 'account_balance_wallet', tone: 'critical' as Tone, text: `${cedis(fees.outstandingPesewas)} in fees outstanding`, detail: `${Math.round(fees.outstandingPesewas / Math.max(fees.billedPesewas, 1) * 100)}% of the ${cedis(fees.billedPesewas)} billed for ${fees.term}`, href: '#/fees', go: 'Open fees' }] : []),
+    ...(waiting ? [{ icon: 'how_to_reg', tone: 'info' as Tone, text: `${plural(waiting, 'admission is', 'admissions are')} waiting for a decision`, detail: 'New applications and applications under review.', href: '#/learners/applications', go: 'Review applications' }] : []),
+  ];
+
   return <section aria-label="Attendance follow-up" className="page">
     {error && <p role="alert">{error}</p>}
+    {follow && <Card title="Needs attention" hint={attention.length ? 'Today’s open items, most urgent first.' : undefined} flush>
+      {attention.length ? <ul className="attention">{attention.map(item => <li key={item.text}>
+        <span className={`stat-icon tone-${item.tone}`}><Icon name={item.icon}/></span>
+        <div><strong>{item.text}</strong><span className="sub">{item.detail}</span></div>
+        <a className="button secondary" href={item.href}>{item.go}</a>
+      </li>)}</ul> : <Empty title="Nothing needs your attention" hint="Registers, absences, fees and admissions are all up to date."/>}
+    </Card>}
     <div className="columns">
       <Card title="Attendance follow-up" hint={follow ? (follow.open ? `Registers for ${follow.day} · ${follow.outstanding} outstanding` : `${follow.day} is not an open school day`) : 'Loading…'} action={<a className="button secondary" href="#/attendance">Open registers</a>} flush>
         {follow && (follow.open

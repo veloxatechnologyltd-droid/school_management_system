@@ -1,6 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
-import { currentTerm } from '../lib/ui';
+import { Card, Empty, Pill, currentTerm } from '../lib/ui';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -108,9 +108,9 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
     <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
     <label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">Choose a subject</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-    {grid.length > 0 && <><table><thead><tr><th>Learner</th><th>Continuous assessment (0–100)</th><th>Exam (0–100)</th>{head && <th>Published report</th>}</tr></thead><tbody>
+    {grid.length > 0 && <><div className="table-wrap"><table><thead><tr><th>Learner</th><th>Continuous assessment (0–100)</th><th>Exam (0–100)</th>{head && <th>Published report</th>}</tr></thead><tbody>
       {grid.map(row => <tr key={row.learnerId}><td>{row.fullName}</td>{(['ca', 'exam'] as const).map(kind => <td key={kind}><input type="number" min={0} max={100} step="0.01" aria-label={`${row.fullName} ${kind === 'ca' ? 'continuous assessment' : 'exam'}`} disabled={row.locked}
-        value={edits[`${row.learnerId}:${kind}`] ?? (row[kind] ?? '')} onChange={e => setEdits({ ...edits, [`${row.learnerId}:${kind}`]: e.target.value })}/></td>)}{head && <td>{row.locked ? <button type="button" className="secondary" disabled={busy} onClick={() => reopen(row)}>Correct this report</button> : row.published ? <button type="button" disabled={busy} onClick={() => reissue(row)}>Publish corrected report</button> : '–'}</td>}</tr>)}</tbody></table>
+        value={edits[`${row.learnerId}:${kind}`] ?? (row[kind] ?? '')} onChange={e => setEdits({ ...edits, [`${row.learnerId}:${kind}`]: e.target.value })}/></td>)}{head && <td>{row.locked ? <button type="button" className="secondary" disabled={busy} onClick={() => reopen(row)}>Correct this report</button> : row.published ? <button type="button" disabled={busy} onClick={() => reissue(row)}>Publish corrected report</button> : '–'}</td>}</tr>)}</tbody></table></div>
       <div className="actions"><button disabled={busy || !policy} onClick={saveScores}>Save scores</button>{head && <button className="secondary" disabled={busy} onClick={preview}>Preview results</button>}</div></>}
     {results.length > 0 && <><h3>Results preview</h3><ul className="history">{results.map(r => <li key={r.learnerId}><strong>{r.fullName}{r.position ? ` · position ${r.position}` : ''}</strong><span>{r.complete ? `Average ${r.average}` : 'Missing scores'} · {r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</span></li>)}</ul>
       <button disabled={busy} onClick={publish}>Publish terminal reports</button></>}
@@ -120,20 +120,24 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
 
 type Snapshot = { term: { name: string }; class: { name: string }; classSize: number; average: number | null; position: number | null; complete: boolean; policy: { caWeight: number; examWeight: number; sourceNote: string };
   subjects: { name: string; ca: number | null; exam: number | null; total: number | null; grade: string | null; remark: string | null }[] };
-export function GuardianTerminalReports({ schoolId }: { schoolId: string }) {
+export function GuardianTerminalReports({ schoolId, childId: chosenChild }: { schoolId: string; childId?: string }) {
   const [children, setChildren] = useState<{ id: string; full_name: string; academic: boolean }[]>([]);
   const [childId, setChildId] = useState('');
   const [reports, setReports] = useState<{ id: string; snapshot: Snapshot; published_at: string }[]>([]);
   const [error, setError] = useState('');
-  useEffect(() => { request<{ id: string; full_name: string; academic: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(rows => { const academic = rows.filter(r => r.academic); setChildren(academic); setChildId(prior => prior || academic[0]?.id || ''); }).catch(e => setError((e as Error).message)); }, [schoolId]);
-  useEffect(() => { setReports([]); if (!childId) return; request<{ items: typeof reports }>(`/schools/${schoolId}/guardian/children/${childId}/terminal-reports`).then(r => setReports(r.items)).catch(e => setError((e as Error).message)); }, [schoolId, childId]);
-  return <section aria-label="Terminal reports">
-    <h2>Terminal reports</h2>{error && <p role="alert">{error}</p>}
-    <label>Child<select value={childId} onChange={e => setChildId(e.target.value)}><option value="">Choose a child</option>{children.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label>
-    {childId && !reports.length && <p>No published terminal reports yet.</p>}
-    {reports.map(r => <article key={r.id}><h3>{r.snapshot.term.name} · {r.snapshot.class.name}</h3>
-      <table><thead><tr><th>Subject</th><th>Class work</th><th>Exam</th><th>Total</th><th>Grade</th></tr></thead><tbody>{r.snapshot.subjects.map(s => <tr key={s.name}><td>{s.name}</td><td>{s.ca ?? '–'}</td><td>{s.exam ?? '–'}</td><td>{s.total ?? '–'}</td><td>{s.grade ?? '–'}{s.remark ? ` · ${s.remark}` : ''}</td></tr>)}</tbody></table>
-      <p>{r.snapshot.complete ? `Average ${r.snapshot.average} · position ${r.snapshot.position} of ${r.snapshot.classSize}` : 'Some scores were not available when this report was published.'}</p>
-      <p className="muted">Weighting: {r.snapshot.policy.caWeight}% class work, {r.snapshot.policy.examWeight}% exam. Source: {r.snapshot.policy.sourceNote}</p></article>)}
+  useEffect(() => { request<{ id: string; full_name: string; academic: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(rows => { const academic = rows.filter(r => r.academic); setChildren(academic); setChildId(prior => prior || academic[0]?.id || ''); }).catch(e => setError((e as Error).message)); }, [schoolId, chosenChild]);
+  // In the guardian portal the page's child picker chooses the child; only children with academic access have reports.
+  const reportChild = chosenChild === undefined ? childId : children.some(c => c.id === chosenChild) ? chosenChild : '';
+  useEffect(() => { setReports([]); if (!reportChild) return; request<{ items: typeof reports }>(`/schools/${schoolId}/guardian/children/${reportChild}/terminal-reports`).then(r => setReports(r.items)).catch(e => setError((e as Error).message)); }, [schoolId, reportChild]);
+  if (chosenChild !== undefined && !reportChild && !error) return null;
+  return <section aria-label="Terminal reports" className="page">
+    <Card title="Terminal reports" hint="Published at the end of each term." action={chosenChild === undefined ? <label className="inline-field">Child<select value={childId} onChange={e => setChildId(e.target.value)}><option value="">Choose a child</option>{children.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label> : undefined} flush>
+      {error && <p role="alert">{error}</p>}
+      {reportChild && !reports.length && <Empty title="No terminal reports yet" hint="They appear here once the school publishes them."/>}
+      {reports.map(r => <article key={r.id} className="term-report"><div className="term-report-head"><h4>{r.snapshot.term.name} · {r.snapshot.class.name}</h4>{r.snapshot.complete ? <Pill tone="info">Average {r.snapshot.average} · position {r.snapshot.position} of {r.snapshot.classSize}</Pill> : <Pill tone="caution">Some scores missing</Pill>}</div>
+        <div className="table-wrap"><table><thead><tr><th>Subject</th><th className="num">Class work</th><th className="num">Exam</th><th className="num">Total</th><th>Grade</th></tr></thead><tbody>{r.snapshot.subjects.map(s => <tr key={s.name}><td>{s.name}</td><td className="num">{s.ca ?? '–'}</td><td className="num">{s.exam ?? '–'}</td><td className="num">{s.total ?? '–'}</td><td>{s.grade ?? '–'}{s.remark ? ` · ${s.remark}` : ''}</td></tr>)}</tbody></table></div>
+        {!r.snapshot.complete && <p>Some scores were not available when this report was published.</p>}
+        <p className="muted">Weighting: {r.snapshot.policy.caWeight}% class work, {r.snapshot.policy.examWeight}% exam. Source: {r.snapshot.policy.sourceNote}</p></article>)}
+    </Card>
   </section>;
 }

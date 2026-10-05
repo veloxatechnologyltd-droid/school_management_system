@@ -68,6 +68,8 @@ export function Dialog({ title, onClose, children, wide = false, drawer = false 
   </div>;
 }
 
+// A stored timestamp shown in Ghana time, e.g. "5 Oct 2026, 09:14".
+export const when = (iso?: string | null) => iso ? new Date(iso).toLocaleString('en-GB', { timeZone: 'Africa/Accra', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 export const todayInAccra = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
 // The term a page should open on: the one running today, else the latest one already started, else the first listed.
 export function currentTerm<T extends { start_date?: string; end_date?: string }>(terms: T[]): T | undefined {

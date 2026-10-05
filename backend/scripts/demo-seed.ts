@@ -292,6 +292,31 @@ async function main() {
       });
     }
 
+    step('Early years progress reports');
+    // A few reports per class at different stages, so the review queue and the families' view both show something.
+    // A report period may only cover locked registers, and the loader locks registers older than six days.
+    const reportDays = observationDays.filter(d => d < addDays(TODAY, -6));
+    const reportStart = reportDays[0], reportEnd = reportDays[reportDays.length - 1];
+    const reportTexts = [
+      ['Listens closely at story time and retells familiar stories with growing confidence. Counts objects to ten during play.', 'Practise retelling stories in order at home, and count everyday things together, such as cups or steps.'],
+      ['Takes turns with friends and joins group games happily. Holds crayons with good control and colours within lines.', 'Encourage cutting along straight lines and naming shapes while drawing.'],
+      ['Sings familiar songs and explains own drawings in short sentences. Shares materials with reminders.', 'Give chances to share without reminders and to talk about pictures in longer sentences.'],
+    ] as const;
+    if (reportStart && reportEnd) for (const [i, c] of classes.entries()) {
+      if (c.level !== 'Nursery' && c.level !== 'KG') continue;
+      const teacher = await new Person(staff[3 + i]!.email).login();
+      for (const [n, l] of learners.filter(l => l.classIndex === i && l.enrolmentId).slice(0, 3).entries()) {
+        const [strengths, nextSteps] = reportTexts[n]!;
+        const report = await teacher.post('/early-years/reports', { learnerId: l.id, enrolmentId: l.enrolmentId, periodStart: reportStart, periodEnd: reportEnd, strengths, nextSteps });
+        if (n === 2) continue; // stays a draft
+        const base = `/early-years/report-revisions/${report.revisionId}`;
+        let version = (await teacher.post(`${base}/submit`, { version: report.version })).version;
+        if (n === 1) continue; // waits for the headteacher's review
+        version = (await head.post(`${base}/approve`, { version })).version;
+        await head.post(`${base}/publish`, { version });
+      }
+    }
+
     step('Pickup records at the gate');
     if (weekday(TODAY) && !holidays[TODAY]) {
       for (const l of learners.filter(l => l.classIndex <= 4).slice(0, 40).filter(() => chance(0.3)).slice(0, 8)) {
