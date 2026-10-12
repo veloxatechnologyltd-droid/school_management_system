@@ -34,7 +34,7 @@ export class PromotionsController {
   private async roster(client: PoolClient, schoolId: string, classId: string, effectiveDate: string) {
     if (!(await client.query('SELECT 1 FROM class_sections WHERE school_id=$1 AND id=$2',[schoolId,classId])).rowCount) throw new NotFoundException('Class unavailable');
     return (await client.query(`SELECT l.id,l.full_name,l.admission_number FROM enrolments e JOIN learners l ON l.school_id=e.school_id AND l.id=e.learner_id
-      WHERE e.school_id=$1 AND e.class_id=$2 AND e.superseded_at IS NULL AND e.start_date<$3 AND (e.end_date IS NULL OR e.end_date>=$3) ORDER BY l.full_name,l.id`,[schoolId,classId,effectiveDate])).rows;
+      WHERE e.school_id=$1 AND e.class_id=$2 AND e.superseded_at IS NULL AND e.start_date<$3 AND (e.end_date IS NULL OR e.end_date>$3) ORDER BY l.full_name,l.id`,[schoolId,classId,effectiveDate])).rows;
   }
   @Get('preview')
   preview(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Query() query: PreviewDto) {

@@ -48,4 +48,6 @@ test('promotion moves, repeats and withdraws in one reviewed batch and is retry-
   assert.deepEqual(of(kids[1]).map((row:any)=>row.class_id),[A,C]);assert.equal(of(kids[2]).length,1);assert.equal(of(kids[2])[0].end_date,effective);assert.equal(of(kids[2])[0].end_reason,'End of year promotion');
   const actions=(await call('/audit?limit=100')).body.items.map((row:any)=>row.action);assert.ok(actions.includes('learners.promotion.completed'));
   assert.equal((await call(`/promotions/preview?sourceClassId=${A}&effectiveDate=${shift(22)}`)).body.items.length,0);
+  // Opening the page again on the same date must not offer the already promoted class a second time.
+  assert.equal((await call(`/promotions/preview?sourceClassId=${A}&effectiveDate=${effective}`)).body.items.length,0);
 });

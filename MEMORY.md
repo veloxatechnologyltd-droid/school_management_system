@@ -161,3 +161,13 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Evans demonstrates the real production system to clients, using a realistic school loaded into a separate local database (`school_demo`, `npm run dev:demo` / `npm run demo:reset`). The demo is data, not a second UI: the production app is not being turned into the old client demo.
 **Why:** The production system is the valuable product; prospective schools need to see it working with believable records rather than synthetic test rows.
 **What was rejected:** Showing the old mock demo, seeding the development/test database (test runs would pollute it and it would pollute tests), inserting demo records directly in SQL (would bypass the rules, versions and audit trail that the API enforces).
+
+## 2026-10-12, Term trial school on Supabase drives the next features
+**What was decided:** At Evans's request, a trial school ("Nkabom Basic School (Trial)", logins @nkabom-trial.test, state and trial passwords in `.local/term-trial/state.json`) runs on the Supabase database through Term 3 of 2025/26 (replayed) and Term 1 of 2026/27 up to today, entirely through the API (`backend/scripts/term-trial.ts`). Gaps it exposed were built and pushed; hosted migrations 031 and 032 were applied with Evans's in-session approval. Teacher-scoped work for the replayed past term is done by the headteacher (assignments end with the year); teachers act themselves in the live term.
+**Why:** Running a real term end to end shows what a Ghanaian KG–JHS school actually needs, rather than guessing.
+**What was rejected:** Faking the clock or extending the 2025/26 year past its real end to let teachers act on the past term; a separate local database (the goal was to use the Supabase account).
+
+## 2026-10-12, Guardians may sign in with a phone number; fee arrears are shown, not moved
+**What was decided:** An account's sign-in may be a Ghana mobile number (stored as +233…, also used for SMS). Per-learner fee adjustments are append-only: discounts by the headteacher, charges by the accountant; a discount may take a bill to zero even if already paid, and the excess shows as a credit. Earlier terms' balances (positive or credit) appear on the next bill as "arrears" computed live; money is never moved between invoices.
+**Why:** Many parents have no email; schools grant bursaries after payment and carry balances term to term.
+**What was rejected:** Email-only guardian accounts; copying arrears into the new invoice (double counting); a refunds module for now.

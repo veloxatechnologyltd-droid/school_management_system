@@ -68,7 +68,7 @@ test('report cards carry attendance, conduct, remarks and the next term date; re
   assert.deepEqual(await ok(`/assessment/classes/${cls}/publish`,'POST',{termId:term1}),{published:2,alreadyPublished:0,incomplete:0});
   const report=(await call(`/guardian/children/${kids[0]}/terminal-reports`,'GET',undefined,guardian)).body.items[0].snapshot;
   assert.deepEqual(report.attendance,{present:3,possible:3});assert.equal(report.conduct,'Very good');assert.equal(report.teacherRemark,'A focused learner');assert.equal(report.headRemark,'Excellent work. Promoted.');
-  assert.equal(report.nextTermBegins,shift(5));assert.equal(report.school.address,'P.O. Box 12, Kasoa');assert.equal(report.school.name,'Term operations school');
+  assert.equal(report.nextTermBegins,shift(5));assert.equal(report.yearName,'Ops year');assert.equal(report.school.address,'P.O. Box 12, Kasoa');assert.equal(report.school.name,'Term operations school');
   const other=(await owner.query('SELECT snapshot FROM terminal_reports WHERE school_id=$1 AND learner_id=$2',[school,kids[1]])).rows[0].snapshot;assert.deepEqual(other.attendance,{present:1,possible:3});
   const printed=(await call(`/assessment/classes/${cls}/reports?termId=${term1}`,'GET',undefined,teacher)).body.items;
   assert.deepEqual(printed.map((row:any)=>row.snapshot.learner.fullName),['Ama Report','Kojo Report']);assert.equal((await call(`/assessment/classes/${cls}/reports?termId=${term1}`,'GET',undefined,guardian)).status,403);

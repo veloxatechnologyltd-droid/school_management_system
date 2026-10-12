@@ -182,17 +182,18 @@ export class AssessmentService {
   // Everything printed on a Ghanaian terminal report besides the scores, fixed into the snapshot at publication.
   private async reportExtras(client: PoolClient, schoolId: string, classId: string, term: { id: string; start_date: string; end_date: string }) {
     const school = (await client.query('SELECT name,address,phone,motto FROM schools WHERE id=$1',[schoolId])).rows[0];
+    const yearName = (await client.query('SELECT y.name FROM terms t JOIN academic_years y ON y.school_id=t.school_id AND y.id=t.academic_year_id WHERE t.school_id=$1 AND t.id=$2',[schoolId,term.id])).rows[0]?.name ?? null;
     const nextTerm = (await client.query('SELECT name,start_date::text FROM terms WHERE school_id=$1 AND start_date>$2 ORDER BY start_date LIMIT 1',[schoolId,term.end_date])).rows[0] ?? null;
     const attendance = new Map((await client.query(`SELECT m.learner_id,count(*) FILTER (WHERE m.mark IN ('present','late'))::int AS present,count(*) FILTER (WHERE m.mark<>'unmarked')::int AS marked
       FROM attendance_marks m JOIN attendance_registers r ON r.school_id=m.school_id AND r.id=m.register_id
       WHERE r.school_id=$1 AND r.class_id=$2 AND r.day>=$3 AND r.day<=$4 AND r.status IN ('submitted','locked') GROUP BY m.learner_id`,[schoolId,classId,term.start_date,term.end_date])).rows.map(row => [row.learner_id as string,{present:row.present as number,possible:row.marked as number}]));
     const remarks = await this.latestRemarks(client,schoolId,term.id,classId);
-    return {school,nextTerm,attendance,remarks};
+    return {school,yearName,nextTerm,attendance,remarks};
   }
   private snapshotOf(results: any, row: any, extras: Awaited<ReturnType<AssessmentService['reportExtras']>>) {
     const teacher = extras.remarks.find(r => r.learner_id === row.learnerId && r.author === 'class_teacher'), head = extras.remarks.find(r => r.learner_id === row.learnerId && r.author === 'headteacher');
     return {term:results.term,class:results.class,classSize:results.classSize,policy:results.policy,learner:{id:row.learnerId,fullName:row.fullName,admissionNumber:row.admissionNumber},subjects:row.subjects,average:row.average,position:row.position,complete:row.complete,
-      school:extras.school,nextTermBegins:extras.nextTerm?.start_date ?? null,attendance:extras.attendance.get(row.learnerId) ?? {present:0,possible:0},
+      school:extras.school,yearName:extras.yearName,nextTermBegins:extras.nextTerm?.start_date ?? null,attendance:extras.attendance.get(row.learnerId) ?? {present:0,possible:0},
       conduct:teacher?.conduct ?? null,attitude:teacher?.attitude ?? null,interest:teacher?.interest ?? null,teacherRemark:teacher?.remark ?? null,headRemark:head?.remark ?? null};
   }
   reopen(client: PoolClient, actor: Actor, classId: string, body: ReopenDto) {

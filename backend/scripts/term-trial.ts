@@ -272,7 +272,7 @@ async function guardians() {
   }
   const staffList = (await head.get('/accounts')).items as { user_id: string; membership_id: string; login: string }[];
   for (const a of Object.values(state.accounts)) { const row = staffList.find(s => s.login === a.email); if (row) a.membershipId = row.membership_id; }
-  const linked = new Set(((await head.get('/guardian-links?limit=100')).items ?? []).map((l: { learner_id: string }) => l.learner_id));
+  const linked = new Set((await all(head, '/guardian-links?')).map((l: { learner_id: string }) => l.learner_id));
   await inBatches(state.learners.filter(l => state.families[l.family]?.account && !linked.has(l.id)), 6, async l => {
     const guardian = state.accounts[state.families[l.family]!.account!]!;
     const link = await head.post('/guardian-links', { learnerId: l.id, guardianMembershipId: guardian.membershipId, academic: true, billing: true, pickup: true, contact: true });
@@ -493,6 +493,14 @@ async function exams() {
 async function close() {
   const head = await as('head'), bursar = await as('bursar');
   const termId = state.termIds['Term 3']!;
+  if (!state.done.includes('close:credits')) {
+    step('JHS 1–2 families who had already paid the wrongly billed BECE mock fee get it back as a credit on their next bill');
+    const paidUp = (await all(bursar, `/finance/invoices?termId=${termId}`)).filter((i: { class_name: string; adjustments: { label: string }[] }) => (i.class_name === 'JHS 1' || i.class_name === 'JHS 2') && !i.adjustments.some(a => a.label === 'BECE mock fee not applicable'));
+    for (const inv of paidUp) await head.post(`/finance/invoices/${inv.id}/adjustments`, { kind: 'discount', label: 'BECE mock fee not applicable', amountPesewas: 10000, reason: 'The BECE mock fee was set for all JHS classes by mistake; already paid, so it is credited to the next bill' });
+    step(`  ${paidUp.length} credits recorded`);
+    state.findings = state.findings.filter(f => !/no credit or refund|refund or credit/.test(f));
+    state.done.push('close:credits'); save();
+  }
   if (!state.done.includes('close:vacation')) {
     step('Vacation: closing notice, fees position and families who still owe');
     const n = await head.post('/notices', { title: 'Vacation and reopening', body: 'School vacates today, Friday 24 July 2026. Reports have been given out. School reopens for the 2026/2027 year on Tuesday 8 September 2026. Have a safe holiday.', audience: 'school' });

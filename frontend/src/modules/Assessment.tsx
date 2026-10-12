@@ -167,7 +167,7 @@ const longDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateStrin
 // Reports published before these details existed show what they hold.
 export function ReportCard({ snapshot: r }: { snapshot: Snapshot }) {
   return <article className="report-card">
-    <header className="report-card-head"><h3>{r.school?.name ?? 'Terminal report'}</h3>{r.school?.motto && <p className="report-motto">{r.school.motto}</p>}{(r.school?.address || r.school?.phone) && <p>{[r.school.address, r.school.phone].filter(Boolean).join(' · ')}</p>}<p className="report-title">Terminal report · {r.term.name}</p></header>
+    <header className="report-card-head"><h3>{r.school?.name ?? 'Terminal report'}</h3>{r.school?.motto && <p className="report-motto">{r.school.motto}</p>}{(r.school?.address || r.school?.phone) && <p>{[r.school.address, r.school.phone].filter(Boolean).join(' · ')}</p>}<p className="report-title">Terminal report · {r.term.name}{r.yearName ? `, ${r.yearName}` : ''}</p></header>
     <dl className="report-facts">
       <div><dt>Name</dt><dd>{r.learner?.fullName}</dd></div><div><dt>Admission no.</dt><dd>{r.learner?.admissionNumber}</dd></div><div><dt>Class</dt><dd>{r.class.name}</dd></div>
       <div><dt>Position</dt><dd>{r.position ? `${ordinal(r.position)} of ${r.classSize}` : '–'}</dd></div><div><dt>Average</dt><dd>{r.average ?? '–'}</dd></div>
@@ -187,7 +187,7 @@ export function ReportCard({ snapshot: r }: { snapshot: Snapshot }) {
 
 type Snapshot = { term: { name: string }; class: { name: string }; classSize: number; average: number | null; position: number | null; complete: boolean; policy: { caWeight: number; examWeight: number; sourceNote: string };
   subjects: { name: string; ca: number | null; exam: number | null; total: number | null; grade: string | null; remark: string | null }[];
-  learner?: { fullName: string; admissionNumber: string }; school?: { name: string; address: string | null; phone: string | null; motto: string | null }; nextTermBegins?: string | null;
+  learner?: { fullName: string; admissionNumber: string }; yearName?: string | null; school?: { name: string; address: string | null; phone: string | null; motto: string | null }; nextTermBegins?: string | null;
   attendance?: { present: number; possible: number }; conduct?: string | null; attitude?: string | null; interest?: string | null; teacherRemark?: string | null; headRemark?: string | null };
 export function GuardianTerminalReports({ schoolId, childId: chosenChild }: { schoolId: string; childId?: string }) {
   const [children, setChildren] = useState<{ id: string; full_name: string; academic: boolean }[]>([]);
