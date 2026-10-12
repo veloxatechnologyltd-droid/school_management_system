@@ -176,3 +176,8 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Existing learner records are corrected from a staged CSV that the headteacher applies with a reason; each changed field is stored in append-only `learner_corrections` with old and new values, and a database trigger refuses a name or date-of-birth change without a matching correction in the same transaction (migration 033). Sex keeps its existing reasoned edit and is also recorded as a correction when changed by CSV.
 **Why:** The trial school needed bulk fixes from class registers, and identity fields must keep their history (reports and receipts already printed carry the old name).
 **What was rejected:** Granting plain UPDATE on learner names (history depends on application code alone); overwriting via the import flow (it creates learners, it does not correct them); a per-learner edit form first (schools fix these in bulk).
+
+## 2026-10-12, Hosted migration 033 applied
+**What was decided:** At Evans's explicit request, migration 033 (learner corrections) was previewed then applied to Supabase with the reviewed runner; the hosted ledger is at 033.
+**Why:** The CSV learner-correction feature is pushed and production refuses to start on an outdated ledger.
+**What was rejected:** Deploying before the hosted apply.

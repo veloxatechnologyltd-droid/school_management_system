@@ -7,7 +7,7 @@ Start here. Read `MEMORY.md`, `AGENT.md` and `STATUS.md` first (see `AGENTS.md`)
 - A trial school, **Nkabom Basic School (Trial)**, runs on Supabase: KG 1–JHS 3, 249 learners, Term 3 of 2025/26 complete, Term 1 of 2026/27 up to 12 Oct.
   - Logins and state: `.local/term-trial/state.json` (ignored by Git).
   - Driver: `backend/scripts/term-trial.ts` (phases `setup|enrol|guardians|term|exams|close|current|status`).
-- Hosted migrations go up to **032**; **033 (learner corrections) is written and pushed but not applied hosted**. Any new migration needs Evans's explicit approval before the hosted apply (preview, then `--apply`).
+- Hosted migrations go up to **033** (033 applied 2026-10-12 with Evans's approval). Any new migration needs Evans's explicit approval before the hosted apply (preview, then `--apply`).
 - Tests: 183 backend and 20 browser tests.
   - Run them in an isolated copy (`.local/t`), because `npm test` rebuilds `backend/dist` and restarts a running cloud API.
   - The browser tests reuse ports 3018/5178, so never run them while `dev:cloud` is up. In `.local/t`, move them to other ports (vite config + Playwright config, `reuseExistingServer:false`); otherwise Playwright silently drives the cloud API.
@@ -44,7 +44,7 @@ Keep school isolation (RLS), append-only history and human approval. The platfor
 
 ### 2. Bulk work
 
-- [x] Update existing learners from a CSV (sex, date of birth, name corrections): staged, previewed and approved like imports, with history kept. *Learners → "Update from CSV"; migration 033 (local only, **needs Evans's approval for the hosted apply before deploying**).*
+- [x] Update existing learners from a CSV (sex, date of birth, name corrections): staged, previewed and approved like imports, with history kept. *Learners → "Update from CSV"; migration 033, applied to Supabase 2026-10-12.*
 - [x] Apply one discount or charge to many bills at once (e.g. all staff wards), with one reason, recorded per bill. *Select bills on Fees → "Adjust N selected"; `POST /finance/invoices/adjustments`, all or nothing, one row and audit event per bill. Not yet run on the trial school.*
 - [x] Print report cards for the whole school or a level, one card per page. *Assessment → "Report cards for" + Print; `GET /assessment/reports?termId=&level=`, latest revision, class by class. Not yet run on the trial school.*
 
