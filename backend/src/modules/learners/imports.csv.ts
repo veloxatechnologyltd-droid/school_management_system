@@ -27,7 +27,8 @@ function delimiterOf(source:string){
   const counts=[',',';','\t'].map(d=>[d,line.split(d).length-1] as const).sort((a,b)=>b[1]-a[1]);
   return counts[0][1]>0?counts[0][0]:',';
 }
-export function parseLearnerCsv(source:string,dateFormat:DateFormat='iso'):CsvRow[]{
+// For corrections (`forUpdate`) only the admission number is required, plus at least one of name, date of birth or sex.
+export function parseLearnerCsv(source:string,dateFormat:DateFormat='iso',forUpdate=false):CsvRow[]{
   const csv=source.replace(/^\uFEFF/,''),delimiter=delimiterOf(csv);const records:string[][]=[];let row:string[]=[],field='',quoted=false,closed=false;
   const endField=()=>{row.push(field);field='';closed=false;};
   const endRow=()=>{endField();records.push(row);row=[];if(records.length>201)throw new BadRequestException('Import at most 200 CSV records at a time');};
@@ -47,7 +48,8 @@ export function parseLearnerCsv(source:string,dateFormat:DateFormat='iso'):CsvRo
     if(found.length>1)throw new BadRequestException(`More than one column looks like ${name==='fullName'?'the learner name':name==='dateOfBirth'?'the date of birth':name==='sex'?'sex':'the admission number'}`);
     column[name]=found.length?found[0]:-1;
   }
-  if(column.admissionNumber<0||column.fullName<0)throw new BadRequestException('The first row must name an admission number column (e.g. "Admission No.") and a name column (e.g. "Full Name"); "Date of Birth" and "Sex" are optional');
+  if(forUpdate&&(column.admissionNumber<0||[column.fullName,column.dateOfBirth,column.sex].every(index=>index<0)))throw new BadRequestException('The first row must name an admission number column (e.g. "Admission No.") and at least one column to correct: "Full Name", "Date of Birth" or "Sex"');
+  if(!forUpdate&&(column.admissionNumber<0||column.fullName<0))throw new BadRequestException('The first row must name an admission number column (e.g. "Admission No.") and a name column (e.g. "Full Name"); "Date of Birth" and "Sex" are optional');
   const at=(cells:string[],index:number)=>index<0?'':(cells[index]??'').trim();
   const rows=records.slice(1).flatMap((cells,index)=>cells.every(value=>!value.trim())?[]:[{rowNumber:index+2,input:{admissionNumber:at(cells,column.admissionNumber),fullName:at(cells,column.fullName),dateOfBirth:normalizeDate(at(cells,column.dateOfBirth),dateFormat),...(column.sex<0?{}:{sex:normalizeSex(at(cells,column.sex))}),columnCount:cells.length===header.length?3:0}}]);
   if(!rows.length)throw new BadRequestException('CSV needs at least one learner record');

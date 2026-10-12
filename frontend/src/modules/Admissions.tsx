@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { LearnerImports } from './LearnerImports';
+import { LearnerUpdates, fieldLabel } from './LearnerUpdates';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Tabs, type Tone } from '../lib/ui';
 
 type Role = 'headteacher' | 'frontdesk' | string;
@@ -35,10 +36,11 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
   const [learnersSearchInput, setLearnersSearchInput] = useState('');
   const [learnersSearch, setLearnersSearch] = useState('');
   const [detail, setDetail] = useState<LearnerDetail | null>(null);
+  const [corrections, setCorrections] = useState<{ id: string; field: keyof typeof fieldLabel; old_value: string | null; new_value: string; reason: string; recorded_at: string }[]>([]);
   const [selectedLearner, setSelectedLearner] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'roll' | 'applications'>(initialTab);
-  const [dialog, setDialog] = useState<'' | 'application' | 'import' | 'census'>('');
+  const [dialog, setDialog] = useState<'' | 'application' | 'import' | 'update' | 'census'>('');
   const [census, setCensus] = useState<{ day: string; items: { id: string; name: string; female: number; male: number; unrecorded: number }[] } | null>(null);
   const selectedLearnerRef=useRef('');
   const [busy, setBusy] = useState(false);
@@ -109,12 +111,13 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
   useEffect(() => {
     const epoch = ++learnerEpoch.current;
     detailEpoch.current++;selectedLearnerRef.current=selectedLearner;
-    setDetail(null);
+    setDetail(null);setCorrections([]);
     setWithdrawalOpen(false);setWithdrawal({effectiveDate:dateToday(),reason:''});
     if (!selectedLearner) return;
     void request<LearnerDetail>(`/schools/${schoolId}/learners/${selectedLearner}`).then(row => {
       if (alive.current && learnerEpoch.current === epoch) setDetail(row);
     }).catch(e => { if (alive.current && learnerEpoch.current === epoch) setError((e as Error).message); });
+    void request<{ items: typeof corrections }>(`/schools/${schoolId}/learners/${selectedLearner}/corrections`).then(r => { if (alive.current && learnerEpoch.current === epoch) setCorrections(r.items); }).catch(() => undefined);
   }, [schoolId, selectedLearner]);
 
   async function send(key: string, payload: Record<string, unknown>, url: string, successText: string) {
@@ -213,7 +216,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
 
   return <section aria-label="Admissions and learners" className="page">
     <PageHeader eyebrow="People" title="Learners" blurb="Every learner record, application and class history in one place."
-      actions={<><button type="button" disabled={loading || !classes.length} onClick={() => { setError(''); setNotice(''); setDialog('application'); }}><Icon name="person_add"/>New application</button><button type="button" className="secondary" onClick={() => setDialog('import')}><Icon name="upload_file"/>Import existing learners</button><button type="button" className="secondary" onClick={() => { setDialog('census'); setCensus(null); request<NonNullable<typeof census>>(`/schools/${schoolId}/learners/census`).then(setCensus).catch(e => setError((e as Error).message)); }}><Icon name="groups"/>Class sizes</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void loadWorkspace(true)}>Refresh records</button></>}/>
+      actions={<><button type="button" disabled={loading || !classes.length} onClick={() => { setError(''); setNotice(''); setDialog('application'); }}><Icon name="person_add"/>New application</button><button type="button" className="secondary" onClick={() => setDialog('import')}><Icon name="upload_file"/>Import existing learners</button><button type="button" className="secondary" onClick={() => setDialog('update')}><Icon name="edit_document"/>Update from CSV</button><button type="button" className="secondary" onClick={() => { setDialog('census'); setCensus(null); request<NonNullable<typeof census>>(`/schools/${schoolId}/learners/census`).then(setCensus).catch(e => setError((e as Error).message)); }}><Icon name="groups"/>Class sizes</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void loadWorkspace(true)}>Refresh records</button></>}/>
     {!dialog && !selectedLearner && messages}
     {loading ? <p role="status">Loading admissions and learner records…</p> : <>
       <div className="actions"><Tabs label="Learner lists" value={tab} onChange={setTab} options={[{ id: 'roll', label: `Learner roll (${learnersTotal})` }, { id: 'applications', label: `Admissions (${admissionsTotal})` }]}/></div>
@@ -269,6 +272,9 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
         <div className="actions"><button disabled={busy || !classes.length}>{busy ? 'Saving…' : 'Record application'}</button><button type="button" className="secondary" onClick={() => setDialog('')}>Cancel</button></div>
       </form>
     </Dialog>}
+    {dialog === 'update' && <Dialog title="Correct learner records from a CSV" wide onClose={() => setDialog('')}>
+      <LearnerUpdates schoolId={schoolId} csrfToken={csrfToken} role={role} onApplied={() => void loadWorkspace(false, true)}/>
+    </Dialog>}
     {dialog === 'import' && <Dialog title="Import existing learners" wide onClose={() => setDialog('')}>
       <LearnerImports schoolId={schoolId} csrfToken={csrfToken} role={role} inDialog onCommitted={() => loadWorkspace(false, true)} />
     </Dialog>}
@@ -278,6 +284,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
       {!detail ? <p role="status">Loading learner history…</p> : <div>
         <p className="muted">Admission number {detail.admission_number}{detail.date_of_birth ? ` · Date of birth ${detail.date_of_birth}` : ''}</p>
         <label className="inline-field">Sex<select aria-label="Sex" value={detail.sex ?? ''} disabled={busy} onChange={e => e.target.value && void send('sex', { version: detail.version, sex: e.target.value }, `/schools/${schoolId}/learners/${detail.id}/sex`, 'Sex recorded.')}><option value="" disabled>Not recorded</option><option value="female">Female</option><option value="male">Male</option></select></label>
+        {corrections.length > 0 && <><h4>Corrections</h4><ul className="history">{corrections.map(c => <li key={c.id}><strong>{fieldLabel[c.field]}: {c.old_value ?? 'not recorded'} → {c.new_value}</strong><span>{c.reason} · {c.recorded_at.slice(0, 10)}</span></li>)}</ul></>}
         <h4>Class history</h4>{detail.enrolments.length ? <ul className="history">{detail.enrolments.map(row => <li key={row.id}><strong>{row.class_name}</strong><span>{row.start_date}{row.end_date ? ` to ${row.end_date} (end exclusive)` : ' · Open-ended'} · {row.superseded_at ? `Superseded · ${row.supersession_reason}` : row.start_date > dateToday() ? 'Scheduled' : row.end_date && row.end_date <= dateToday() ? 'Ended' : 'Active today'}{row.end_reason ? ` · ${row.end_reason}` : ''}</span></li>)}</ul> : <p>No enrolments recorded.</p>}
         {detail.enrolments.some(row=>!row.end_date&&!row.superseded_at) ? <><form onSubmit={transferLearner}><h4>Transfer to another class</h4>
           <label>New class<select value={transfer.classId} onChange={e => setTransfer({ ...transfer, classId: e.target.value })} required><option value="">Choose a class</option>{classes.filter(c => !detail.enrolments.some(enrolment => enrolment.class_id === c.id && !enrolment.end_date && !enrolment.superseded_at)).map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}</select></label>

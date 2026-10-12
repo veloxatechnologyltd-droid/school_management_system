@@ -171,3 +171,8 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** An account's sign-in may be a Ghana mobile number (stored as +233…, also used for SMS). Per-learner fee adjustments are append-only: discounts by the headteacher, charges by the accountant; a discount may take a bill to zero even if already paid, and the excess shows as a credit. Earlier terms' balances (positive or credit) appear on the next bill as "arrears" computed live; money is never moved between invoices.
 **Why:** Many parents have no email; schools grant bursaries after payment and carry balances term to term.
 **What was rejected:** Email-only guardian accounts; copying arrears into the new invoice (double counting); a refunds module for now.
+
+## 2026-10-12, Learner names and dates of birth change only through recorded corrections
+**What was decided:** Existing learner records are corrected from a staged CSV that the headteacher applies with a reason; each changed field is stored in append-only `learner_corrections` with old and new values, and a database trigger refuses a name or date-of-birth change without a matching correction in the same transaction (migration 033). Sex keeps its existing reasoned edit and is also recorded as a correction when changed by CSV.
+**Why:** The trial school needed bulk fixes from class registers, and identity fields must keep their history (reports and receipts already printed carry the old name).
+**What was rejected:** Granting plain UPDATE on learner names (history depends on application code alone); overwriting via the import flow (it creates learners, it does not correct them); a per-learner edit form first (schools fix these in bulk).
