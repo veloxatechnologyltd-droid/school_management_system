@@ -29,7 +29,7 @@ before(async()=>{
   const leaver=randomUUID();kids.push(leaver);
   await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,'Esi Leftearly')",[leaver,school,`OP-${leaver.slice(0,8)}`]);
   await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date,end_date,end_reason) VALUES($1,$2,$3,$4,$5,$6,'Relocated')",[randomUUID(),school,leaver,cls,shift(-85),shift(-40)]);
-  await owner.query("INSERT INTO guardian_links(id,school_id,learner_id,guardian_membership_id,guardian_display_name,academic,billing,pickup,contact,verified_at,verified_by,verification_reason) VALUES($1,$2,$3,$4,'Abena Sample',true,true,false,false,now(),$5,'Synthetic access')",[randomUUID(),school,kids[0],guardianM,headM]);
+  await owner.query("INSERT INTO guardian_links(id,school_id,learner_id,guardian_membership_id,guardian_display_name,academic,billing,pickup,contact,verified_at,verified_by,verification_reason) VALUES($1,$2,$3,$4,'Abena Sample',true,true,false,true,now(),$5,'Synthetic access')",[randomUUID(),school,kids[0],guardianM,headM]);
   term1=(await ok('/assessment/terms','POST',{academicYearId:year,name:'Term 1',startDate:shift(-80),endDate:shift(-10)})).id;
   term2=(await ok('/assessment/terms','POST',{academicYearId:year,name:'Term 2',startDate:shift(5),endDate:shift(90)})).id;
 });
@@ -106,6 +106,19 @@ test('class fee items, reasoned discounts and charges, and arrears on the next b
   const statement=(await call(`/guardian/children/${kids[0]}/statement`,'GET',undefined,guardian)).body.items.find((row:any)=>row.id===invoice.id);
   assert.equal(statement.balance_pesewas,50000);assert.equal(statement.adjustments[0].label,'Staff ward');
   const actions=(await call('/audit?limit=100')).body.items.map((row:any)=>row.action);for(const a of ['finance.invoice.discount','finance.invoice.charge'])assert.ok(actions.includes(a),a);
+});
+
+test('fee reminders reach only the families who still owe on that term',async()=>{
+  assert.equal((await call('/notices','POST',{operationId:randomUUID(),title:'Fees reminder',body:'Please clear the balance.',audience:'owing'})).status,400);
+  const owing=await ok('/notices','POST',{title:'Fees reminder',body:'Term 1 fees are overdue. Please see the bursar.',audience:'owing',termId:term1});
+  assert.equal((await ok(`/notices/${owing.id}/approve`,'POST',{version:owing.version})).recipients,1,'Ama still owes on Term 1');
+  const listed=(await call('/notices')).body.items.find((row:any)=>row.id===owing.id);assert.equal(listed.term_name,'Term 1');
+  assert.ok((await call('/guardian/notices','GET',undefined,guardian)).body.items.some((row:any)=>row.title==='Fees reminder'));
+  // Pay the balance: nobody owes on Term 1 any more, so a new reminder has no recipients.
+  const inv=(await call(`/finance/invoices?termId=${term1}`,'GET',undefined,acct)).body.items.find((row:any)=>row.learner_id===kids[0]);
+  await ok('/finance/payments','POST',{invoiceId:inv.id,amountPesewas:inv.balance_pesewas,method:'cash',receivedOn:today},acct);
+  const none=await ok('/notices','POST',{title:'Fees reminder 2',body:'Second reminder.',audience:'owing',termId:term1});
+  assert.equal((await call(`/notices/${none.id}/approve`,'POST',{operationId:randomUUID(),version:none.version})).status,400);
 });
 
 test('learner sex comes from admission, CSV import or a reasoned edit',async()=>{

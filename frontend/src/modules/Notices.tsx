@@ -3,14 +3,15 @@ import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, type Tone } from '../lib/ui';
 
 type SchoolClass = { id: string; name: string; year_name: string };
-type Notice = { id: string; title: string; body: string; audience: string; class_name: string | null; status: string; version: number; deliveries: Record<string, number> };
+type Notice = { id: string; title: string; body: string; audience: string; class_name: string | null; term_name?: string | null; status: string; version: number; deliveries: Record<string, number> };
 type Delivery = { id: string; guardian: string; phone: string | null; state: string; last_error: string | null };
 const stateLabel: Record<string, string> = { queued: 'waiting to send', sending: 'sending', sent: 'sent by SMS', in_app_only: 'app only (no phone number)', suppressed: 'SMS switched off', failed: 'SMS failed', cancelled: 'cancelled' };
-const empty = { title: '', body: '', audience: 'school', classId: '' };
+const empty = { title: '', body: '', audience: 'school', classId: '', termId: '' };
 
 export function Notices({ schoolId, csrfToken }: { schoolId: string; csrfToken: string }) {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [terms, setTerms] = useState<{ id: string; name: string; year_name: string }[]>([]);
   const [form, setForm] = useState(empty);
   const [open, setOpen] = useState<{ id: string; items: Delivery[] } | null>(null);
   const [error, setError] = useState('');
@@ -22,7 +23,7 @@ export function Notices({ schoolId, csrfToken }: { schoolId: string; csrfToken: 
     try { setNotices((await request<{ items: Notice[] }>(`/schools/${schoolId}/notices`)).items); }
     catch (e) { setError((e as Error).message); }
   }, [schoolId]);
-  useEffect(() => { void load(); request<{ items: SchoolClass[] }>(`/schools/${schoolId}/classes?limit=100`).then(r => setClasses(r.items)).catch(e => setError((e as Error).message)); }, [load, schoolId]);
+  useEffect(() => { void load(); request<{ items: SchoolClass[] }>(`/schools/${schoolId}/classes?limit=100`).then(r => setClasses(r.items)).catch(e => setError((e as Error).message)); request<{ items: { id: string; name: string; year_name: string }[] }>(`/schools/${schoolId}/assessment/terms`).then(r => setTerms(r.items)).catch(() => setTerms([])); }, [load, schoolId]);
 
   async function act(work: () => Promise<void>) {
     setBusy(true); setError(''); setNote('');
@@ -30,7 +31,7 @@ export function Notices({ schoolId, csrfToken }: { schoolId: string; csrfToken: 
   }
   const post = (path: string, body: object) => request<any>(`/schools/${schoolId}/notices${path}`, { method: 'POST', headers, body: JSON.stringify({ operationId: crypto.randomUUID(), ...body }) });
   const create = (event: FormEvent) => { event.preventDefault(); void act(async () => {
-    await post('', { title: form.title, body: form.body, audience: form.audience, ...(form.audience === 'class' ? { classId: form.classId } : {}) });
+    await post('', { title: form.title, body: form.body, audience: form.audience, ...(form.audience === 'class' ? { classId: form.classId } : {}), ...(form.audience === 'owing' ? { termId: form.termId } : {}) });
     setForm(empty); setComposing(false); setNote('Saved as a draft. Nothing is sent until you approve it.');
   }); };
   const approve = (n: Notice) => { if (window.confirm(`Send "${n.title}"? The guardians it reaches are fixed when you approve.`)) void act(async () => {
@@ -60,7 +61,7 @@ export function Notices({ schoolId, csrfToken }: { schoolId: string; csrfToken: 
       {notices.length ? <ul className="notice-list">{notices.map(n => <li key={n.id}>
         <div className="notice-head"><strong>{n.title}</strong><Pill tone={statusTone[n.status] ?? 'neutral'}>{statusName[n.status] ?? n.status}</Pill></div>
         <p>{n.body}</p>
-        <span className="sub">{n.audience === 'class' ? n.class_name : 'Whole school'} · {Object.entries(n.deliveries).map(([state, count]) => `${count} ${stateLabel[state] ?? state}`).join(', ') || 'not sent yet'}</span>
+        <span className="sub">{n.audience === 'class' ? n.class_name : n.audience === 'owing' ? `Families owing ${n.term_name ?? ''} fees` : 'Whole school'} · {Object.entries(n.deliveries).map(([state, count]) => `${count} ${stateLabel[state] ?? state}`).join(', ') || 'not sent yet'}</span>
         <div className="actions">
           {n.status === 'draft' && <button type="button" disabled={busy} onClick={() => approve(n)}>Approve and send</button>}
           {n.status === 'approved' && <button type="button" className="secondary" disabled={busy} onClick={() => details(n)}>Show recipients</button>}
@@ -77,7 +78,8 @@ export function Notices({ schoolId, csrfToken }: { schoolId: string; csrfToken: 
         <label>Title<input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required minLength={3} maxLength={100}/></label>
         <label>Message<textarea value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} required minLength={3} maxLength={320} rows={3}/></label>
         <p className="muted">{form.body.length}/320 characters</p>
-        <div className="grid"><label>Send to<select value={form.audience} onChange={e => setForm({ ...form, audience: e.target.value })}><option value="school">Whole school</option><option value="class">One class</option></select></label>
+        <div className="grid"><label>Send to<select value={form.audience} onChange={e => setForm({ ...form, audience: e.target.value })}><option value="school">Whole school</option><option value="class">One class</option><option value="owing">Families who owe fees</option></select></label>
+        {form.audience === 'owing' && <label>Fees for term<select value={form.termId} onChange={e => setForm({ ...form, termId: e.target.value })} required><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>}
         {form.audience === 'class' && <label>Class<select value={form.classId} onChange={e => setForm({ ...form, classId: e.target.value })} required><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>}</div>
         <div className="actions"><button disabled={busy}>Save draft</button><button type="button" className="secondary" onClick={() => setComposing(false)}>Cancel</button></div>
       </form>

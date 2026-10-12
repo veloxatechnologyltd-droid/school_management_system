@@ -10,21 +10,22 @@ const counts = `(SELECT coalesce(jsonb_object_agg(state,n),'{}'::jsonb) FROM (SE
 @Injectable()
 export class NoticesService {
   private async notice(client: PoolClient, schoolId: string, id: string, lock = false) {
-    const row = (await client.query(`SELECT id,title,body,audience,class_id,status,version FROM notices WHERE school_id=$1 AND id=$2${lock ? ' FOR UPDATE' : ''}`,[schoolId,id])).rows[0];
+    const row = (await client.query(`SELECT id,title,body,audience,class_id,term_id,status,version FROM notices WHERE school_id=$1 AND id=$2${lock ? ' FOR UPDATE' : ''}`,[schoolId,id])).rows[0];
     if (!row) throw new NotFoundException('Notice unavailable');
     return row;
   }
   create(client: PoolClient, actor: Actor, body: NoticeDto) {
     return command(client,actor,body.operationId,'notice.create',body,async () => {
       if (body.audience === 'class' && !(await client.query('SELECT 1 FROM class_sections WHERE school_id=$1 AND id=$2',[actor.schoolId,body.classId])).rowCount) throw new NotFoundException('Class unavailable');
-      const row = (await client.query("INSERT INTO notices(id,school_id,title,body,audience,class_id,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,title,body,audience,class_id,status,version",[randomUUID(),actor.schoolId,body.title.trim(),body.body.trim(),body.audience,body.audience === 'class' ? body.classId : null,actor.membershipId])).rows[0];
+      if (body.audience === 'owing' && !(await client.query('SELECT 1 FROM terms WHERE school_id=$1 AND id=$2',[actor.schoolId,body.termId])).rowCount) throw new NotFoundException('Term unavailable');
+      const row = (await client.query("INSERT INTO notices(id,school_id,title,body,audience,class_id,term_id,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,title,body,audience,class_id,term_id,status,version",[randomUUID(),actor.schoolId,body.title.trim(),body.body.trim(),body.audience,body.audience === 'class' ? body.classId : null,body.audience === 'owing' ? body.termId : null,actor.membershipId])).rows[0];
       await audit(client,actor,'notice.created',row.id,{audience:body.audience});
       return row;
     });
   }
   async list(client: PoolClient, schoolId: string) {
-    return (await client.query(`SELECT n.id,n.title,n.body,n.audience,n.class_id,c.name AS class_name,n.status,n.version,n.created_at,n.approved_at,${counts} AS deliveries
-      FROM notices n LEFT JOIN class_sections c ON c.school_id=n.school_id AND c.id=n.class_id WHERE n.school_id=$1 ORDER BY n.created_at DESC,n.id LIMIT 50`,[schoolId])).rows;
+    return (await client.query(`SELECT n.id,n.title,n.body,n.audience,n.class_id,c.name AS class_name,n.term_id,t.name AS term_name,n.status,n.version,n.created_at,n.approved_at,${counts} AS deliveries
+      FROM notices n LEFT JOIN class_sections c ON c.school_id=n.school_id AND c.id=n.class_id LEFT JOIN terms t ON t.school_id=n.school_id AND t.id=n.term_id WHERE n.school_id=$1 ORDER BY n.created_at DESC,n.id LIMIT 50`,[schoolId])).rows;
   }
   // The recipient list is frozen here: guardians who gain rights later are not added to an already approved notice.
   approve(client: PoolClient, actor: Actor, id: string, body: ApproveNoticeDto) {
@@ -32,7 +33,9 @@ export class NoticesService {
       const notice = await this.notice(client,actor.schoolId,id,true);
       if (notice.status !== 'draft') throw new ConflictException('Only a draft notice can be approved');
       if (notice.version !== body.version) throw new ConflictException('The notice changed; reload it before approving');
-      const recipients = (await client.query('SELECT guardian_membership_id,phone FROM notice_recipients($1)',[notice.class_id])).rows;
+      const recipients = (notice.audience === 'owing'
+        ? await client.query('SELECT guardian_membership_id,phone FROM notice_recipients_owing($1)',[notice.term_id])
+        : await client.query('SELECT guardian_membership_id,phone FROM notice_recipients($1)',[notice.class_id])).rows;
       if (!recipients.length) throw new BadRequestException('No guardian with a verified contact right is linked to a current learner in this audience');
       for (const recipient of recipients) await client.query('INSERT INTO notice_deliveries(id,school_id,notice_id,guardian_membership_id,to_phone,state) VALUES($1,$2,$3,$4,$5,$6)',[randomUUID(),actor.schoolId,id,recipient.guardian_membership_id,recipient.phone,recipient.phone ? 'queued' : 'in_app_only']);
       await client.query("UPDATE notices SET status='approved',version=version+1,approved_by=$3,approved_at=now() WHERE school_id=$1 AND id=$2",[actor.schoolId,id,actor.membershipId]);

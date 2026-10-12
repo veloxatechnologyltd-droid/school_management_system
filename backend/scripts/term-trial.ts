@@ -427,8 +427,8 @@ async function events(d: string) {
     step(`  ${owing.length} families still owe; summary ${JSON.stringify(summary).slice(0, 200)}`);
     const absence = await head.get(`/attendance/repeated-absence?to=${d}&days=20&threshold=4`);
     step(`  repeated absence: ${(absence.items ?? absence).length ?? 0} learner(s)`);
-    const n = await head.post('/notices', { title: 'Fees reminder', body: 'Term 3 fees were due today. Parents with balances should see the bursar this week or call the school to agree a payment plan.', audience: 'school' });
-    await head.post(`/notices/${n.id}/approve`, { version: n.version });
+    const n = await head.post('/notices', { title: 'Fees reminder', body: 'Term 3 fees were due today. Your ward still has a balance. Please see the bursar this week or call the school to agree a payment plan.', audience: 'owing', termId });
+    step(`  reminder sent to ${(await head.post(`/notices/${n.id}/approve`, { version: n.version })).recipients} owing families`);
   }
   if (d === '2026-05-20') {
     step('A Basic 4 learner leaves: family relocating to Kumasi');
