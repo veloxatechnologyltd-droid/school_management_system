@@ -349,3 +349,35 @@ test('class teacher remarks and the headteacher remark appear on the printed rep
   await page.setViewportSize({width:375,height:812});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(errors).toEqual([]);
 });
+test('the headteacher’s morning view lists missing registers, this week’s fees against last term and missing scores, each linking to its page',async({page})=>{
+  const {Pool}=require('pg');const path=require('node:path');
+  const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewportSize({width:375,height:812});
+  const suffix=randomUUID().slice(0,8);await page.goto('/');
+  expect((await page.request.post('/api/v1/auth/register',{data:{name:'Yaw Morning',schoolName:`Morning School ${suffix}`,email:`morning-${suffix}@example.test`,password:'Morning-passphrase-2026'}})).status()).toBe(201);
+  const sid=(await (await page.request.get('/api/v1/auth/session')).json()).schools[0].id;
+  // The API dates the view by the server's Ghana date, so the data is placed around that day.
+  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}),shift=(delta:number)=>new Date(Date.parse(`${today}T00:00:00Z`)+delta*86400000).toISOString().slice(0,10);
+  const head=(await owner.query("SELECT id FROM memberships WHERE school_id=$1 AND role='headteacher'",[sid])).rows[0].id;
+  const [year,term,last,section,learner,subject,invoice,old]=Array.from({length:8},()=>randomUUID());
+  await owner.query("INSERT INTO academic_years(id,school_id,name,start_date,end_date) VALUES($1,$2,'Morning year',$3,$4)",[year,sid,shift(-300),shift(60)]);
+  await owner.query("INSERT INTO terms(id,school_id,academic_year_id,name,start_date,end_date) VALUES($1,$2,$3,'Term 2',$4,$5),($6,$2,$3,'Term 1',$7,$8)",[term,sid,year,shift(-30),shift(10),last,shift(-150),shift(-60)]);
+  await owner.query("INSERT INTO class_sections(id,school_id,academic_year_id,name,level,capacity) VALUES($1,$2,$3,'Basic 4','Primary',30)",[section,sid,year]);
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,'MV-1','Kwesi Morning')",[learner,sid]);
+  await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,$5)",[randomUUID(),sid,learner,section,shift(-200)]);
+  await owner.query("INSERT INTO school_days(id,school_id,day,is_open,reason,created_by) VALUES($1,$2,$3,true,'Morning view open day',$4)",[randomUUID(),sid,today,head]);
+  await owner.query("INSERT INTO subjects(id,school_id,name) VALUES($1,$2,'Science')",[subject,sid]);
+  await owner.query("INSERT INTO assessment_score_entries(id,school_id,term_id,class_id,subject_id,learner_id,kind,score,recorded_by) VALUES($1,$2,$3,$4,$5,$6,'ca',55,$7)",[randomUUID(),sid,term,section,subject,learner,head]);
+  await owner.query(`INSERT INTO invoices(id,school_id,learner_id,term_id,class_id,lines,total_pesewas,issued_by) VALUES($1,$2,$3,$4,$5,'[{"name":"Tuition","amount_pesewas":90000}]',90000,$6),($7,$2,$3,$8,$5,'[{"name":"Tuition","amount_pesewas":90000}]',90000,$6)`,[invoice,sid,learner,term,section,head,old,last]);
+  await owner.query("INSERT INTO payments(id,school_id,invoice_id,amount_pesewas,method,received_on,receipt_number,recorded_by) VALUES($1,$2,$3,12000,'cash',$4,1,$5),($6,$2,$7,45000,'cash',$8,2,$5)",[randomUUID(),sid,invoice,today,head,randomUUID(),old,shift(-120)]);
+  await owner.end();
+  await page.reload();
+  const card=page.locator('.card').filter({has:page.getByRole('heading',{name:'Needs attention',exact:true})});
+  const item=(text:string)=>card.getByRole('listitem').filter({hasText:text});
+  await expect(item('1 class has no register today')).toContainText('Basic 4');await expect(item('1 class has no register today').getByRole('link',{name:'Open registers'})).toHaveAttribute('href','#/attendance');
+  await expect(item('GH₵ 120.00 in fees collected this week')).toContainText('GH₵ 450.00 in the same week of Term 1');await expect(item('in fees collected this week').getByRole('link',{name:'Open fees'})).toHaveAttribute('href','#/fees');
+  await expect(item('1 class is missing scores')).toContainText('Term 2 ends in 10 days: Basic 4 (Science)');await expect(item('missing scores').getByRole('link',{name:'Open scores'})).toHaveAttribute('href','#/assessment');
+  await expect(page.getByText('No learner has been absent 3 or more days this week.')).toBeVisible();
+  await item('missing scores').getByRole('link',{name:'Open scores'}).click();await expect(page).toHaveURL(/#\/assessment$/);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
+});

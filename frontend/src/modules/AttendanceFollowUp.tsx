@@ -6,7 +6,14 @@ import { cedis } from './Finance';
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
 type FollowClass = { class_id: string; name: string; level: string; learners: number; register_status: string };
 type FollowUp = { day: string; open: boolean; classes: FollowClass[]; outstanding?: number };
-type Absent = { learner_id: string; full_name: string; admission_number: string; class_name: string; absences: number; last_absent_day: string };
+type Absent = { learner_id: string; full_name: string; class_name: string; absences: number; last_absent_day: string; guardian_name: string | null; phone: string | null };
+type Morning = {
+  day: string; weekStart: string; open: boolean;
+  registers: { class_id: string; name: string; status: 'missing' | 'draft' }[];
+  absences: Absent[];
+  fees: { term: string; collectedPesewas: number; previous: { term: string; collectedPesewas: number } | null } | null;
+  scores: { term: string; endsOn: string; daysLeft: number; classes: { class_id: string; name: string; missing: number; subjects: string[]; not_started: boolean }[] } | null;
+};
 type ClassOption = { id: string; name: string; level: string; year_name: string };
 type RosterLearner = { id: string; full_name: string; admission_number: string };
 type Term = { id: string; name: string; start_date?: string; end_date?: string };
@@ -18,11 +25,10 @@ const tone: Record<string, Tone> = { missing: 'critical', draft: 'caution', subm
 
 export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
   const [follow, setFollow] = useState<FollowUp | null>(null);
-  const [absent, setAbsent] = useState<Absent[]>([]);
+  const [morning, setMorning] = useState<Morning | null>(null);
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [printClass, setPrintClass] = useState('');
   const [sheet, setSheet] = useState<{ title: string; learners: RosterLearner[]; date: string } | null>(null);
-  const [absentTotal, setAbsentTotal] = useState(0);
   const [fees, setFees] = useState<FeeSummary | null>(null);
   const [waiting, setWaiting] = useState(0);
   const [error, setError] = useState('');
@@ -30,12 +36,12 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
   const load = useCallback(async () => {
     setError('');
     try {
-      const [f, a, c] = await Promise.all([
+      const [f, m, c] = await Promise.all([
         request<FollowUp>(`/schools/${schoolId}/attendance/follow-up`),
-        request<Page<Absent>>(`/schools/${schoolId}/attendance/repeated-absence?limit=50`),
+        request<Morning>(`/schools/${schoolId}/home/morning`),
         request<Page<ClassOption>>(`/schools/${schoolId}/teaching/class-options?limit=100`),
       ]);
-      setFollow(f); setAbsent(a.items); setAbsentTotal(a.total); setClasses(c.items); setPrintClass(prior => prior || c.items[0]?.id || '');
+      setFollow(f); setMorning(m); setClasses(c.items); setPrintClass(prior => prior || c.items[0]?.id || '');
     } catch (e) { setError((e as Error).message); }
   }, [schoolId]);
   useEffect(() => { void load(); }, [load]);
@@ -72,13 +78,21 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
     } catch (e) { setError((e as Error).message); }
   }
 
-  const missing = follow?.open ? follow.classes.filter(c => c.register_status === 'missing').length : 0;
-  const drafts = follow?.open ? follow.classes.filter(c => c.register_status === 'draft').length : 0;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const names = (list: string[]) => list.slice(0, 4).join(', ') + (list.length > 4 ? '…' : '');
+  const missing = morning?.registers.filter(r => r.status === 'missing') ?? [], drafts = morning?.registers.filter(r => r.status === 'draft') ?? [];
+  const absent = morning?.absences ?? [], unreachable = absent.filter(a => !a.phone);
+  const week = morning?.fees, scoreGaps = morning?.scores && morning.scores.daysLeft <= 21 ? morning.scores.classes : [];
   const attention: Attention[] = [
-    ...(missing ? [{ icon: 'event_busy', tone: 'critical' as Tone, text: `${plural(missing, 'class has', 'classes have')} no register today`, detail: follow!.classes.filter(c => c.register_status === 'missing').slice(0, 4).map(c => c.name).join(', ') + (missing > 4 ? '…' : ''), href: '#/attendance', go: 'Open registers' }] : []),
-    ...(drafts ? [{ icon: 'edit_note', tone: 'caution' as Tone, text: `${plural(drafts, 'register is', 'registers are')} saved but not submitted`, detail: 'Teachers still need to submit today’s marks.', href: '#/attendance', go: 'Open registers' }] : []),
-    ...(absentTotal ? [{ icon: 'person_alert', tone: 'caution' as Tone, text: `${plural(absentTotal, 'learner is', 'learners are')} often absent`, detail: `3 or more absences in the last 14 days${absent[0] ? `, including ${absent[0].full_name}` : ''}`, href: '#/attendance', go: 'Check registers' }] : []),
+    ...(missing.length ? [{ icon: 'event_busy', tone: 'critical' as Tone, text: `${plural(missing.length, 'class has', 'classes have')} no register today`, detail: names(missing.map(c => c.name)), href: '#/attendance', go: 'Open registers' }] : []),
+    ...(drafts.length ? [{ icon: 'edit_note', tone: 'caution' as Tone, text: `${plural(drafts.length, 'register is', 'registers are')} saved but not submitted`, detail: names(drafts.map(c => c.name)), href: '#/attendance', go: 'Open registers' }] : []),
+    ...(absent.length ? [{ icon: 'person_alert', tone: 'caution' as Tone, text: `${plural(absent.length, 'learner has', 'learners have')} been absent 3 or more days this week`,
+      detail: unreachable.length ? `No guardian phone on file for ${names(unreachable.map(a => a.full_name))}` : 'Guardian phone numbers are listed below.',
+      href: unreachable.length ? '#/guardians' : '#/attendance', go: unreachable.length ? 'Add guardian contacts' : 'Check registers' }] : []),
+    ...(week ? [{ icon: 'payments', tone: (week.previous && week.collectedPesewas < week.previous.collectedPesewas ? 'caution' : 'positive') as Tone, text: `${cedis(week.collectedPesewas)} in fees collected this week`,
+      detail: week.previous ? `${cedis(week.previous.collectedPesewas)} in the same week of ${week.previous.term}` : `No earlier term to compare with`, href: '#/fees', go: 'Open fees' }] : []),
+    ...(scoreGaps.length ? [{ icon: 'grading', tone: 'caution' as Tone, text: `${plural(scoreGaps.length, 'class is', 'classes are')} missing scores`,
+      detail: `${morning!.scores!.term} ends ${morning!.scores!.daysLeft > 0 ? `in ${plural(morning!.scores!.daysLeft, 'day', 'days')}` : 'today'}: ${names(scoreGaps.map(c => c.not_started ? `${c.name} (none yet)` : `${c.name} (${c.subjects.join(', ')})`))}`, href: '#/assessment', go: 'Open scores' }] : []),
     ...(fees && fees.outstandingPesewas > 0 ? [{ icon: 'account_balance_wallet', tone: 'critical' as Tone, text: `${cedis(fees.outstandingPesewas)} in fees outstanding`, detail: `${Math.round(fees.outstandingPesewas / Math.max(fees.billedPesewas, 1) * 100)}% of the ${cedis(fees.billedPesewas)} billed for ${fees.term}`, href: '#/fees', go: 'Open fees' }] : []),
     ...(waiting ? [{ icon: 'how_to_reg', tone: 'info' as Tone, text: `${plural(waiting, 'admission is', 'admissions are')} waiting for a decision`, detail: 'New applications and applications under review.', href: '#/learners/applications', go: 'Review applications' }] : []),
   ];
@@ -101,9 +115,11 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
           : <Empty title="No registers are due" hint="Today is not an open school day."/>)}
       </Card>
       <div>
-        <Card title="Learners often absent" hint="3 or more absences in the last 14 days" flush>
-          {absent.length ? <div className="table-wrap"><table><tbody>{absent.map(a => <tr key={a.learner_id}><td>{a.full_name}<span className="sub">{a.class_name} · last {a.last_absent_day}</span></td><td className="num"><Pill tone="critical">{a.absences} absent</Pill></td></tr>)}</tbody></table></div>
-            : <p className="muted">No learners have reached the threshold.</p>}
+        <Card title="Absent 3 or more days this week" hint={morning ? `Since Monday ${morning.weekStart}, from submitted registers` : undefined} flush>
+          {absent.length ? <div className="table-wrap"><table><tbody>{absent.map(a => <tr key={a.learner_id}><td>{a.full_name}<span className="sub">{a.class_name} · last {a.last_absent_day}</span></td>
+            <td>{a.guardian_name ? <>{a.guardian_name}{a.phone ? <a className="sub" href={`tel:${a.phone}`}>{a.phone}</a> : <span className="sub">No phone on file</span>}</> : <span className="muted">No guardian contact</span>}</td>
+            <td className="num"><Pill tone="critical">{a.absences} absent</Pill></td></tr>)}</tbody></table></div>
+            : <p className="muted">No learner has been absent 3 or more days this week.</p>}
         </Card>
         <Card title="Printable register" hint="For a power or network outage">
           <label>Class<select value={printClass} onChange={e => setPrintClass(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>

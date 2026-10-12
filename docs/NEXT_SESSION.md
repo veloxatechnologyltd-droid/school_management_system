@@ -8,9 +8,9 @@ Start here. Read `MEMORY.md`, `AGENT.md` and `STATUS.md` first (see `AGENTS.md`)
   - Logins and state: `.local/term-trial/state.json` (ignored by Git).
   - Driver: `backend/scripts/term-trial.ts` (phases `setup|enrol|guardians|term|exams|close|current|status`).
 - Hosted migrations go up to **032**. Any new migration needs Evans's explicit approval before the hosted apply (preview, then `--apply`).
-- Tests: 176 backend and 17 browser tests.
+- Tests: 178 backend and 18 browser tests.
   - Run them in an isolated copy (`.local/t`), because `npm test` rebuilds `backend/dist` and restarts a running cloud API.
-  - The browser tests reuse ports 3018/5178, so never run them while `dev:cloud` is up.
+  - The browser tests reuse ports 3018/5178, so never run them while `dev:cloud` is up. In `.local/t`, move them to other ports (vite config + Playwright config, `reuseExistingServer:false`); otherwise Playwright silently drives the cloud API.
 - Evans's uncommitted work (`Teaching.tsx`, roster CSS, `README.md`, `demo-seed.ts`, `EarlyYears.tsx`) must stay out of commits. Stage `style.css` changes selectively.
   - The teacher-grant browser test fails with that work in place (phone-width overflow).
 - Push tested features to `main` (see `AGENTS.md`).
@@ -34,13 +34,13 @@ Keep school isolation (RLS), append-only history and human approval. The platfor
 
 ### 1. Headteacher's morning view (no migration expected)
 
-- [ ] One Home section answers:
-  - [ ] Registers not taken today.
-  - [ ] Learners absent 3+ days this week, and whether a guardian was contacted.
-  - [ ] Fees collected this week compared with the same week last term.
-  - [ ] Classes or subjects with missing scores as the term end approaches.
-- [ ] Every item links to the page where it is fixed.
-- [ ] Opens in under 2 s on the trial school, measured against the API.
+- [x] One Home section answers (`GET /home/morning`, "Needs attention" card):
+  - [x] Registers not taken today.
+  - [ ] Learners absent 3+ days this week, and whether a guardian was contacted. *Done: list with the verified contact guardian's name and phone. Open: no record of contact exists; recording it needs a migration (decide with Evans, or wait for the absence SMS in item 4).*
+  - [x] Fees collected this week compared with the same week last term.
+  - [x] Classes or subjects with missing scores as the term end approaches (shown from 21 days before term end).
+- [x] Every item links to the page where it is fixed.
+- [ ] Opens in under 2 s on the trial school, measured against the API. *Not measured: running the new build against Supabase was blocked for the agent; Evans to run it.*
 
 ### 2. Bulk work
 
