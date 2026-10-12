@@ -1,4 +1,4 @@
-import React, { FormEvent, useCallback, useEffect, useState } from 'react';
+import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Pill, currentTerm } from '../lib/ui';
 
@@ -62,11 +62,14 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     catch (e) { setError((e as Error).message); }
   }, [schoolId, classId, termId, subjectId]);
   useEffect(() => { void loadGrid(); }, [loadGrid]);
+  // Only the latest request may fill the table, so a quick change of class never shows another class's learners.
+  const remarksRequest = useRef(0);
   const loadRemarks = useCallback(async () => {
+    const current = ++remarksRequest.current;
     setRemarks([]); setRemarkEdits({});
     if (!classId || !termId || view === 'setup') return;
-    try { setRemarks((await request<{ items: Remark[] }>(`/schools/${schoolId}/assessment/classes/${classId}/remarks?termId=${termId}`)).items); }
-    catch (e) { setError((e as Error).message); }
+    try { const items = (await request<{ items: Remark[] }>(`/schools/${schoolId}/assessment/classes/${classId}/remarks?termId=${termId}`)).items; if (current === remarksRequest.current) setRemarks(items); }
+    catch (e) { if (current === remarksRequest.current) setError((e as Error).message); }
   }, [schoolId, classId, termId, view]);
   useEffect(() => { void loadRemarks(); }, [loadRemarks]);
 
@@ -152,7 +155,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     </Card>}
     {printing && <Dialog title="Report cards" wide onClose={() => setPrinting(null)}>
       <div className="actions"><button type="button" onClick={() => window.print()}>Print all ({printing.length})</button></div>
-      <div className="print-sheet">{printing.map(r => <ReportCard key={r.id} snapshot={r.snapshot}/>)}</div>
+      <div className="report-sheet">{printing.map(r => <ReportCard key={r.id} snapshot={r.snapshot}/>)}</div>
     </Dialog>}
     </>}
   </section>;

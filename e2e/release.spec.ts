@@ -315,3 +315,37 @@ test('a new sign-up sees a setup guide instead of empty daily screens, and daily
   await expect(guide.getByRole('link',{name:'Add staff'})).toBeVisible();await expect(page.getByRole('heading',{name:'Attendance follow-up'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
+test('class teacher remarks and the headteacher remark appear on the printed report card with attendance and reopening date',async({page})=>{
+  const {Pool}=require('pg');const path=require('node:path');
+  const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Assessment');
+  const suffix=randomUUID().slice(0,8),name=`Report Learner ${suffix}`;
+  const session=await (await page.request.get('/api/v1/auth/session')).json();
+  async function send(route:string,body:Record<string,unknown>,method='post',status=201){const response=await page.request[method as 'post'](`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
+  const year=await send('/academic-years',{name:`Report year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'}),section=await send('/classes',{name:`Report class ${suffix}`,level:'Primary',capacity:5,academicYearId:year.id});
+  const term=await send('/assessment/terms',{academicYearId:year.id,name:`Term ${suffix}`,startDate:'2026-09-01',endDate:'2026-12-15'});await send('/assessment/terms',{academicYearId:year.id,name:`Next ${suffix}`,startDate:'2027-01-05',endDate:'2027-04-01'});
+  const subject=await send('/assessment/subjects',{name:`Maths ${suffix}`});
+  const policy=(await (await page.request.get(`/api/v1/schools/${school}/assessment/policy`)).json()).policy;
+  if(!policy)await send('/assessment/policy',{caWeight:30,examWeight:70,bands:[{min:50,grade:'1',remark:'Pass'},{min:0,grade:'9',remark:'Lowest'}],sourceNote:'Synthetic policy'},'put',200);
+  const learner=randomUUID();
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,$4)",[learner,school,`RP-${suffix}`,name]);
+  await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,'2026-09-01')",[randomUUID(),school,learner,section.id]);await owner.end();
+  await send('/attendance/school-days',{day:'2026-09-25',isOpen:true,reason:'Normal day'}).catch(()=>undefined);
+  const register=await (await page.request.get(`/api/v1/schools/${school}/attendance/classes/${section.id}/register?day=2026-09-25`)).json();
+  const draft=await send(`/attendance/classes/${section.id}/register`,{day:'2026-09-25',version:register.version,action:'save',marks:[{learnerId:learner,mark:'present'}]});
+  await send(`/attendance/classes/${section.id}/register`,{day:'2026-09-25',version:draft.version,action:'submit',marks:[{learnerId:learner,mark:'present'}]});
+  await send(`/assessment/classes/${section.id}/scores`,{termId:term.id,subjectId:subject.id,scores:[{learnerId:learner,kind:'ca',score:70},{learnerId:learner,kind:'exam',score:80}]});
+  await page.reload();await pickSchool(page);
+  const panel=page.getByRole('region',{name:'Assessment and terminal reports',exact:true});
+  await panel.getByRole('combobox',{name:'Class',exact:true}).selectOption(section.id);await panel.getByRole('combobox',{name:'Term',exact:true}).selectOption(term.id);
+  await panel.getByLabel(`${name} Conduct`,{exact:true}).fill('Very good');await panel.getByLabel(`${name} Class teacher's remark`,{exact:true}).fill('A careful worker.');
+  await panel.getByLabel(`${name} Headteacher's remark`,{exact:true}).fill('Well done.');
+  await panel.getByRole('button',{name:'Save remarks',exact:true}).click();await expect(panel.getByText('Report card remarks saved.')).toBeVisible();
+  await send(`/assessment/classes/${section.id}/publish`,{termId:term.id});
+  await panel.getByRole('button',{name:'Report cards',exact:true}).click();
+  const card=page.getByRole('dialog',{name:'Report cards',exact:true}).locator('article.report-card');
+  await expect(card.getByText(name)).toBeVisible();await expect(card.getByText('1 out of 1')).toBeVisible();await expect(card.getByText('A careful worker.')).toBeVisible();
+  await expect(card.getByText('Well done.')).toBeVisible();await expect(card.getByText('Next term begins',{exact:true})).toBeVisible();await expect(card.getByText('1st of 1')).toBeVisible();
+  await page.setViewportSize({width:375,height:812});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});

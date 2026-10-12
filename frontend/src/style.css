@@ -189,4 +189,4 @@ tr.selected td{background:var(--accent-soft)}tbody tr.selected:hover td{backgrou
 .report-facts,.report-remarks{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 16px;margin:10px 0}.report-remarks{grid-template-columns:1fr}
 .report-facts div,.report-remarks div{display:flex;gap:8px;min-width:0}.report-facts dt,.report-remarks dt{font-weight:600;color:var(--ink-2);flex:none}.report-facts dd,.report-remarks dd{margin:0;min-width:0}
 .card-actions{padding:12px 22px}
-@media print{.dialog-layer .dialog{position:static;box-shadow:none;max-height:none;overflow:visible}.report-card{break-after:page;border:0}}
+@media print{.report-sheet,.report-sheet *{visibility:visible}.report-sheet{position:absolute;left:0;top:0;width:100%;background:#fff}.report-card{break-after:page;border:0}}
