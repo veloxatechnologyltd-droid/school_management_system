@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Query, Req } fr
 import { Request } from 'express';
 import { Access } from '../../core/access';
 import { AssessmentService } from './assessment.service';
-import { PolicyDto, PublishDto, RecordScoresDto, ReissueDto, ReopenDto, SubjectDto, TermDto, TermQueryDto } from './assessment.dto';
+import { PolicyDto, PublishDto, RecordScoresDto, ReissueDto, ReopenDto, RemarksDto, SubjectDto, TermDto, TermQueryDto } from './assessment.dto';
 
 const head = ['headteacher'], staff = ['headteacher','teacher'];
 @Controller('api/v1/schools/:schoolId')
@@ -43,6 +43,18 @@ export class AssessmentController {
   @Get('assessment/classes/:classId/results')
   results(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: TermQueryDto) {
     return this.access.school(req,schoolId,head,(client,actor) => this.assessment.results(client,actor,classId,query.termId));
+  }
+  @Get('assessment/classes/:classId/reports')
+  classReports(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: TermQueryDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.assessment.classReports(client,actor,classId,query.termId));
+  }
+  @Get('assessment/classes/:classId/remarks')
+  remarks(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: TermQueryDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.assessment.remarks(client,actor,classId,query.termId));
+  }
+  @Post('assessment/classes/:classId/remarks')
+  recordRemarks(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Body() body: RemarksDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.assessment.recordRemarks(client,actor,classId,body),true);
   }
   @Post('assessment/classes/:classId/publish')
   publish(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Body() body: PublishDto) {

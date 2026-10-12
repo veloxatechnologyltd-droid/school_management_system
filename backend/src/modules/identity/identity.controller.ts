@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { Database } from '../../core/database';
 import { Access, digest, sessionToken } from '../../core/access';
 import { decryptSecret, encryptSecret, hashRecovery, newRecoveryCodes, newSecret, verifyTotp } from '../../core/totp';
+import { normalizeGhanaPhone } from '../notices/sms.provider';
 const scryptAsync = promisify(scrypt) as (password: string, salt: string, length: number) => Promise<Buffer>;
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString('hex');
@@ -23,7 +24,8 @@ class RegisterDto {
   @IsString() @MinLength(12) @MaxLength(200) password!: string;
 }
 class LoginDto {
-  @IsEmail() @MaxLength(200) email!: string;
+  // Email address or Ghana mobile number.
+  @IsString() @MinLength(3) @MaxLength(200) email!: string;
   @IsString() @MinLength(1) @MaxLength(200) password!: string;
 }
 // Failed sign-ins per account (attempted email, known or not): 10 failures lock that email for 15 minutes on this instance.
@@ -47,7 +49,7 @@ export class IdentityController {
     const syntheticLocal = process.env.DEV_AUTH === 'synthetic-local' && ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
     if (!syntheticLocal && process.env.AUTH_MODE !== 'password') throw new ForbiddenException('Synthetic identity is disabled');
     // Phones capitalise the first letter and people add spaces; accounts are stored lower-case.
-    const email = body.email.trim().toLowerCase();
+    const email = normalizeGhanaPhone(body.email) ?? body.email.trim().toLowerCase();
     if (throttled(email)) throw new HttpException('Too many failed sign-ins for this account. Try again in 15 minutes or ask your school administrator to reset the password.',429);
     const identity = await this.db.pool.query('SELECT id,password_hash FROM users WHERE synthetic_login=$1',[email]);
     const [salt,hash] = identity.rows[0]?.password_hash.split(':') ?? ['missing', '00'.repeat(64)];

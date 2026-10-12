@@ -40,3 +40,16 @@ export class ReopenDto extends OperationDto {
   @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) reason!: string;
 }
 export class ReissueDto extends OperationDto { @IsUUID() termId!: string; @IsUUID() learnerId!: string; @IsOptional() @IsBoolean() acknowledgeIncomplete?: boolean; }
+export class RemarkDto {
+  @IsUUID() learnerId!: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) conduct?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) attitude?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) interest?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(300) @Matches(/\S.*\S/) remark?: string;
+}
+export class RemarksDto extends OperationDto {
+  @IsUUID() termId!: string;
+  // The class teacher writes conduct, attitude, interest and a remark; the headteacher adds the head's remark.
+  @IsIn(['class_teacher','headteacher']) author!: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(300) @ValidateNested({each:true}) @Type(() => RemarkDto) items!: RemarkDto[];
+}

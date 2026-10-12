@@ -43,6 +43,7 @@ export class LearnerImportsService {
       if(!/^[A-Za-z0-9][A-Za-z0-9/-]{1,39}$/.test(input.admissionNumber))issues.push('Admission number must be 2–40 letters, digits, / or -');
       if(input.fullName.length<3||input.fullName.length>120||/[\x00-\x1f\x7f]/.test(input.fullName))issues.push('Learner name must be 3–120 characters without line breaks');
       if(input.dateOfBirth&&(!validDate(input.dateOfBirth)||input.dateOfBirth>=startDate))issues.push('Birth date must be a valid date before enrolment');
+      if(input.sex&&!['female','male'].includes(input.sex))issues.push('Sex must be M or F (or Male/Female)');
       if(rows.filter(other=>other.input.admissionNumber===input.admissionNumber).length>1)issues.push('Admission number repeats in this CSV');
       if(existing.some(match=>match.admission_number===input.admissionNumber))issues.push('Admission number already belongs to a learner or application');
       const samePerson=(name:string,birth:string|null)=>name.trim().toLowerCase()===input.fullName.toLowerCase()&&(!input.dateOfBirth||!birth||birth===input.dateOfBirth);
@@ -85,7 +86,7 @@ export class LearnerImportsService {
     }
     for(const row of selected){
       await this.learners.ensureCapacity(client,actor,section,batch.start_date,body.capacityOverrideReason);
-      const learnerId=randomUUID();await client.query('INSERT INTO learners(id,school_id,admission_number,full_name,date_of_birth) VALUES($1,$2,$3,$4,$5)',[learnerId,actor.schoolId,row.input.admissionNumber,row.input.fullName,row.input.dateOfBirth||null]);
+      const learnerId=randomUUID();await client.query('INSERT INTO learners(id,school_id,admission_number,full_name,date_of_birth,sex) VALUES($1,$2,$3,$4,$5,$6)',[learnerId,actor.schoolId,row.input.admissionNumber,row.input.fullName,row.input.dateOfBirth||null,row.input.sex||null]);
       await client.query('INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,$5)',[randomUUID(),actor.schoolId,learnerId,batch.class_id,batch.start_date]);
       await client.query('UPDATE learner_import_rows SET learner_id=$1,duplicate_review_reason=$2 WHERE school_id=$3 AND batch_id=$4 AND row_number=$5',[learnerId,selection.get(row.row_number)!.duplicateReviewReason?.trim()??null,actor.schoolId,id,row.row_number]);
     }

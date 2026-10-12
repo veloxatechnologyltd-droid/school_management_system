@@ -8,7 +8,15 @@ export class FeeItemDto extends OperationDto {
   @IsUUID() termId!: string;
   @IsString() @MinLength(2) @MaxLength(80) @Matches(/\S.*\S/) name!: string;
   @IsOptional() @IsIn(['Nursery','KG','Primary','JHS']) level?: string;
+  // One class only (for example a JHS 3 examination fee). Leave both level and class out for a whole-school item.
+  @IsOptional() @IsUUID() classId?: string;
   @IsInt() @Min(1) @Max(money.max) amountPesewas!: number;
+}
+export class AdjustmentDto extends OperationDto {
+  @IsIn(['discount','charge']) kind!: string;
+  @IsString() @MinLength(2) @MaxLength(80) @Matches(/\S.*\S/) label!: string;
+  @IsInt() @Min(1) @Max(money.max) amountPesewas!: number;
+  @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) reason!: string;
 }
 export class GenerateInvoicesDto extends OperationDto { @IsUUID() termId!: string; @IsUUID() classId!: string; }
 export class PaymentDto extends OperationDto {

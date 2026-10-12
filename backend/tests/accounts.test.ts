@@ -51,3 +51,15 @@ test('headteacher creates, resets and revokes school accounts with an audit trai
   const actions=(await call(`/schools/${schoolA}/audit?limit=100`,head)).body.items.map((row:any)=>row.action);
   for(const action of ['account.created','account.password_reset','account.revoked'])assert.ok(actions.includes(action),action);
 });
+
+test('guardians without email get a phone-number sign-in that also receives notices',async()=>{
+  const head=await login('head@example.test'),digits=String(Math.floor(1e7+Math.random()*9e7)).slice(0,7);
+  const created=await call(`/schools/${schoolA}/accounts`,head,'POST',{name:'Akua Phoneonly',email:`024 ${digits.slice(0,3)} ${digits.slice(3)}`,role:'guardian'});
+  assert.equal(created.status,201);assert.equal(created.body.email,`+23324${digits}`);
+  const row=(await call(`/schools/${schoolA}/accounts`,head)).body.items.find((item:any)=>item.user_id===created.body.userId);
+  assert.equal(row.login,`+23324${digits}`);assert.equal(row.phone,`+23324${digits}`);
+  // Signs in with the number written the way people type it.
+  await login(`024${digits}`,created.body.temporaryPassword);await login(`+233 24 ${digits}`,created.body.temporaryPassword);
+  assert.equal((await call(`/schools/${schoolA}/accounts`,head,'POST',{name:'Same Number',email:`+23324${digits}`,role:'guardian'})).status,409);
+  assert.equal((await call(`/schools/${schoolA}/accounts`,head,'POST',{name:'Not Contact',email:'not a contact',role:'guardian'})).status,400);
+});

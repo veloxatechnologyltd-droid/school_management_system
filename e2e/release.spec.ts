@@ -10,7 +10,7 @@ async function pickSchool(p:Page) {
 }
 async function openSetting(page:Page,name:string){await page.getByRole('navigation',{name:'Settings',exact:true}).getByRole('link',{name,exact:true}).click();}
 async function signIn(page:Page,email='head@example.test',tab='') {
-  await page.goto('/');await page.getByLabel('Email',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('Synthetic-only-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.goto('/');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('Synthetic-only-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await pickSchool(page);
   await expect(page.getByRole('heading',{name:'Adinkra Synthetic School',exact:true})).toBeVisible();
   if(tab){await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:tab,exact:true}).click();}
@@ -230,7 +230,7 @@ test('platform administrator creates a school; its headteacher signs in with the
     const adminId=randomUUID();
     await owner.query('INSERT INTO users(id,display_name,synthetic_login,password_hash) VALUES($1,$2,$3,$4)',[adminId,'Platform Admin',adminEmail,`${salt}:${scryptSync('Platform-admin-2026!',salt,64).toString('hex')}`]);
     await owner.query('INSERT INTO platform_admins(user_id) VALUES($1)',[adminId]);
-    await page.goto('/');await page.getByLabel('Email',{exact:true}).fill(adminEmail);await page.getByLabel('Password',{exact:true}).fill('Platform-admin-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
+    await page.goto('/');await page.getByLabel('Email or phone number',{exact:true}).fill(adminEmail);await page.getByLabel('Password',{exact:true}).fill('Platform-admin-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
     const panel=page.getByRole('region',{name:'Platform administration'});await expect(panel).toBeVisible();
     await panel.getByLabel('School name',{exact:true}).fill(schoolName);await panel.getByLabel('Headteacher name',{exact:true}).fill('Efua Mensah');await panel.getByLabel('Headteacher email',{exact:true}).fill(headEmail);
     await panel.getByRole('button',{name:'Create school',exact:true}).click();
@@ -239,7 +239,7 @@ test('platform administrator creates a school; its headteacher signs in with the
     await expect(panel.locator('li').filter({hasText:schoolName})).toContainText('1 headteacher');
     const context=await browser.newContext(),headPage=await context.newPage();
     try {
-      await headPage.goto('/');await headPage.getByLabel('Email',{exact:true}).fill(headEmail);await headPage.getByLabel('Password',{exact:true}).fill(temporary);await headPage.getByRole('button',{name:'Sign in',exact:true}).click();
+      await headPage.goto('/');await headPage.getByLabel('Email or phone number',{exact:true}).fill(headEmail);await headPage.getByLabel('Password',{exact:true}).fill(temporary);await headPage.getByRole('button',{name:'Sign in',exact:true}).click();
       await expect(headPage.getByRole('heading',{name:'Choose a new password'})).toBeVisible();
       await headPage.getByLabel('Temporary password',{exact:true}).fill(temporary);await headPage.getByLabel('New password',{exact:true}).fill('Brand-new-passphrase-77');await headPage.getByRole('button',{name:'Save new password'}).click();
       await expect(headPage.getByRole('heading',{name:schoolName,exact:true})).toBeVisible();await expect(headPage.getByRole('region',{name:'Platform administration'})).toHaveCount(0);

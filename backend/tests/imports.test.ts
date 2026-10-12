@@ -30,7 +30,7 @@ test('CSV parser preserves quoted identities and rejects malformed, empty and ex
 });
 test('Ghana school spreadsheets: header aliases, any column order, extra columns, semicolons and DD/MM/YYYY',()=>{
   const excel='Name of Student,Gender,Admission No.,DOB\r\n"Mensah, Ama",F,GH-001,03/04/2015\r\nOwusu Kofi,M,GH-002,\r\n';
-  const rows=parseLearnerCsv(excel,'dmy');assert.deepEqual(rows.map(r=>r.input),[{admissionNumber:'GH-001',fullName:'Mensah, Ama',dateOfBirth:'2015-04-03',columnCount:3},{admissionNumber:'GH-002',fullName:'Owusu Kofi',dateOfBirth:'',columnCount:3}]);
+  const rows=parseLearnerCsv(excel,'dmy');assert.deepEqual(rows.map(r=>r.input),[{admissionNumber:'GH-001',fullName:'Mensah, Ama',dateOfBirth:'2015-04-03',sex:'female',columnCount:3},{admissionNumber:'GH-002',fullName:'Owusu Kofi',dateOfBirth:'',sex:'male',columnCount:3}]);
   assert.equal(parseLearnerCsv(excel,'mdy')[0].input.dateOfBirth,'2015-03-04');
   assert.equal(parseLearnerCsv(excel,'iso')[0].input.dateOfBirth,'03/04/2015','without a chosen format the value is left for validation to reject');
   assert.equal(parseLearnerCsv('Admission Number;Full Name;Date of Birth\nA-1;Ama Sample;5-1-2016\n','dmy')[0].input.dateOfBirth,'2016-01-05');

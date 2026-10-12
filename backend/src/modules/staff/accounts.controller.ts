@@ -1,5 +1,5 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, NotFoundException, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
-import { IsEmail, IsIn, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsString, MaxLength, MinLength } from 'class-validator';
 import { Request } from 'express';
 import { randomBytes } from 'node:crypto';
 import { PoolClient } from 'pg';
@@ -11,9 +11,11 @@ import { hashPassword } from '../identity/identity.controller';
 
 class NewAccountDto {
   @IsString() @MinLength(2) @MaxLength(120) name!: string;
-  @IsEmail() @MaxLength(200) email!: string;
+  // An email address, or a Ghana mobile number for people (often guardians) who have no email.
+  @IsString() @MinLength(3) @MaxLength(200) email!: string;
   @IsIn(['teacher','frontdesk','accountant','guardian']) role!: string;
 }
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function temporaryPassword() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   return Array.from(randomBytes(16),byte => alphabet[byte % alphabet.length]).join('');
@@ -40,11 +42,14 @@ export class AccountsController {
   }
   @Post()
   create(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Body() body: NewAccountDto) {
-    const password = temporaryPassword();
+    const password = temporaryPassword(), phone = normalizeGhanaPhone(body.email), login = phone ?? body.email.trim().toLowerCase();
+    if (!phone && !emailPattern.test(login)) throw new BadRequestException('Enter an email address or a Ghana mobile number such as 024 123 4567');
     return this.run(req,schoolId,true,async (client,actor) => {
-      const id = (await client.query('SELECT staff_create($1,$2,$3,$4) AS id',[body.name.trim(),body.email,await hashPassword(password),body.role])).rows[0].id as string;
-      await audit(client,actor,'account.created',id,{role:body.role});
-      return {userId:id,email:body.email.toLowerCase(),role:body.role,temporaryPassword:password};
+      const id = (await client.query('SELECT staff_create($1,$2,$3,$4) AS id',[body.name.trim(),login,await hashPassword(password),body.role])).rows[0].id as string;
+      // A phone sign-in is also the number notices are sent to.
+      if (phone) await client.query('SELECT staff_set_phone($1,$2)',[id,phone]);
+      await audit(client,actor,'account.created',id,{role:body.role,signIn:phone ? 'phone' : 'email'});
+      return {userId:id,email:login,role:body.role,temporaryPassword:password};
     });
   }
   @Post(':userId/reset-password')

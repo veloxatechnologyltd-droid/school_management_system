@@ -1,14 +1,20 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
-import { FeeItemDto, GenerateInvoicesDto, InvoiceQueryDto, PaymentDto, ReverseDto } from './finance.dto';
+import { AdjustmentDto, FeeItemDto, GenerateInvoicesDto, InvoiceQueryDto, PaymentDto, ReverseDto } from './finance.dto';
 
 // Paid = payments that have not been reversed. bigint sums come back as strings; they stay whole pesewas.
 const paidSql = `coalesce((SELECT sum(p.amount_pesewas) FROM payments p WHERE p.school_id=i.school_id AND p.invoice_id=i.id
   AND NOT EXISTS (SELECT 1 FROM payment_reversals r WHERE r.school_id=p.school_id AND r.payment_id=p.id)),0)`;
-const money = (value: string | number) => Number(value);
+// Due = billed fee items plus charges minus discounts recorded against the invoice.
+const adjustedSql = `coalesce((SELECT sum(CASE a.kind WHEN 'charge' THEN a.amount_pesewas ELSE -a.amount_pesewas END) FROM invoice_adjustments a WHERE a.school_id=i.school_id AND a.invoice_id=i.id),0)`;
+const dueSql = `(i.total_pesewas+${adjustedSql})`;
+const adjustmentsJson = `coalesce((SELECT json_agg(json_build_object('id',a.id,'kind',a.kind,'label',a.label,'amountPesewas',a.amount_pesewas::float8,'reason',a.reason,'recordedAt',a.recorded_at) ORDER BY a.recorded_at) FROM invoice_adjustments a WHERE a.school_id=i.school_id AND a.invoice_id=i.id),'[]')`;
+// Arrears: what the learner still owes on invoices of earlier terms. Shown on the new bill; never moved between invoices.
+const arrearsSql = `coalesce((SELECT sum(${dueSql.replace(/\bi\./g,'o.')}-${paidSql.replace(/\bi\./g,'o.')}) FROM invoices o JOIN terms ot ON ot.school_id=o.school_id AND ot.id=o.term_id
+  WHERE o.school_id=i.school_id AND o.learner_id=i.learner_id AND ot.start_date<(SELECT t.start_date FROM terms t WHERE t.school_id=i.school_id AND t.id=i.term_id)),0)`;
 
 @Injectable()
 export class FinanceService {
@@ -20,20 +26,22 @@ export class FinanceService {
   createFeeItem(client: PoolClient, actor: Actor, body: FeeItemDto) {
     return command(client,actor,body.operationId,'finance.fee-item',body,async () => {
       await this.term(client,actor.schoolId,body.termId);
-      const row = (await client.query('INSERT INTO fee_items(id,school_id,term_id,name,level,amount_pesewas,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,term_id,name,level,amount_pesewas::float8 AS amount_pesewas',[randomUUID(),actor.schoolId,body.termId,body.name.trim(),body.level ?? null,body.amountPesewas,actor.membershipId])).rows[0];
+      if (body.level && body.classId) throw new BadRequestException('Choose a level or one class, not both');
+      if (body.classId && !(await client.query('SELECT 1 FROM class_sections WHERE school_id=$1 AND id=$2',[actor.schoolId,body.classId])).rowCount) throw new NotFoundException('Class unavailable');
+      const row = (await client.query('INSERT INTO fee_items(id,school_id,term_id,name,level,class_id,amount_pesewas,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,term_id,name,level,class_id,amount_pesewas::float8 AS amount_pesewas',[randomUUID(),actor.schoolId,body.termId,body.name.trim(),body.level ?? null,body.classId ?? null,body.amountPesewas,actor.membershipId])).rows[0];
       await audit(client,actor,'finance.fee-item.created',row.id,{amountPesewas:body.amountPesewas});
       return row;
     });
   }
   async feeItems(client: PoolClient, schoolId: string, termId?: string) {
-    return (await client.query('SELECT id,term_id,name,level,amount_pesewas::float8 AS amount_pesewas FROM fee_items WHERE school_id=$1 AND ($2::uuid IS NULL OR term_id=$2) ORDER BY name,id',[schoolId,termId ?? null])).rows;
+    return (await client.query('SELECT f.id,f.term_id,f.name,f.level,f.class_id,c.name AS class_name,f.amount_pesewas::float8 AS amount_pesewas FROM fee_items f LEFT JOIN class_sections c ON c.school_id=f.school_id AND c.id=f.class_id WHERE f.school_id=$1 AND ($2::uuid IS NULL OR f.term_id=$2) ORDER BY f.name,f.id',[schoolId,termId ?? null])).rows;
   }
   generate(client: PoolClient, actor: Actor, body: GenerateInvoicesDto) {
     return command(client,actor,body.operationId,'finance.invoices.generate',body,async () => {
       const term = await this.term(client,actor.schoolId,body.termId);
       const section = (await client.query('SELECT id,level FROM class_sections WHERE school_id=$1 AND id=$2',[actor.schoolId,body.classId])).rows[0];
       if (!section) throw new NotFoundException('Class unavailable');
-      const items = (await client.query('SELECT name,amount_pesewas::float8 AS amount FROM fee_items WHERE school_id=$1 AND term_id=$2 AND (level IS NULL OR level=$3) ORDER BY name,id',[actor.schoolId,body.termId,section.level])).rows;
+      const items = (await client.query('SELECT name,amount_pesewas::float8 AS amount FROM fee_items WHERE school_id=$1 AND term_id=$2 AND ((level IS NULL AND class_id IS NULL) OR level=$3 OR class_id=$4) ORDER BY name,id',[actor.schoolId,body.termId,section.level,section.id])).rows;
       if (!items.length) throw new ConflictException('Add fee items for this term and class level first');
       const lines = items.map(item => ({name:item.name,amountPesewas:item.amount})), total = lines.reduce((sum,line) => sum + line.amountPesewas,0);
       const learners = (await client.query('SELECT DISTINCT e.learner_id FROM enrolments e WHERE e.school_id=$1 AND e.class_id=$2 AND e.superseded_at IS NULL AND e.start_date<$4 AND (e.end_date IS NULL OR e.end_date>$3)',[actor.schoolId,body.classId,term.start_date,term.end_date])).rows;
@@ -51,16 +59,16 @@ export class FinanceService {
     const filter = `i.school_id=$1 AND i.term_id=$2 AND ($3::uuid IS NULL OR i.class_id=$3) AND (l.full_name ILIKE $4 ESCAPE '\\' OR l.admission_number ILIKE $4 ESCAPE '\\')`;
     const values = [schoolId,query.termId,query.classId ?? null,search];
     const from = `FROM invoices i JOIN learners l ON l.school_id=i.school_id AND l.id=i.learner_id JOIN class_sections c ON c.school_id=i.school_id AND c.id=i.class_id`;
-    const having = query.outstandingOnly ? ` AND i.total_pesewas > ${paidSql}` : '';
+    const having = query.outstandingOnly ? ` AND ${dueSql} > ${paidSql}` : '';
     const total = (await client.query(`SELECT count(*) ${from} WHERE ${filter}${having}`,values)).rows[0].count;
-    const items = (await client.query(`SELECT i.id,i.learner_id,l.full_name,l.admission_number,c.name AS class_name,i.total_pesewas::float8 AS total_pesewas,${paidSql}::float8 AS paid_pesewas,i.lines ${from} WHERE ${filter}${having} ORDER BY l.full_name,i.id LIMIT $5 OFFSET $6`,[...values,query.limit,query.offset])).rows
-      .map(row => ({...row,balance_pesewas:row.total_pesewas - row.paid_pesewas}));
+    const items = (await client.query(`SELECT i.id,i.learner_id,l.full_name,l.admission_number,c.name AS class_name,i.total_pesewas::float8 AS total_pesewas,${dueSql}::float8 AS due_pesewas,${paidSql}::float8 AS paid_pesewas,${arrearsSql}::float8 AS arrears_pesewas,i.lines,${adjustmentsJson} AS adjustments ${from} WHERE ${filter}${having} ORDER BY l.full_name,i.id LIMIT $5 OFFSET $6`,[...values,query.limit,query.offset])).rows
+      .map(row => ({...row,balance_pesewas:row.due_pesewas - row.paid_pesewas}));
     return {items,total:Number(total),limit:query.limit,offset:query.offset};
   }
   payment(client: PoolClient, actor: Actor, body: PaymentDto) {
     return command(client,actor,body.operationId,'finance.payment',body,async () => {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`invoice:${actor.schoolId}:${body.invoiceId}`]);
-      const invoice = (await client.query(`SELECT i.id,i.learner_id,i.total_pesewas::float8 AS total,${paidSql}::float8 AS paid FROM invoices i WHERE i.school_id=$1 AND i.id=$2`,[actor.schoolId,body.invoiceId])).rows[0];
+      const invoice = (await client.query(`SELECT i.id,i.learner_id,${dueSql}::float8 AS total,${paidSql}::float8 AS paid FROM invoices i WHERE i.school_id=$1 AND i.id=$2`,[actor.schoolId,body.invoiceId])).rows[0];
       if (!invoice) throw new NotFoundException('Invoice unavailable');
       const balance = invoice.total - invoice.paid;
       if (body.amountPesewas > balance) throw new ConflictException(`Payment is more than the balance of ${balance} pesewas`);
@@ -68,6 +76,22 @@ export class FinanceService {
       const row = (await client.query('INSERT INTO payments(id,school_id,invoice_id,amount_pesewas,method,reference,received_on,receipt_number,recorded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,receipt_number',[randomUUID(),actor.schoolId,body.invoiceId,body.amountPesewas,body.method,body.reference?.trim() ?? null,body.receivedOn,receipt,actor.membershipId])).rows[0];
       await audit(client,actor,'finance.payment.recorded',row.id,{amountPesewas:body.amountPesewas,method:body.method,receiptNumber:receipt});
       return {id:row.id,receiptNumber:row.receipt_number,balancePesewas:balance - body.amountPesewas};
+    });
+  }
+  // Discounts are the headteacher's decision; charges may be recorded by the accountant.
+  adjust(client: PoolClient, actor: Actor, invoiceId: string, body: AdjustmentDto) {
+    return command(client,actor,body.operationId,'finance.invoice.adjust',{invoiceId,...body},async () => {
+      if (body.kind === 'discount' && actor.role !== 'headteacher') throw new ForbiddenException('Only the headteacher can grant a discount');
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`invoice:${actor.schoolId}:${invoiceId}`]);
+      const invoice = (await client.query(`SELECT i.id,${dueSql}::float8 AS due,${paidSql}::float8 AS paid FROM invoices i WHERE i.school_id=$1 AND i.id=$2`,[actor.schoolId,invoiceId])).rows[0];
+      if (!invoice) throw new NotFoundException('Invoice unavailable');
+      // A bill can be discounted down to zero. Anything already paid beyond the new amount becomes a credit, shown on later bills.
+      if (body.kind === 'discount' && body.amountPesewas > invoice.due) throw new ConflictException(`A discount cannot be more than the bill of ${invoice.due} pesewas`);
+      const id = randomUUID();
+      await client.query('INSERT INTO invoice_adjustments(id,school_id,invoice_id,kind,label,amount_pesewas,reason,recorded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[id,actor.schoolId,invoiceId,body.kind,body.label.trim(),body.amountPesewas,body.reason.trim(),actor.membershipId]);
+      await audit(client,actor,`finance.invoice.${body.kind}`,invoiceId,{adjustmentId:id,amountPesewas:body.amountPesewas,label:body.label.trim()});
+      const balance = invoice.due + (body.kind === 'charge' ? body.amountPesewas : -body.amountPesewas) - invoice.paid;
+      return {id,balancePesewas:balance};
     });
   }
   reverse(client: PoolClient, actor: Actor, paymentId: string, body: ReverseDto) {
@@ -83,7 +107,7 @@ export class FinanceService {
   }
   async receipt(client: PoolClient, schoolId: string, paymentId: string) {
     const row = (await client.query(`SELECT p.id,p.receipt_number,p.amount_pesewas::float8 AS amount_pesewas,p.method,p.reference,p.received_on::text,p.recorded_at,
-        l.full_name,l.admission_number,t.name AS term_name,s.name AS school_name,i.total_pesewas::float8 AS invoice_total,r.reason AS reversal_reason
+        l.full_name,l.admission_number,t.name AS term_name,s.name AS school_name,s.address AS school_address,s.phone AS school_phone,${dueSql}::float8 AS invoice_total,r.reason AS reversal_reason
       FROM payments p JOIN invoices i ON i.school_id=p.school_id AND i.id=p.invoice_id JOIN learners l ON l.school_id=i.school_id AND l.id=i.learner_id
       JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id JOIN schools s ON s.id=p.school_id
       LEFT JOIN payment_reversals r ON r.school_id=p.school_id AND r.payment_id=p.id WHERE p.school_id=$1 AND p.id=$2`,[schoolId,paymentId])).rows[0];
@@ -92,13 +116,13 @@ export class FinanceService {
   }
   async summary(client: PoolClient, schoolId: string, termId: string) {
     await this.term(client,schoolId,termId);
-    const row = (await client.query(`SELECT count(*)::int AS invoices,coalesce(sum(i.total_pesewas),0)::float8 AS billed,coalesce(sum(${paidSql}),0)::float8 AS collected FROM invoices i WHERE i.school_id=$1 AND i.term_id=$2`,[schoolId,termId])).rows[0];
-    return {invoices:row.invoices,billedPesewas:row.billed,collectedPesewas:row.collected,outstandingPesewas:row.billed - row.collected};
+    const row = (await client.query(`SELECT count(*)::int AS invoices,coalesce(sum(${dueSql}),0)::float8 AS billed,coalesce(sum(${adjustedSql}),0)::float8 AS adjusted,coalesce(sum(${paidSql}),0)::float8 AS collected FROM invoices i WHERE i.school_id=$1 AND i.term_id=$2`,[schoolId,termId])).rows[0];
+    return {invoices:row.invoices,billedPesewas:row.billed,adjustmentsPesewas:row.adjusted,collectedPesewas:row.collected,outstandingPesewas:row.billed - row.collected};
   }
   async statement(client: PoolClient, actor: Actor, learnerId: string) {
     const link = (await client.query('SELECT id FROM guardian_links WHERE school_id=$1 AND learner_id=$2 AND guardian_membership_id=$3 AND billing=true AND verified_at IS NOT NULL AND revoked_at IS NULL FOR SHARE',[actor.schoolId,learnerId,actor.membershipId])).rows[0];
     if (!link) throw new NotFoundException('Child unavailable');
-    const invoices = (await client.query(`SELECT i.id,t.name AS term_name,i.total_pesewas::float8 AS total_pesewas,${paidSql}::float8 AS paid_pesewas,i.lines FROM invoices i JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id WHERE i.school_id=$1 AND i.learner_id=$2 ORDER BY t.start_date DESC,i.id`,[actor.schoolId,learnerId])).rows;
+    const invoices = (await client.query(`SELECT i.id,t.name AS term_name,${dueSql}::float8 AS total_pesewas,${paidSql}::float8 AS paid_pesewas,i.lines,${adjustmentsJson} AS adjustments FROM invoices i JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id WHERE i.school_id=$1 AND i.learner_id=$2 ORDER BY t.start_date DESC,i.id`,[actor.schoolId,learnerId])).rows;
     return {items:invoices.map(row => ({...row,balance_pesewas:row.total_pesewas - row.paid_pesewas}))};
   }
 }

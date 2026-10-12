@@ -37,10 +37,10 @@ export function Accounts({ schoolId, csrfToken }: { schoolId: string; csrfToken:
     <h2>Staff and family accounts</h2>
     <p className="muted">Create sign-ins for teachers, front desk, accountants and guardians. Each person gets a temporary password and must choose their own.</p>
     {error && <p role="alert">{error}</p>}
-    {credentials && <div role="status" className="credentials"><strong>{credentials.label}</strong><p>Email: {credentials.email}<br/>Temporary password: <code>{credentials.temporaryPassword}</code></p><p className="muted">Shown once. Share it privately.</p><button type="button" className="secondary" onClick={() => setCredentials(null)}>I have copied it</button></div>}
+    {credentials && <div role="status" className="credentials"><strong>{credentials.label}</strong><p>Sign in with: {credentials.email}<br/>Temporary password: <code>{credentials.temporaryPassword}</code></p><p className="muted">Shown once. Share it privately.</p><button type="button" className="secondary" onClick={() => setCredentials(null)}>I have copied it</button></div>}
     <form onSubmit={create}>
       <label>Full name<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required minLength={2} maxLength={120}/></label>
-      <label>Email<input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required/></label>
+      <label>Email or mobile number<input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="name@example.com or 024 123 4567" required/></label>
       <label>Role<select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>{roles.map(r => <option key={r} value={r}>{r}</option>)}</select></label>
       <button disabled={busy}>Create account</button>
     </form>

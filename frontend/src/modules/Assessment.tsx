@@ -1,6 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
-import { Card, Empty, Pill, currentTerm } from '../lib/ui';
+import { Card, Dialog, Empty, Pill, currentTerm } from '../lib/ui';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -11,6 +11,8 @@ type Band = { min: number; grade: string; remark: string };
 type Policy = { ca_weight: number; exam_weight: number; bands: Band[]; source_note: string; version: number } | null;
 type GridRow = { learnerId: string; fullName: string; admissionNumber: string; ca: number | null; exam: number | null; locked: boolean; published: boolean };
 type Result = { learnerId: string; fullName: string; complete: boolean; average: number | null; position: number | null; subjects: { name: string; total: number | null; grade: string | null }[] };
+type Remark = { learnerId: string; fullName: string; locked: boolean; conduct: string | null; attitude: string | null; interest: string | null; teacherRemark: string | null; headRemark: string | null };
+const remarkFields = [['conduct', 'Conduct'], ['attitude', 'Attitude'], ['interest', 'Interest'], ['teacherRemark', "Class teacher's remark"], ['headRemark', "Headteacher's remark"]] as const;
 
 const bandsToText = (bands: Band[]) => bands.map(b => `${b.min},${b.grade},${b.remark}`).join('\n');
 function parseBands(text: string): Band[] {
@@ -30,6 +32,8 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const [classId, setClassId] = useState(''); const [termId, setTermId] = useState(''); const [subjectId, setSubjectId] = useState('');
   const [grid, setGrid] = useState<GridRow[]>([]); const [edits, setEdits] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Result[]>([]);
+  const [remarks, setRemarks] = useState<Remark[]>([]); const [remarkEdits, setRemarkEdits] = useState<Record<string, string>>({});
+  const [printing, setPrinting] = useState<{ id: string; snapshot: Snapshot }[] | null>(null);
   const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [newSubject, setNewSubject] = useState(''); const [newTerm, setNewTerm] = useState({ academicYearId: '', name: '', startDate: '', endDate: '' });
   const [policyForm, setPolicyForm] = useState({ caWeight: '30', examWeight: '70', bands: '80,A,Excellent\n65,B,Good\n50,C,Credit\n0,D,Needs support', sourceNote: '' });
@@ -58,6 +62,13 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     catch (e) { setError((e as Error).message); }
   }, [schoolId, classId, termId, subjectId]);
   useEffect(() => { void loadGrid(); }, [loadGrid]);
+  const loadRemarks = useCallback(async () => {
+    setRemarks([]); setRemarkEdits({});
+    if (!classId || !termId || view === 'setup') return;
+    try { setRemarks((await request<{ items: Remark[] }>(`/schools/${schoolId}/assessment/classes/${classId}/remarks?termId=${termId}`)).items); }
+    catch (e) { setError((e as Error).message); }
+  }, [schoolId, classId, termId, view]);
+  useEffect(() => { void loadRemarks(); }, [loadRemarks]);
 
   async function act(work: () => Promise<void>) {
     setBusy(true); setError(''); setMessage('');
@@ -80,6 +91,23 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const reopen = (row: GridRow) => { const reason = window.prompt(`Why is ${row.fullName}'s published report being corrected? This is recorded.`); if (!reason || reason.trim().length < 3) return;
     void act(async () => { await send(`/assessment/classes/${classId}/reopen`, 'POST', { termId, learnerId: row.learnerId, reason }); await loadGrid(); setMessage(`${row.fullName}'s report is open for correction. Fix the scores, then publish the corrected report.`); }); };
   const reissue = (row: GridRow) => void act(async () => { const r = await send<{ revision: number }>(`/assessment/classes/${classId}/reissue`, 'POST', { termId, learnerId: row.learnerId, acknowledgeIncomplete: false }); await loadGrid(); setMessage(`Corrected report published (revision ${r.revision}).`); });
+  // The class teacher's fields and the head's remark are saved as separate authors; only changed rows are sent.
+  const saveRemarks = () => void act(async () => {
+    const value = (row: Remark, field: typeof remarkFields[number][0]) => (remarkEdits[`${row.learnerId}:${field}`] ?? row[field] ?? '').trim() || undefined;
+    const changed = (row: Remark, fields: readonly string[]) => fields.some(field => remarkEdits[`${row.learnerId}:${field}`] !== undefined);
+    const teacherFields = ['conduct', 'attitude', 'interest', 'teacherRemark'] as const;
+    const teacherItems = remarks.filter(row => !row.locked && changed(row, teacherFields)).map(row => ({ learnerId: row.learnerId, conduct: value(row, 'conduct'), attitude: value(row, 'attitude'), interest: value(row, 'interest'), remark: value(row, 'teacherRemark') }));
+    const headItems = head ? remarks.filter(row => !row.locked && changed(row, ['headRemark'])).map(row => ({ learnerId: row.learnerId, remark: value(row, 'headRemark') })) : [];
+    if (!teacherItems.length && !headItems.length) throw new Error('Nothing has changed.');
+    if (teacherItems.length) await send(`/assessment/classes/${classId}/remarks`, 'POST', { termId, author: 'class_teacher', items: teacherItems });
+    if (headItems.length) await send(`/assessment/classes/${classId}/remarks`, 'POST', { termId, author: 'headteacher', items: headItems });
+    await loadRemarks(); setMessage('Report card remarks saved.');
+  });
+  const openReportCards = () => void act(async () => {
+    const r = await request<{ items: { id: string; snapshot: Snapshot }[] }>(`/schools/${schoolId}/assessment/classes/${classId}/reports?termId=${termId}`);
+    if (!r.items.length) throw new Error('No terminal reports have been published for this class and term yet.');
+    setPrinting(r.items);
+  });
   const preview = () => void act(async () => { setResults((await request<{ items: Result[] }>(`/schools/${schoolId}/assessment/classes/${classId}/results?termId=${termId}`)).items); });
   const publish = () => { if (!window.confirm('Publish terminal reports for this class? Scores will be locked and guardians can see them.')) return;
     void act(async () => {
@@ -114,12 +142,50 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
       <div className="actions"><button disabled={busy || !policy} onClick={saveScores}>Save scores</button>{head && <button className="secondary" disabled={busy} onClick={preview}>Preview results</button>}</div></>}
     {results.length > 0 && <><h3>Results preview</h3><ul className="history">{results.map(r => <li key={r.learnerId}><strong>{r.fullName}{r.position ? ` · position ${r.position}` : ''}</strong><span>{r.complete ? `Average ${r.average}` : 'Missing scores'} · {r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</span></li>)}</ul>
       <button disabled={busy} onClick={publish}>Publish terminal reports</button></>}
+    {remarks.length > 0 && <Card title="Report card remarks" hint={head ? 'Class teachers fill conduct, attitude, interest and their remark; you add the headteacher\'s remark. Locked once the report is published.' : 'Conduct, attitude, interest and your remark for each learner. Locked once the report is published.'} flush>
+      <div className="table-wrap"><table><thead><tr><th>Learner</th>{remarkFields.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead><tbody>
+        {remarks.map(row => <tr key={row.learnerId}><td>{row.fullName}{row.locked && <> <Pill>published</Pill></>}</td>{remarkFields.map(([field, label]) => {
+          const key = `${row.learnerId}:${field}`, readOnly = row.locked || (field === 'headRemark' && !head);
+          return <td key={field}>{readOnly ? (row[field] ?? '–') : <input aria-label={`${row.fullName} ${label}`} maxLength={field.endsWith('emark') ? 300 : 120} value={remarkEdits[key] ?? row[field] ?? ''} onChange={e => setRemarkEdits({ ...remarkEdits, [key]: e.target.value })}/>}</td>;
+        })}</tr>)}</tbody></table></div>
+      <div className="actions card-actions"><button disabled={busy} onClick={saveRemarks}>Save remarks</button><button className="secondary" disabled={busy} onClick={openReportCards}>Report cards</button></div>
+    </Card>}
+    {printing && <Dialog title="Report cards" wide onClose={() => setPrinting(null)}>
+      <div className="actions"><button type="button" onClick={() => window.print()}>Print all ({printing.length})</button></div>
+      <div className="print-sheet">{printing.map(r => <ReportCard key={r.id} snapshot={r.snapshot}/>)}</div>
+    </Dialog>}
     </>}
   </section>;
 }
 
+const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;
+const longDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+// The Ghanaian terminal report as printed for families: school header, scores, position, attendance, conduct and remarks.
+// Reports published before these details existed show what they hold.
+export function ReportCard({ snapshot: r }: { snapshot: Snapshot }) {
+  return <article className="report-card">
+    <header className="report-card-head"><h3>{r.school?.name ?? 'Terminal report'}</h3>{r.school?.motto && <p className="report-motto">{r.school.motto}</p>}{(r.school?.address || r.school?.phone) && <p>{[r.school.address, r.school.phone].filter(Boolean).join(' · ')}</p>}<p className="report-title">Terminal report · {r.term.name}</p></header>
+    <dl className="report-facts">
+      <div><dt>Name</dt><dd>{r.learner?.fullName}</dd></div><div><dt>Admission no.</dt><dd>{r.learner?.admissionNumber}</dd></div><div><dt>Class</dt><dd>{r.class.name}</dd></div>
+      <div><dt>Position</dt><dd>{r.position ? `${ordinal(r.position)} of ${r.classSize}` : '–'}</dd></div><div><dt>Average</dt><dd>{r.average ?? '–'}</dd></div>
+      {r.attendance && <div><dt>Attendance</dt><dd>{r.attendance.present} out of {r.attendance.possible}</dd></div>}
+    </dl>
+    <div className="table-wrap"><table><thead><tr><th>Subject</th><th className="num">Class score ({r.policy.caWeight}%)</th><th className="num">Exam ({r.policy.examWeight}%)</th><th className="num">Total</th><th>Grade</th><th>Remark</th></tr></thead>
+      <tbody>{r.subjects.map(s => <tr key={s.name}><td>{s.name}</td><td className="num">{s.ca ?? '–'}</td><td className="num">{s.exam ?? '–'}</td><td className="num">{s.total ?? '–'}</td><td>{s.grade ?? '–'}</td><td>{s.remark ?? ''}</td></tr>)}</tbody></table></div>
+    {!r.complete && <p>Some scores were not available when this report was published.</p>}
+    <dl className="report-remarks">
+      {r.conduct && <div><dt>Conduct</dt><dd>{r.conduct}</dd></div>}{r.attitude && <div><dt>Attitude</dt><dd>{r.attitude}</dd></div>}{r.interest && <div><dt>Interest</dt><dd>{r.interest}</dd></div>}
+      {r.teacherRemark && <div><dt>Class teacher's remark</dt><dd>{r.teacherRemark}</dd></div>}{r.headRemark && <div><dt>Headteacher's remark</dt><dd>{r.headRemark}</dd></div>}
+      {r.nextTermBegins && <div><dt>Next term begins</dt><dd>{longDate(r.nextTermBegins)}</dd></div>}
+    </dl>
+    <p className="muted">Grading: {r.policy.sourceNote}</p>
+  </article>;
+}
+
 type Snapshot = { term: { name: string }; class: { name: string }; classSize: number; average: number | null; position: number | null; complete: boolean; policy: { caWeight: number; examWeight: number; sourceNote: string };
-  subjects: { name: string; ca: number | null; exam: number | null; total: number | null; grade: string | null; remark: string | null }[] };
+  subjects: { name: string; ca: number | null; exam: number | null; total: number | null; grade: string | null; remark: string | null }[];
+  learner?: { fullName: string; admissionNumber: string }; school?: { name: string; address: string | null; phone: string | null; motto: string | null }; nextTermBegins?: string | null;
+  attendance?: { present: number; possible: number }; conduct?: string | null; attitude?: string | null; interest?: string | null; teacherRemark?: string | null; headRemark?: string | null };
 export function GuardianTerminalReports({ schoolId, childId: chosenChild }: { schoolId: string; childId?: string }) {
   const [children, setChildren] = useState<{ id: string; full_name: string; academic: boolean }[]>([]);
   const [childId, setChildId] = useState('');
@@ -134,10 +200,7 @@ export function GuardianTerminalReports({ schoolId, childId: chosenChild }: { sc
     <Card title="Terminal reports" hint="Published at the end of each term." action={chosenChild === undefined ? <label className="inline-field">Child<select value={childId} onChange={e => setChildId(e.target.value)}><option value="">Choose a child</option>{children.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label> : undefined} flush>
       {error && <p role="alert">{error}</p>}
       {reportChild && !reports.length && <Empty title="No terminal reports yet" hint="They appear here once the school publishes them."/>}
-      {reports.map(r => <article key={r.id} className="term-report"><div className="term-report-head"><h4>{r.snapshot.term.name} · {r.snapshot.class.name}</h4>{r.snapshot.complete ? <Pill tone="info">Average {r.snapshot.average} · position {r.snapshot.position} of {r.snapshot.classSize}</Pill> : <Pill tone="caution">Some scores missing</Pill>}</div>
-        <div className="table-wrap"><table><thead><tr><th>Subject</th><th className="num">Class work</th><th className="num">Exam</th><th className="num">Total</th><th>Grade</th></tr></thead><tbody>{r.snapshot.subjects.map(s => <tr key={s.name}><td>{s.name}</td><td className="num">{s.ca ?? '–'}</td><td className="num">{s.exam ?? '–'}</td><td className="num">{s.total ?? '–'}</td><td>{s.grade ?? '–'}{s.remark ? ` · ${s.remark}` : ''}</td></tr>)}</tbody></table></div>
-        {!r.snapshot.complete && <p>Some scores were not available when this report was published.</p>}
-        <p className="muted">Weighting: {r.snapshot.policy.caWeight}% class work, {r.snapshot.policy.examWeight}% exam. Source: {r.snapshot.policy.sourceNote}</p></article>)}
+      {reports.map(r => <ReportCard key={r.id} snapshot={r.snapshot}/>)}
     </Card>
   </section>;
 }

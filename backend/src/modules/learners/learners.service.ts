@@ -3,7 +3,7 @@ import { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { Actor } from '../../core/access';
 import { audit,command } from '../../core/commands';
-import { AdmissionDto,ClassDto,ClassPageDto,PageDto,TransferDto,TransitionDto,WithdrawalDto,YearDto } from './learners.dto';
+import { AdmissionDto,ClassDto,ClassPageDto,PageDto,TransferDto,TransitionDto,WithdrawalDto,LearnerSexDto,YearDto } from './learners.dto';
 @Injectable()
 export class LearnersService {
   async lockIdentityCatalog(client:PoolClient,schoolId:string){await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${schoolId}:learner-identity-catalog`]);}
@@ -11,7 +11,7 @@ export class LearnersService {
     const search=`%${(page.search??'').trim().replace(/[\\%_]/g,'\\$&')}%`;
     const filter="a.school_id=$1 AND (a.full_name ILIKE $2 ESCAPE '\\' OR a.admission_number ILIKE $2 ESCAPE '\\')";
     const total=Number((await client.query(`SELECT count(*) FROM ${table} a WHERE ${filter}`,[schoolId,search])).rows[0].count);
-    const select=table==='learners'?'a.id,a.full_name,a.admission_number,a.date_of_birth::text,a.version':'a.id,a.full_name,a.date_of_birth::text,a.status,a.class_id,c.name AS class_name,a.start_date::text,a.admission_number,a.version,a.learner_id,a.decision_reason';
+    const select=table==='learners'?'a.id,a.full_name,a.admission_number,a.date_of_birth::text,a.sex,a.version':'a.id,a.full_name,a.date_of_birth::text,a.status,a.class_id,c.name AS class_name,a.start_date::text,a.admission_number,a.version,a.learner_id,a.decision_reason';
     const join=table==='admissions'?'JOIN class_sections c ON c.school_id=a.school_id AND c.id=a.class_id':'';
     const order=table==='admissions'?'a.created_at DESC,a.id':'a.full_name,a.id';
     const items=(await client.query(`SELECT ${select} FROM ${table} a ${join} WHERE ${filter} ORDER BY ${order} LIMIT $3 OFFSET $4`,[schoolId,search,page.limit,page.offset])).rows;
@@ -68,7 +68,7 @@ export class LearnersService {
       if(body.dateOfBirth&&body.dateOfBirth>=body.startDate)throw new BadRequestException('Birth date must precede enrolment');
       const existing=await client.query('SELECT id FROM learners WHERE school_id=$1 AND admission_number=$2',[actor.schoolId,body.admissionNumber]);
       if(existing.rowCount)throw new ConflictException('Admission number already belongs to a learner');
-      const result=await client.query('INSERT INTO admissions(id,school_id,full_name,date_of_birth,class_id,start_date,admission_number) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,full_name,status,version',[randomUUID(),actor.schoolId,body.fullName.trim(),body.dateOfBirth??null,body.classId,body.startDate,body.admissionNumber]);
+      const result=await client.query('INSERT INTO admissions(id,school_id,full_name,date_of_birth,class_id,start_date,admission_number,sex) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,full_name,status,version',[randomUUID(),actor.schoolId,body.fullName.trim(),body.dateOfBirth??null,body.classId,body.startDate,body.admissionNumber,body.sex??null]);
       await audit(client,actor,'admission.created',result.rows[0].id);return result.rows[0];
     });
   }
@@ -87,7 +87,7 @@ export class LearnersService {
         const section=await this.classForDate(client,actor.schoolId,record.class_id,record.start_date);
         await this.ensureCapacity(client,actor,section,record.start_date,body.capacityOverrideReason);
         learnerId=randomUUID();
-        await client.query('INSERT INTO learners(id,school_id,admission_number,full_name,date_of_birth) VALUES($1,$2,$3,$4,$5)',[learnerId,actor.schoolId,record.admission_number,record.full_name,record.date_of_birth]);
+        await client.query('INSERT INTO learners(id,school_id,admission_number,full_name,date_of_birth,sex) VALUES($1,$2,$3,$4,$5,$6)',[learnerId,actor.schoolId,record.admission_number,record.full_name,record.date_of_birth,record.sex]);
         await client.query('INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,$5)',[randomUUID(),actor.schoolId,learnerId,record.class_id,record.start_date]);
       }
       const result=await client.query('UPDATE admissions SET status=$1,version=version+1,learner_id=$2,decision_reason=COALESCE($3,decision_reason) WHERE school_id=$4 AND id=$5 RETURNING id,status,version,learner_id',[next,learnerId,body.reason??null,actor.schoolId,id]);
@@ -97,10 +97,18 @@ export class LearnersService {
     });
   }
   async learner(client:PoolClient,schoolId:string,id:string,lock=false) {
-    const result=await client.query(`SELECT id,full_name,admission_number,date_of_birth::text,version FROM learners WHERE school_id=$1 AND id=$2${lock?' FOR UPDATE':''}`,[schoolId,id]);
+    const result=await client.query(`SELECT id,full_name,admission_number,date_of_birth::text,sex,version FROM learners WHERE school_id=$1 AND id=$2${lock?' FOR UPDATE':''}`,[schoolId,id]);
     if(!result.rowCount)throw new NotFoundException('Learner unavailable');
     const enrolments=await client.query('SELECT e.id,e.class_id,c.name AS class_name,e.start_date::text,e.end_date::text,e.end_reason,e.superseded_at,e.supersession_reason FROM enrolments e JOIN class_sections c ON c.school_id=e.school_id AND c.id=e.class_id WHERE e.school_id=$1 AND e.learner_id=$2 ORDER BY e.start_date,e.id',[schoolId,id]);
     return {...result.rows[0],enrolments:enrolments.rows};
+  }
+  setSex(client:PoolClient,actor:Actor,id:string,body:LearnerSexDto) {
+    return command(client,actor,body.operationId,'learner.sex',{id,...body},async()=>{
+      const learner=await this.learner(client,actor.schoolId,id,true);
+      if(learner.version!==body.version)throw new ConflictException('Learner changed. Reload before saving');
+      const result=await client.query('UPDATE learners SET sex=$1,version=version+1 WHERE school_id=$2 AND id=$3 RETURNING id,sex,version',[body.sex,actor.schoolId,id]);
+      await audit(client,actor,'learner.sex.recorded',id,{sex:body.sex,previous:learner.sex});return result.rows[0];
+    });
   }
   withdraw(client:PoolClient,actor:Actor,id:string,body:WithdrawalDto) {
     return command(client,actor,body.operationId,'learner.withdraw',{id,...body},async()=>{

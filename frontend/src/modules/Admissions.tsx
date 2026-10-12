@@ -7,7 +7,7 @@ type Role = 'headteacher' | 'frontdesk' | string;
 type AcademicYear = { id: string; name: string; start_date: string; end_date: string };
 type SchoolClass = { id: string; name: string; level: 'Nursery' | 'KG' | 'Primary' | 'JHS'; capacity: number; academic_year_id: string; year_name: string; start_date: string; end_date: string };
 type Admission = { id: string; full_name: string; date_of_birth?: string | null; status: string; class_id: string; class_name: string; start_date: string; admission_number: string; version: number; learner_id?: string | null; decision_reason?: string | null };
-type Learner = { id: string; full_name: string; admission_number: string; date_of_birth?: string | null; version: number };
+type Learner = { id: string; full_name: string; admission_number: string; date_of_birth?: string | null; sex?: 'female' | 'male' | null; version: number };
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
 type Enrolment = { id: string; class_id: string; class_name: string; start_date: string; end_date?: string | null; end_reason?: string | null; superseded_at?:string | null; supersession_reason?:string | null };
 type LearnerDetail = Learner & { enrolments: Enrolment[] };
@@ -38,7 +38,8 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
   const [selectedLearner, setSelectedLearner] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'roll' | 'applications'>(initialTab);
-  const [dialog, setDialog] = useState<'' | 'application' | 'import'>('');
+  const [dialog, setDialog] = useState<'' | 'application' | 'import' | 'census'>('');
+  const [census, setCensus] = useState<{ day: string; items: { id: string; name: string; female: number; male: number; unrecorded: number }[] } | null>(null);
   const selectedLearnerRef=useRef('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -48,7 +49,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
   const [transfer, setTransfer] = useState({ classId: '', effectiveDate: dateToday(), reason: '' });
   const [withdrawalOpen,setWithdrawalOpen]=useState(false);
   const [withdrawal,setWithdrawal]=useState({effectiveDate:dateToday(),reason:''});
-  const [application, setApplication] = useState({ fullName: '', dateOfBirth: '', classId: '', startDate: dateToday(), admissionNumber: '' });
+  const [application, setApplication] = useState({ fullName: '', dateOfBirth: '', sex: '', classId: '', startDate: dateToday(), admissionNumber: '' });
   const [newYear, setNewYear] = useState({ name: '', startDate: '', endDate: '' });
   const [newClass, setNewClass] = useState({ name: '', level: 'Primary' as SchoolClass['level'], capacity: '', academicYearId: '' });
   const operations = useRef(new Map<string, { payload: string; id: string }>());
@@ -139,8 +140,8 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
 
   async function submitApplication(event: React.FormEvent) {
     event.preventDefault();
-    const payload = { fullName: application.fullName.trim(), ...(application.dateOfBirth ? { dateOfBirth: application.dateOfBirth } : {}), classId: application.classId, startDate: application.startDate, admissionNumber: application.admissionNumber.trim() };
-    if (await send('application', payload, `/schools/${schoolId}/admissions`, 'Application recorded. Review and enrolment remain staff decisions.')) { setApplication({ fullName: '', dateOfBirth: '', classId: '', startDate: dateToday(), admissionNumber: '' }); setDialog(''); setTab('applications'); }
+    const payload = { fullName: application.fullName.trim(), ...(application.dateOfBirth ? { dateOfBirth: application.dateOfBirth } : {}), ...(application.sex ? { sex: application.sex } : {}), classId: application.classId, startDate: application.startDate, admissionNumber: application.admissionNumber.trim() };
+    if (await send('application', payload, `/schools/${schoolId}/admissions`, 'Application recorded. Review and enrolment remain staff decisions.')) { setApplication({ fullName: '', dateOfBirth: '', sex: '', classId: '', startDate: dateToday(), admissionNumber: '' }); setDialog(''); setTab('applications'); }
   }
 
   async function transition(row: Admission, action: string) {
@@ -212,7 +213,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
 
   return <section aria-label="Admissions and learners" className="page">
     <PageHeader eyebrow="People" title="Learners" blurb="Every learner record, application and class history in one place."
-      actions={<><button type="button" disabled={loading || !classes.length} onClick={() => { setError(''); setNotice(''); setDialog('application'); }}><Icon name="person_add"/>New application</button><button type="button" className="secondary" onClick={() => setDialog('import')}><Icon name="upload_file"/>Import existing learners</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void loadWorkspace(true)}>Refresh records</button></>}/>
+      actions={<><button type="button" disabled={loading || !classes.length} onClick={() => { setError(''); setNotice(''); setDialog('application'); }}><Icon name="person_add"/>New application</button><button type="button" className="secondary" onClick={() => setDialog('import')}><Icon name="upload_file"/>Import existing learners</button><button type="button" className="secondary" onClick={() => { setDialog('census'); setCensus(null); request<NonNullable<typeof census>>(`/schools/${schoolId}/learners/census`).then(setCensus).catch(e => setError((e as Error).message)); }}><Icon name="groups"/>Class sizes</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void loadWorkspace(true)}>Refresh records</button></>}/>
     {!dialog && !selectedLearner && messages}
     {loading ? <p role="status">Loading admissions and learner records…</p> : <>
       <div className="actions"><Tabs label="Learner lists" value={tab} onChange={setTab} options={[{ id: 'roll', label: `Learner roll (${learnersTotal})` }, { id: 'applications', label: `Admissions (${admissionsTotal})` }]}/></div>
@@ -224,8 +225,8 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
           </form>
           <span className="count">{learnersTotal} learners</span>
         </div>
-        {learners.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Admission no.</th><th className="hide-sm">Date of birth</th><th className="hide-sm"></th></tr></thead><tbody>{learners.map(row => <tr key={row.id}>
-          <td><button type="button" className="link-button" onClick={() => setSelectedLearner(row.id)}>{row.full_name}</button></td><td>{row.admission_number}</td><td className="hide-sm">{row.date_of_birth ?? '—'}</td>
+        {learners.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Admission no.</th><th className="hide-sm">Sex</th><th className="hide-sm">Date of birth</th><th className="hide-sm"></th></tr></thead><tbody>{learners.map(row => <tr key={row.id}>
+          <td><button type="button" className="link-button" onClick={() => setSelectedLearner(row.id)}>{row.full_name}</button></td><td>{row.admission_number}</td><td className="hide-sm">{row.sex === 'female' ? 'F' : row.sex === 'male' ? 'M' : '—'}</td><td className="hide-sm">{row.date_of_birth ?? '—'}</td>
           <td className="num hide-sm"><button type="button" className="secondary" aria-label={`Open ${row.full_name}`} onClick={() => setSelectedLearner(row.id)}>Open</button></td></tr>)}</tbody></table></div>
           : <Empty title={learnersSearch ? 'No learners match this search' : 'No learners yet'} hint={learnersSearch ? undefined : 'Record an application or import your class lists from Excel.'}/>}
         {pager(learnersOffset, learners.length, learnersTotal, 'learners', setLearnersOffset)}
@@ -248,12 +249,21 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
       </Card>}
     </>}
 
+    {dialog === 'census' && <Dialog title="Class sizes by sex" onClose={() => setDialog('')}>
+      {!census ? <p role="status">Loading…</p> : <><p className="muted">Learners enrolled on {census.day}, as the GES school census asks for them.</p>
+        <div className="table-wrap"><table><thead><tr><th>Class</th><th className="num">Girls</th><th className="num">Boys</th><th className="num">Not recorded</th><th className="num">Total</th></tr></thead><tbody>
+          {census.items.map(row => <tr key={row.id}><td>{row.name}</td><td className="num">{row.female}</td><td className="num">{row.male}</td><td className="num">{row.unrecorded}</td><td className="num">{row.female + row.male + row.unrecorded}</td></tr>)}
+          <tr><td><strong>All classes</strong></td>{(['female', 'male', 'unrecorded'] as const).map(k => <td key={k} className="num"><strong>{census.items.reduce((sum, row) => sum + row[k], 0)}</strong></td>)}<td className="num"><strong>{census.items.reduce((sum, row) => sum + row.female + row.male + row.unrecorded, 0)}</strong></td></tr>
+        </tbody></table></div>
+        <div className="actions"><button type="button" onClick={() => window.print()}><Icon name="print"/>Print</button></div></>}
+    </Dialog>}
     {dialog === 'application' && <Dialog title="New application" onClose={() => setDialog('')}>
       {messages}
       <form onSubmit={submitApplication}>
         <label>Learner full name<input autoComplete="off" value={application.fullName} onChange={e => setApplication({ ...application, fullName: e.target.value })} required minLength={3} maxLength={120}/></label>
         <div className="grid"><label>Admission number<input value={application.admissionNumber} onChange={e => setApplication({ ...application, admissionNumber: e.target.value })} required minLength={2} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9/-]{1,39}"/></label>
-        <label>Date of birth (optional)<input type="date" value={application.dateOfBirth} onChange={e => setApplication({ ...application, dateOfBirth: e.target.value })}/></label></div>
+        <label>Date of birth (optional)<input type="date" value={application.dateOfBirth} onChange={e => setApplication({ ...application, dateOfBirth: e.target.value })}/></label>
+        <label>Sex<select value={application.sex} onChange={e => setApplication({ ...application, sex: e.target.value })}><option value="">Not recorded</option><option value="female">Female</option><option value="male">Male</option></select></label></div>
         <label>Intended class<select value={application.classId} onChange={e => setApplication({ ...application, classId: e.target.value })} required><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}</select></label>
         <label>Proposed start date<input type="date" value={application.startDate} onChange={e => setApplication({ ...application, startDate: e.target.value })} required/></label>
         <div className="actions"><button disabled={busy || !classes.length}>{busy ? 'Saving…' : 'Record application'}</button><button type="button" className="secondary" onClick={() => setDialog('')}>Cancel</button></div>
@@ -267,6 +277,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
       {messages}
       {!detail ? <p role="status">Loading learner history…</p> : <div>
         <p className="muted">Admission number {detail.admission_number}{detail.date_of_birth ? ` · Date of birth ${detail.date_of_birth}` : ''}</p>
+        <label className="inline-field">Sex<select aria-label="Sex" value={detail.sex ?? ''} disabled={busy} onChange={e => e.target.value && void send('sex', { version: detail.version, sex: e.target.value }, `/schools/${schoolId}/learners/${detail.id}/sex`, 'Sex recorded.')}><option value="" disabled>Not recorded</option><option value="female">Female</option><option value="male">Male</option></select></label>
         <h4>Class history</h4>{detail.enrolments.length ? <ul className="history">{detail.enrolments.map(row => <li key={row.id}><strong>{row.class_name}</strong><span>{row.start_date}{row.end_date ? ` to ${row.end_date} (end exclusive)` : ' · Open-ended'} · {row.superseded_at ? `Superseded · ${row.supersession_reason}` : row.start_date > dateToday() ? 'Scheduled' : row.end_date && row.end_date <= dateToday() ? 'Ended' : 'Active today'}{row.end_reason ? ` · ${row.end_reason}` : ''}</span></li>)}</ul> : <p>No enrolments recorded.</p>}
         {detail.enrolments.some(row=>!row.end_date&&!row.superseded_at) ? <><form onSubmit={transferLearner}><h4>Transfer to another class</h4>
           <label>New class<select value={transfer.classId} onChange={e => setTransfer({ ...transfer, classId: e.target.value })} required><option value="">Choose a class</option>{classes.filter(c => !detail.enrolments.some(enrolment => enrolment.class_id === c.id && !enrolment.end_date && !enrolment.superseded_at)).map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}</select></label>

@@ -3,10 +3,10 @@ import { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
-import { PolicyDto, PublishDto, RecordScoresDto, ReissueDto, ReopenDto, SubjectDto, TermDto } from './assessment.dto';
+import { PolicyDto, PublishDto, RecordScoresDto, ReissueDto, ReopenDto, RemarksDto, SubjectDto, TermDto } from './assessment.dto';
 
 type Policy = { ca_weight: number; exam_weight: number; bands: { min: number; grade: string; remark: string }[]; source_note: string; version: number };
-type Learner = { id: string; full_name: string; admission_number: string };
+type Learner = { id: string; full_name: string; admission_number: string; left: boolean };
 type Entry = { learner_id: string; subject_id: string; kind: string; score: number };
 
 // Integer arithmetic in hundredths so weighted totals round half-up to one decimal without float drift.
@@ -72,8 +72,9 @@ export class AssessmentService {
     return section;
   }
   private async learners(client: PoolClient, schoolId: string, classId: string, term: { start_date: string; end_date: string }) {
-    return (await client.query(`SELECT DISTINCT l.id,l.full_name,l.admission_number FROM enrolments e JOIN learners l ON l.school_id=e.school_id AND l.id=e.learner_id
-      WHERE e.school_id=$1 AND e.class_id=$2 AND e.superseded_at IS NULL AND e.start_date<$4 AND (e.end_date IS NULL OR e.end_date>$3) ORDER BY l.full_name,l.id`,[schoolId,classId,term.start_date,term.end_date])).rows as Learner[];
+    // left: every enrolment in this class ended before the term's last day (withdrawn or moved during the term).
+    return (await client.query(`SELECT l.id,l.full_name,l.admission_number,bool_and(e.end_date IS NOT NULL AND e.end_date<=$4) AS left FROM enrolments e JOIN learners l ON l.school_id=e.school_id AND l.id=e.learner_id
+      WHERE e.school_id=$1 AND e.class_id=$2 AND e.superseded_at IS NULL AND e.start_date<$4 AND (e.end_date IS NULL OR e.end_date>$3) GROUP BY l.id ORDER BY l.full_name,l.id`,[schoolId,classId,term.start_date,term.end_date])).rows as Learner[];
   }
   private async latest(client: PoolClient, schoolId: string, termId: string, classId: string) {
     return (await client.query('SELECT DISTINCT ON (learner_id,subject_id,kind) learner_id,subject_id,kind,score::float AS score FROM assessment_score_entries WHERE school_id=$1 AND term_id=$2 AND class_id=$3 ORDER BY learner_id,subject_id,kind,created_at DESC,id DESC',[schoolId,termId,classId])).rows as Entry[];
@@ -90,7 +91,7 @@ export class AssessmentService {
     const published = await this.lockedLearners(client,actor.schoolId,termId,classId);
     const everPublished = new Set((await client.query('SELECT DISTINCT learner_id FROM terminal_reports WHERE school_id=$1 AND term_id=$2 AND class_id=$3',[actor.schoolId,termId,classId])).rows.map(row => row.learner_id as string));
     return {class:section,term,policy:(await this.policy(client,actor.schoolId)) ?? null,items:learners.map(learner => ({
-      learnerId:learner.id,fullName:learner.full_name,admissionNumber:learner.admission_number,locked:published.has(learner.id),published:everPublished.has(learner.id),
+      learnerId:learner.id,fullName:learner.full_name,admissionNumber:learner.admission_number,left:learner.left,locked:published.has(learner.id),published:everPublished.has(learner.id),
       ca:entries.find(e => e.learner_id === learner.id && e.kind === 'ca')?.score ?? null,exam:entries.find(e => e.learner_id === learner.id && e.kind === 'exam')?.score ?? null,
     }))};
   }
@@ -133,14 +134,66 @@ export class AssessmentService {
       });
       const complete = subjects.length > 0 && subjects.every(subject => subject.total !== null);
       const average = complete ? Math.round(subjects.reduce((sum,subject) => sum + subject.total!*10,0) / subjects.length) / 10 : null;
-      return {learnerId:learner.id,fullName:learner.full_name,admissionNumber:learner.admission_number,subjects,complete,average,position:null as number | null};
+      return {learnerId:learner.id,fullName:learner.full_name,admissionNumber:learner.admission_number,left:learner.left,subjects,complete,average,position:null as number | null};
     });
     const ranked = rows.filter(row => row.complete).sort((a,b) => b.average! - a.average!);
     ranked.forEach((row,index) => { row.position = index > 0 && row.average === ranked[index - 1].average ? ranked[index - 1].position : index + 1; });
-    return {class:section,term,policy:{caWeight:policy.ca_weight,examWeight:policy.exam_weight,bands:policy.bands,sourceNote:policy.source_note},classSize:rows.length,items:rows};
+    // Class size on the report is the class at the end of term; learners who left are listed but not counted.
+    return {class:section,term,policy:{caWeight:policy.ca_weight,examWeight:policy.exam_weight,bands:policy.bands,sourceNote:policy.source_note},classSize:rows.filter(row => !row.left).length,items:rows};
   }
-  private snapshotOf(results: any, row: any) {
-    return {term:results.term,class:results.class,classSize:results.classSize,policy:results.policy,learner:{id:row.learnerId,fullName:row.fullName,admissionNumber:row.admissionNumber},subjects:row.subjects,average:row.average,position:row.position,complete:row.complete};
+  private async latestRemarks(client: PoolClient, schoolId: string, termId: string, classId: string) {
+    return (await client.query(`SELECT DISTINCT ON (learner_id,author) learner_id,author,conduct,attitude,interest,remark,created_at FROM terminal_report_remarks
+      WHERE school_id=$1 AND term_id=$2 AND class_id=$3 ORDER BY learner_id,author,created_at DESC,id DESC`,[schoolId,termId,classId])).rows as { learner_id: string; author: string; conduct: string | null; attitude: string | null; interest: string | null; remark: string | null }[];
+  }
+  async remarks(client: PoolClient, actor: Actor, classId: string, termId: string) {
+    await this.classFor(client,actor,classId);
+    const term = await this.term(client,actor.schoolId,termId);
+    const learners = await this.learners(client,actor.schoolId,classId,term), rows = await this.latestRemarks(client,actor.schoolId,termId,classId);
+    const locked = await this.lockedLearners(client,actor.schoolId,termId,classId);
+    return {items:learners.map(learner => {
+      const teacher = rows.find(row => row.learner_id === learner.id && row.author === 'class_teacher'), head = rows.find(row => row.learner_id === learner.id && row.author === 'headteacher');
+      return {learnerId:learner.id,fullName:learner.full_name,locked:locked.has(learner.id),conduct:teacher?.conduct ?? null,attitude:teacher?.attitude ?? null,interest:teacher?.interest ?? null,teacherRemark:teacher?.remark ?? null,headRemark:head?.remark ?? null};
+    })};
+  }
+  recordRemarks(client: PoolClient, actor: Actor, classId: string, body: RemarksDto) {
+    return command(client,actor,body.operationId,'assessment.remarks',{classId,...body},async () => {
+      await this.classFor(client,actor,classId);
+      if (body.author === 'headteacher' && actor.role !== 'headteacher') throw new ForbiddenException('Only the headteacher writes the headteacher\'s remark');
+      const term = await this.term(client,actor.schoolId,body.termId);
+      const eligible = new Set((await this.learners(client,actor.schoolId,classId,term)).map(learner => learner.id));
+      if (new Set(body.items.map(item => item.learnerId)).size !== body.items.length) throw new BadRequestException('Each learner may appear once');
+      if (body.items.some(item => !eligible.has(item.learnerId))) throw new NotFoundException('A learner is not in this class for the term');
+      const current = new Map((await this.latestRemarks(client,actor.schoolId,body.termId,classId)).filter(row => row.author === body.author).map(row => [row.learner_id,row]));
+      let written = 0;
+      for (const item of body.items) {
+        const values = body.author === 'headteacher' ? {conduct:null,attitude:null,interest:null,remark:item.remark?.trim() ?? null}
+          : {conduct:item.conduct?.trim() ?? null,attitude:item.attitude?.trim() ?? null,interest:item.interest?.trim() ?? null,remark:item.remark?.trim() ?? null};
+        const before = current.get(item.learnerId);
+        if (before && before.conduct === values.conduct && before.attitude === values.attitude && before.interest === values.interest && before.remark === values.remark) continue;
+        if (!before && Object.values(values).every(value => value === null)) continue;
+        await client.query('INSERT INTO terminal_report_remarks(id,school_id,term_id,class_id,learner_id,author,conduct,attitude,interest,remark,recorded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+          [randomUUID(),actor.schoolId,body.termId,classId,item.learnerId,body.author,values.conduct,values.attitude,values.interest,values.remark,actor.membershipId]);
+        written++;
+      }
+      await audit(client,actor,'assessment.remarks.recorded',classId,{termId:body.termId,author:body.author,written});
+      return {written,unchanged:body.items.length - written};
+    }).catch(error => { if ((error as {code?:string}).code === '23514') throw new ConflictException('This report is published. Reopen it for correction before changing remarks'); throw error; });
+  }
+  // Everything printed on a Ghanaian terminal report besides the scores, fixed into the snapshot at publication.
+  private async reportExtras(client: PoolClient, schoolId: string, classId: string, term: { id: string; start_date: string; end_date: string }) {
+    const school = (await client.query('SELECT name,address,phone,motto FROM schools WHERE id=$1',[schoolId])).rows[0];
+    const nextTerm = (await client.query('SELECT name,start_date::text FROM terms WHERE school_id=$1 AND start_date>$2 ORDER BY start_date LIMIT 1',[schoolId,term.end_date])).rows[0] ?? null;
+    const attendance = new Map((await client.query(`SELECT m.learner_id,count(*) FILTER (WHERE m.mark IN ('present','late'))::int AS present,count(*) FILTER (WHERE m.mark<>'unmarked')::int AS marked
+      FROM attendance_marks m JOIN attendance_registers r ON r.school_id=m.school_id AND r.id=m.register_id
+      WHERE r.school_id=$1 AND r.class_id=$2 AND r.day>=$3 AND r.day<=$4 AND r.status IN ('submitted','locked') GROUP BY m.learner_id`,[schoolId,classId,term.start_date,term.end_date])).rows.map(row => [row.learner_id as string,{present:row.present as number,possible:row.marked as number}]));
+    const remarks = await this.latestRemarks(client,schoolId,term.id,classId);
+    return {school,nextTerm,attendance,remarks};
+  }
+  private snapshotOf(results: any, row: any, extras: Awaited<ReturnType<AssessmentService['reportExtras']>>) {
+    const teacher = extras.remarks.find(r => r.learner_id === row.learnerId && r.author === 'class_teacher'), head = extras.remarks.find(r => r.learner_id === row.learnerId && r.author === 'headteacher');
+    return {term:results.term,class:results.class,classSize:results.classSize,policy:results.policy,learner:{id:row.learnerId,fullName:row.fullName,admissionNumber:row.admissionNumber},subjects:row.subjects,average:row.average,position:row.position,complete:row.complete,
+      school:extras.school,nextTermBegins:extras.nextTerm?.start_date ?? null,attendance:extras.attendance.get(row.learnerId) ?? {present:0,possible:0},
+      conduct:teacher?.conduct ?? null,attitude:teacher?.attitude ?? null,interest:teacher?.interest ?? null,teacherRemark:teacher?.remark ?? null,headRemark:head?.remark ?? null};
   }
   reopen(client: PoolClient, actor: Actor, classId: string, body: ReopenDto) {
     return command(client,actor,body.operationId,'assessment.reopen',{classId,...body},async () => {
@@ -164,8 +217,8 @@ export class AssessmentService {
       if (!row) throw new NotFoundException('Learner is not in this class for the term');
       if (!row.complete && !body.acknowledgeIncomplete) throw new ConflictException('This learner still has missing scores. Complete them or acknowledge publishing an incomplete report');
       const previous = (await client.query('SELECT id,revision FROM terminal_reports WHERE school_id=$1 AND term_id=$2 AND learner_id=$3 ORDER BY revision DESC LIMIT 1',[actor.schoolId,body.termId,body.learnerId])).rows[0];
-      const id = randomUUID();
-      await client.query('INSERT INTO terminal_reports(id,school_id,term_id,class_id,learner_id,snapshot,published_by,revision,supersedes_id,correction_reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[id,actor.schoolId,body.termId,classId,body.learnerId,JSON.stringify(this.snapshotOf(results,row)),actor.membershipId,previous.revision + 1,previous.id,reopening.reason]);
+      const id = randomUUID(), extras = await this.reportExtras(client,actor.schoolId,classId,{...results.term,id:body.termId});
+      await client.query('INSERT INTO terminal_reports(id,school_id,term_id,class_id,learner_id,snapshot,published_by,revision,supersedes_id,correction_reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[id,actor.schoolId,body.termId,classId,body.learnerId,JSON.stringify(this.snapshotOf(results,row,extras)),actor.membershipId,previous.revision + 1,previous.id,reopening.reason]);
       await audit(client,actor,'assessment.report.reissued',body.learnerId,{termId:body.termId,revision:previous.revision + 1});
       return {revision:previous.revision + 1};
     });
@@ -174,19 +227,29 @@ export class AssessmentService {
     return command(client,actor,body.operationId,'assessment.publish',{classId,...body},async () => {
       const results = await this.results(client,actor,classId,body.termId);
       if (!results.items.length || !results.items.some(row => row.subjects.length)) throw new ConflictException('There are no scores to publish for this class and term');
-      const incomplete = results.items.filter(row => !row.complete).length;
+      // A learner who left during the term with no scores gets no report and does not hold up the class.
+      const leftWithoutScores = (row: typeof results.items[number]) => row.left && row.subjects.every(subject => subject.ca === null && subject.exam === null);
+      const incomplete = results.items.filter(row => !row.complete && !leftWithoutScores(row)).length;
       if (incomplete && !body.acknowledgeIncomplete) throw new ConflictException(`${incomplete} learner(s) have missing scores. Complete them or acknowledge publishing incomplete reports`);
       const already = new Set((await client.query('SELECT learner_id FROM terminal_reports WHERE school_id=$1 AND term_id=$2 AND class_id=$3',[actor.schoolId,body.termId,classId])).rows.map(row => row.learner_id));
       let published = 0;
+      const extras = await this.reportExtras(client,actor.schoolId,classId,{...results.term,id:body.termId});
       for (const row of results.items) {
-        if (already.has(row.learnerId)) continue;
-        const snapshot = this.snapshotOf(results,row);
+        if (already.has(row.learnerId) || leftWithoutScores(row)) continue;
+        const snapshot = this.snapshotOf(results,row,extras);
         await client.query('INSERT INTO terminal_reports(id,school_id,term_id,class_id,learner_id,snapshot,published_by) VALUES($1,$2,$3,$4,$5,$6,$7)',[randomUUID(),actor.schoolId,body.termId,classId,row.learnerId,JSON.stringify(snapshot),actor.membershipId]);
         published++;
       }
       await audit(client,actor,'assessment.reports.published',classId,{termId:body.termId,published,incomplete});
       return {published,alreadyPublished:already.size,incomplete};
     });
+  }
+  // Latest published revision of each learner's report in a class, for printing at vacation.
+  async classReports(client: PoolClient, actor: Actor, classId: string, termId: string) {
+    await this.classFor(client,actor,classId);
+    return {items:(await client.query(`SELECT DISTINCT ON (r.learner_id) r.id,r.learner_id,r.snapshot,r.published_at,r.revision FROM terminal_reports r
+      WHERE r.school_id=$1 AND r.term_id=$2 AND r.class_id=$3 ORDER BY r.learner_id,r.revision DESC`,[actor.schoolId,termId,classId])).rows
+      .sort((a,b) => String(a.snapshot.learner.fullName).localeCompare(String(b.snapshot.learner.fullName)))};
   }
   async guardianReports(client: PoolClient, actor: Actor, learnerId: string) {
     const link = (await client.query('SELECT id FROM guardian_links WHERE school_id=$1 AND learner_id=$2 AND guardian_membership_id=$3 AND academic=true AND verified_at IS NOT NULL AND revoked_at IS NULL FOR SHARE',[actor.schoolId,learnerId,actor.membershipId])).rows[0];

@@ -21,6 +21,7 @@ export class ClassDto extends OperationDto {
 export class AdmissionDto extends OperationDto {
   @IsString() @MinLength(3) @MaxLength(120) @Matches(/\S.{1,}\S/) fullName!:string;
   @IsOptional() @IsDateString({strict:true}) @Matches(/^\d{4}-\d{2}-\d{2}$/) dateOfBirth?:string;
+  @IsOptional() @IsIn(['female','male']) sex?:string;
   @IsUUID() classId!:string;
   @IsDateString({strict:true}) @Matches(/^\d{4}-\d{2}-\d{2}$/) startDate!:string;
   @IsString() @Matches(/^[A-Za-z0-9][A-Za-z0-9/-]{1,39}$/) admissionNumber!:string;
@@ -43,3 +44,8 @@ export class WithdrawalDto extends OperationDto {
   @IsDateString({strict:true}) @Matches(/^\d{4}-\d{2}-\d{2}$/) effectiveDate!:string;
   @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.{1,}\S/) reason!:string;
 }
+export class LearnerSexDto extends OperationDto {
+  @IsInt() @Min(1) version!:number;
+  @IsIn(['female','male']) sex!:string;
+}
+export class CensusDto { @IsOptional() @IsDateString({strict:true}) @Matches(/^\d{4}-\d{2}-\d{2}$/) day?:string }

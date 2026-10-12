@@ -1,14 +1,17 @@
 import { BadRequestException } from '@nestjs/common';
-export type ImportInput={admissionNumber:string;fullName:string;dateOfBirth:string;columnCount:number};
+export type ImportInput={admissionNumber:string;fullName:string;dateOfBirth:string;sex?:string;columnCount:number};
 export type CsvRow={rowNumber:number;input:ImportInput};
 
 export type DateFormat='iso'|'dmy'|'mdy';
 // Header names people actually use in Excel/Google Sheets exports, compared after lower-casing and dropping punctuation/spaces.
-const aliases:Record<'admissionNumber'|'fullName'|'dateOfBirth',string[]>={
+const aliases:Record<'admissionNumber'|'fullName'|'dateOfBirth'|'sex',string[]>={
   admissionNumber:['admissionnumber','admissionno','admissionnum','admno','admission','admissionid','studentid','studentno','pupilno','idnumber','idno'],
   fullName:['fullname','name','studentname','learnername','pupilname','nameofstudent','nameofpupil'],
-  dateOfBirth:['dateofbirth','dob','birthdate','dateborn','birthday']
+  dateOfBirth:['dateofbirth','dob','birthdate','dateborn','birthday'],
+  sex:['sex','gender','mf']
 };
+// M/F, Male/Female and Boy/Girl as schools write them. Anything else is kept as typed so validation flags it.
+export function normalizeSex(value:string){const v=value.trim().toLowerCase();return ['m','male','boy'].includes(v)?'male':['f','female','girl'].includes(v)?'female':value.trim();}
 const key=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,'');
 // Turns 03/04/2015 into an ISO date under the format the school chose. Anything unreadable is left as typed so validation flags it.
 export function normalizeDate(value:string,format:DateFormat):string{
@@ -41,12 +44,12 @@ export function parseLearnerCsv(source:string,dateFormat:DateFormat='iso'):CsvRo
   const header=(records[0]??[]).map(key),column={} as Record<keyof typeof aliases,number>;
   for(const name of Object.keys(aliases) as (keyof typeof aliases)[]){
     const found=header.flatMap((cell,index)=>aliases[name].includes(cell)?[index]:[]);
-    if(found.length>1)throw new BadRequestException(`More than one column looks like ${name==='fullName'?'the learner name':name==='dateOfBirth'?'the date of birth':'the admission number'}`);
+    if(found.length>1)throw new BadRequestException(`More than one column looks like ${name==='fullName'?'the learner name':name==='dateOfBirth'?'the date of birth':name==='sex'?'sex':'the admission number'}`);
     column[name]=found.length?found[0]:-1;
   }
-  if(column.admissionNumber<0||column.fullName<0)throw new BadRequestException('The first row must name an admission number column (e.g. "Admission No.") and a name column (e.g. "Full Name"); "Date of Birth" is optional');
+  if(column.admissionNumber<0||column.fullName<0)throw new BadRequestException('The first row must name an admission number column (e.g. "Admission No.") and a name column (e.g. "Full Name"); "Date of Birth" and "Sex" are optional');
   const at=(cells:string[],index:number)=>index<0?'':(cells[index]??'').trim();
-  const rows=records.slice(1).flatMap((cells,index)=>cells.every(value=>!value.trim())?[]:[{rowNumber:index+2,input:{admissionNumber:at(cells,column.admissionNumber),fullName:at(cells,column.fullName),dateOfBirth:normalizeDate(at(cells,column.dateOfBirth),dateFormat),columnCount:cells.length===header.length?3:0}}]);
+  const rows=records.slice(1).flatMap((cells,index)=>cells.every(value=>!value.trim())?[]:[{rowNumber:index+2,input:{admissionNumber:at(cells,column.admissionNumber),fullName:at(cells,column.fullName),dateOfBirth:normalizeDate(at(cells,column.dateOfBirth),dateFormat),...(column.sex<0?{}:{sex:normalizeSex(at(cells,column.sex))}),columnCount:cells.length===header.length?3:0}}]);
   if(!rows.length)throw new BadRequestException('CSV needs at least one learner record');
   return rows;
 }

@@ -66,7 +66,7 @@ test('payments issue sequential receipts, cannot overpay, and reversals need a r
   const after=(await call(`/finance/invoices?termId=${term}&outstandingOnly=true`,'GET',undefined,acct)).body;assert.equal(after.total,2);
   assert.equal(after.items.find((row:any)=>row.learner_id===kids[0]).balance_pesewas,20000);
   await assert.rejects(owner.query('DELETE FROM payments WHERE id=$1',[first.body.id]),/append-only/);await assert.rejects(owner.query('UPDATE invoices SET total_pesewas=1'),/append-only/);
-  const summary=(await call(`/finance/summary?termId=${term}`,'GET',undefined,acct)).body;assert.deepEqual(summary,{invoices:2,billedPesewas:95100,collectedPesewas:27550,outstandingPesewas:67550});
+  const summary=(await call(`/finance/summary?termId=${term}`,'GET',undefined,acct)).body;assert.deepEqual(summary,{invoices:2,billedPesewas:95100,adjustmentsPesewas:0,collectedPesewas:27550,outstandingPesewas:67550});
   const actions=(await call('/audit?limit=100')).body.items.map((row:any)=>row.action);for(const a of ['finance.payment.recorded','finance.payment.reversed','finance.invoices.generated'])assert.ok(actions.includes(a),a);
 });
 
