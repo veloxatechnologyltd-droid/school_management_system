@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@
 import { Request } from 'express';
 import { Access } from '../../core/access';
 import { FinanceService } from './finance.service';
-import { AdjustmentDto, FeeItemDto, GenerateInvoicesDto, InvoiceQueryDto, PaymentDto, ReverseDto, SummaryQueryDto } from './finance.dto';
+import { AdjustmentDto, BulkAdjustmentDto, FeeItemDto, GenerateInvoicesDto, InvoiceQueryDto, PaymentDto, ReverseDto, SummaryQueryDto } from './finance.dto';
 
 const money = ['headteacher','accountant'];
 @Controller('api/v1/schools/:schoolId')
@@ -31,6 +31,10 @@ export class FinanceController {
   @Get('finance/invoices')
   invoices(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Query() query: InvoiceQueryDto) {
     return this.access.school(req,schoolId,money,client => this.finance.invoices(client,schoolId,query));
+  }
+  @Post('finance/invoices/adjustments')
+  adjustMany(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Body() body: BulkAdjustmentDto) {
+    return this.access.school(req,schoolId,money,(client,actor) => this.finance.adjustMany(client,actor,body),true);
   }
   @Post('finance/invoices/:invoiceId/adjustments')
   adjust(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('invoiceId',new ParseUUIDPipe()) invoiceId: string,@Body() body: AdjustmentDto) {

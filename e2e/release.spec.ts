@@ -381,3 +381,32 @@ test('the headteacher’s morning view lists missing registers, this week’s fe
   await item('missing scores').getByRole('link',{name:'Open scores'}).click();await expect(page).toHaveURL(/#\/assessment$/);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
+test('the headteacher selects several bills and records one discount on each, with its reason',async({page})=>{
+  const {Pool}=require('pg');const path=require('node:path');
+  const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  const suffix=randomUUID().slice(0,8);await page.goto('/');
+  expect((await page.request.post('/api/v1/auth/register',{data:{name:'Ama Bulk',schoolName:`Bulk School ${suffix}`,email:`bulk-${suffix}@example.test`,password:'Bulk-passphrase-2026'}})).status()).toBe(201);
+  const sid=(await (await page.request.get('/api/v1/auth/session')).json()).schools[0].id;
+  const head=(await owner.query("SELECT id FROM memberships WHERE school_id=$1 AND role='headteacher'",[sid])).rows[0].id;
+  const [year,term,section]=[randomUUID(),randomUUID(),randomUUID()];
+  await owner.query("INSERT INTO academic_years(id,school_id,name,start_date,end_date) VALUES($1,$2,'2026/27','2026-09-01','2027-08-01')",[year,sid]);
+  await owner.query("INSERT INTO terms(id,school_id,academic_year_id,name,start_date,end_date) VALUES($1,$2,$3,'Term 1','2026-09-08','2026-12-18')",[term,sid,year]);
+  await owner.query("INSERT INTO class_sections(id,school_id,academic_year_id,name,level,capacity) VALUES($1,$2,$3,'Basic 5','Primary',30)",[section,sid,year]);
+  for(const name of ['Adwoa Staffward','Kojo Staffward','Yaa Fullfee']){const learner=randomUUID();
+    await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,$4)",[learner,sid,`BK-${learner.slice(0,6)}`,name]);
+    await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,'2026-09-01')",[randomUUID(),sid,learner,section]);
+    await owner.query(`INSERT INTO invoices(id,school_id,learner_id,term_id,class_id,lines,total_pesewas,issued_by) VALUES($1,$2,$3,$4,$5,'[{"name":"Tuition","amount_pesewas":60000}]',60000,$6)`,[randomUUID(),sid,learner,term,section,head]);}
+  await page.reload();await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Fees',exact:true}).click();
+  await page.getByRole('checkbox',{name:'Select Adwoa Staffward'}).check();await page.getByRole('checkbox',{name:'Select Kojo Staffward'}).check();
+  await page.getByRole('button',{name:'Adjust 2 selected'}).click();
+  const dialog=page.getByRole('dialog',{name:'Adjust 2 bills'});await expect(dialog).toContainText('Adwoa Staffward, Kojo Staffward');
+  await dialog.getByLabel('Label on the bill').fill('Staff ward');await dialog.getByLabel('Amount (GH₵)').fill('150');await dialog.getByLabel('Reason').fill('Staff ward policy, board minute 4/2026');
+  await expect(dialog).toContainText('GH₵ 300.00 in all');await dialog.getByRole('button',{name:'Save',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Discount of GH₵ 150.00 recorded on 2 bills');
+  for(const name of ['Adwoa Staffward','Kojo Staffward'])await expect(page.getByRole('row').filter({hasText:name})).toContainText('−GH₵ 150.00 Staff ward');
+  await expect(page.getByRole('row').filter({hasText:'Yaa Fullfee'})).not.toContainText('Staff ward');
+  const reasons=(await owner.query("SELECT a.reason FROM invoice_adjustments a WHERE a.school_id=$1",[sid])).rows.map((r:any)=>r.reason);await owner.end();
+  expect(reasons).toEqual(['Staff ward policy, board minute 4/2026','Staff ward policy, board minute 4/2026']);
+  await expect(page.getByRole('button',{name:/selected$/})).toHaveCount(0);expect(errors).toEqual([]);
+});

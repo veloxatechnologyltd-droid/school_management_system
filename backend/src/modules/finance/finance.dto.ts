@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OperationDto, PageDto } from '../learners/learners.dto';
 
@@ -17,6 +17,10 @@ export class AdjustmentDto extends OperationDto {
   @IsString() @MinLength(2) @MaxLength(80) @Matches(/\S.*\S/) label!: string;
   @IsInt() @Min(1) @Max(money.max) amountPesewas!: number;
   @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) reason!: string;
+}
+// One discount or charge applied to many bills (for example every staff ward), with one reason recorded on each bill.
+export class BulkAdjustmentDto extends AdjustmentDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @ArrayUnique() @IsUUID('all',{each:true}) invoiceIds!: string[];
 }
 export class GenerateInvoicesDto extends OperationDto { @IsUUID() termId!: string; @IsUUID() classId!: string; }
 export class PaymentDto extends OperationDto {

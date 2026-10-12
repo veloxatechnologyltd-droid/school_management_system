@@ -75,3 +75,32 @@ test('guardians see statements only for children where they hold verified billin
   assert.equal((await call(`/guardian/children/${kids[1]}/statement`,'GET',undefined,guardian)).status,404);
   assert.equal((await call(`/guardian/children/${kids[0]}/statement`,'GET',undefined,acct)).status,403);
 });
+
+test('one discount or charge applies to many bills at once, all or nothing, with one reason recorded on each bill',async()=>{
+  const list=async()=>(await call(`/finance/invoices?termId=${term}&limit=50`)).body.items as any[];
+  const before=await list(),ids=before.map(i=>i.id),min=Math.min(...before.map(i=>i.due_pesewas));
+  const audits=async()=>Number((await owner.query("SELECT count(*) FROM audit_events WHERE school_id=$1 AND action='finance.invoice.discount'",[school])).rows[0].count);
+  const auditsBefore=await audits();
+  // Accountants may charge but not discount; an unknown bill or a discount larger than any one bill changes nothing.
+  assert.equal((await call('/finance/invoices/adjustments','POST',{operationId:randomUUID(),invoiceIds:ids,kind:'discount',label:'Staff ward',amountPesewas:100,reason:'Staff ward policy'},acct)).status,403);
+  assert.equal((await call('/finance/invoices/adjustments','POST',{operationId:randomUUID(),invoiceIds:[...ids,randomUUID()],kind:'discount',label:'Staff ward',amountPesewas:100,reason:'Staff ward policy'})).status,404);
+  const tooBig=await call('/finance/invoices/adjustments','POST',{operationId:randomUUID(),invoiceIds:ids,kind:'discount',label:'Staff ward',amountPesewas:min+1,reason:'Staff ward policy'});
+  assert.equal(tooBig.status,409);assert.match(tooBig.body.message,/Too large for/);
+  assert.equal((await call('/finance/invoices/adjustments','POST',{operationId:randomUUID(),invoiceIds:[ids[0],ids[0]],kind:'charge',label:'Sports',amountPesewas:100,reason:'Sports day levy'},acct)).status,400);
+  assert.equal((await call('/finance/invoices/adjustments','POST',{operationId:randomUUID(),invoiceIds:[],kind:'charge',label:'Sports',amountPesewas:100,reason:'Sports day levy'},acct)).status,400);
+  assert.deepEqual((await list()).map(i=>i.adjustments.length),before.map(i=>i.adjustments.length));
+  // The headteacher's discount lands on every selected bill with the same label and reason; a retry does not repeat it.
+  const operationId=randomUUID(),body={operationId,invoiceIds:ids,kind:'discount',label:'Staff ward',amountPesewas:500,reason:'Staff ward policy 2026'};
+  const done=(await call('/finance/invoices/adjustments','POST',body)).body;
+  assert.deepEqual([done.count,done.totalPesewas],[ids.length,500*ids.length]);
+  assert.deepEqual((await call('/finance/invoices/adjustments','POST',body)).body,done);
+  const after=await list();
+  for(const bill of after){const old=before.find(i=>i.id===bill.id);
+    assert.equal(bill.due_pesewas,old.due_pesewas-500);assert.equal(bill.adjustments.length,old.adjustments.length+1);
+    const added=bill.adjustments.at(-1);assert.deepEqual([added.kind,added.label,added.reason,added.amountPesewas],['discount','Staff ward','Staff ward policy 2026',500]);
+    assert.equal(done.items.find((x:any)=>x.invoiceId===bill.id).balancePesewas,bill.balance_pesewas);}
+  assert.equal(await audits(),auditsBefore+ids.length);
+  // Accountants may apply one charge to many bills.
+  const charged=(await call('/finance/invoices/adjustments','POST',{operationId:randomUUID(),invoiceIds:ids,kind:'charge',label:'Sports levy',amountPesewas:250,reason:'Sports day levy'},acct)).body;
+  assert.equal(charged.count,ids.length);
+});

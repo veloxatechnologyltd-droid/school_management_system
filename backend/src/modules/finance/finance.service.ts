@@ -3,7 +3,7 @@ import { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
-import { AdjustmentDto, FeeItemDto, GenerateInvoicesDto, InvoiceQueryDto, PaymentDto, ReverseDto } from './finance.dto';
+import { AdjustmentDto, BulkAdjustmentDto, FeeItemDto, GenerateInvoicesDto, InvoiceQueryDto, PaymentDto, ReverseDto } from './finance.dto';
 
 // Paid = payments that have not been reversed. bigint sums come back as strings; they stay whole pesewas.
 const paidSql = `coalesce((SELECT sum(p.amount_pesewas) FROM payments p WHERE p.school_id=i.school_id AND p.invoice_id=i.id
@@ -92,6 +92,28 @@ export class FinanceService {
       await audit(client,actor,`finance.invoice.${body.kind}`,invoiceId,{adjustmentId:id,amountPesewas:body.amountPesewas,label:body.label.trim()});
       const balance = invoice.due + (body.kind === 'charge' ? body.amountPesewas : -body.amountPesewas) - invoice.paid;
       return {id,balancePesewas:balance};
+    });
+  }
+  // All or nothing: every bill must exist and no discount may exceed a bill; each bill gets its own adjustment row and audit event.
+  adjustMany(client: PoolClient, actor: Actor, body: BulkAdjustmentDto) {
+    return command(client,actor,body.operationId,'finance.invoice.adjust.many',body,async () => {
+      if (body.kind === 'discount' && actor.role !== 'headteacher') throw new ForbiddenException('Only the headteacher can grant a discount');
+      const ids = [...body.invoiceIds].sort();
+      // Same per-invoice locks as single adjustments and payments, taken in a fixed order.
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended(k,0)) FROM unnest($1::text[]) k',[ids.map(id => `invoice:${actor.schoolId}:${id}`)]);
+      const bills = (await client.query(`SELECT i.id,l.full_name,${dueSql}::float8 AS due,${paidSql}::float8 AS paid FROM invoices i JOIN learners l ON l.school_id=i.school_id AND l.id=i.learner_id
+        WHERE i.school_id=$1 AND i.id=ANY($2::uuid[]) ORDER BY i.id`,[actor.schoolId,ids])).rows;
+      if (bills.length !== ids.length) throw new NotFoundException('A selected bill is unavailable');
+      const over = bills.filter(bill => body.kind === 'discount' && body.amountPesewas > bill.due);
+      if (over.length) throw new ConflictException(`A discount cannot be more than the bill. Too large for: ${over.slice(0,5).map(bill => bill.full_name).join(', ')}${over.length > 5 ? ` and ${over.length - 5} more` : ''}`);
+      const adjustmentIds = bills.map(() => randomUUID()), label = body.label.trim(), reason = body.reason.trim();
+      await client.query(`INSERT INTO invoice_adjustments(id,school_id,invoice_id,kind,label,amount_pesewas,reason,recorded_by)
+        SELECT x.id,$1,x.invoice_id,$4,$5,$6,$7,$8 FROM unnest($2::uuid[],$3::uuid[]) x(id,invoice_id)`,[actor.schoolId,adjustmentIds,bills.map(bill => bill.id),body.kind,label,body.amountPesewas,reason,actor.membershipId]);
+      await client.query(`INSERT INTO audit_events(id,school_id,actor_membership_id,action,target_id,metadata)
+        SELECT gen_random_uuid(),$1,$2,$3,x.invoice_id,jsonb_build_object('adjustmentId',x.id,'amountPesewas',$4::bigint,'label',$5::text,'batch',$6::text,'bills',$7::int)
+        FROM unnest($8::uuid[],$9::uuid[]) x(id,invoice_id)`,[actor.schoolId,actor.membershipId,`finance.invoice.${body.kind}`,body.amountPesewas,label,body.operationId,bills.length,adjustmentIds,bills.map(bill => bill.id)]);
+      const sign = body.kind === 'charge' ? 1 : -1;
+      return {count:bills.length,totalPesewas:bills.length * body.amountPesewas,items:bills.map((bill,index) => ({invoiceId:bill.id,id:adjustmentIds[index],balancePesewas:bill.due + sign*body.amountPesewas - bill.paid}))};
     });
   }
   reverse(client: PoolClient, actor: Actor, paymentId: string, body: ReverseDto) {

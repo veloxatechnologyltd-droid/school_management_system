@@ -8,7 +8,7 @@ Start here. Read `MEMORY.md`, `AGENT.md` and `STATUS.md` first (see `AGENTS.md`)
   - Logins and state: `.local/term-trial/state.json` (ignored by Git).
   - Driver: `backend/scripts/term-trial.ts` (phases `setup|enrol|guardians|term|exams|close|current|status`).
 - Hosted migrations go up to **032**. Any new migration needs Evans's explicit approval before the hosted apply (preview, then `--apply`).
-- Tests: 178 backend and 18 browser tests.
+- Tests: 179 backend and 19 browser tests.
   - Run them in an isolated copy (`.local/t`), because `npm test` rebuilds `backend/dist` and restarts a running cloud API.
   - The browser tests reuse ports 3018/5178, so never run them while `dev:cloud` is up. In `.local/t`, move them to other ports (vite config + Playwright config, `reuseExistingServer:false`); otherwise Playwright silently drives the cloud API.
 - Evans's uncommitted work (`Teaching.tsx`, roster CSS, `README.md`, `demo-seed.ts`, `EarlyYears.tsx`) must stay out of commits. Stage `style.css` changes selectively.
@@ -45,7 +45,7 @@ Keep school isolation (RLS), append-only history and human approval. The platfor
 ### 2. Bulk work
 
 - [ ] Update existing learners from a CSV (sex, date of birth, name corrections): staged, previewed and approved like imports, with history kept.
-- [ ] Apply one discount or charge to many bills at once (e.g. all staff wards), with one reason, recorded per bill.
+- [x] Apply one discount or charge to many bills at once (e.g. all staff wards), with one reason, recorded per bill. *Select bills on Fees → "Adjust N selected"; `POST /finance/invoices/adjustments`, all or nothing, one row and audit event per bill. Not yet run on the trial school.*
 - [ ] Print report cards for the whole school or a level, one card per page.
 
 ### 3. Fees as parents actually pay

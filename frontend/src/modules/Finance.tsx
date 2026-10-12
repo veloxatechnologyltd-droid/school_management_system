@@ -25,7 +25,9 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
   const [newItem, setNewItem] = useState({ name: '', amount: '', level: '' });
   const [pay, setPay] = useState<{ invoiceId: string; amount: string; method: string; reference: string; receivedOn: string } | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
-  const [adjust, setAdjust] = useState<{ invoiceId: string; kind: 'discount' | 'charge'; label: string; amount: string; reason: string } | null>(null);
+  // Bills chosen for one adjustment, kept across class filters within a term (id → learner name).
+  const [selected, setSelected] = useState<Map<string, string>>(new Map());
+  const [adjust, setAdjust] = useState<{ invoiceIds: string[]; kind: 'discount' | 'charge'; label: string; amount: string; reason: string } | null>(null);
   const [owingOnly, setOwingOnly] = useState(false);
   const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
@@ -46,6 +48,9 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
     } catch (e) { setError((e as Error).message); }
   }, [schoolId, termId, classId, owingOnly]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { setSelected(new Map()); }, [termId]);
+  const toggle = (rows: Invoice[], on: boolean) => setSelected(prior => { const next = new Map(prior); for (const r of rows) { if (on) next.set(r.id, r.full_name); else next.delete(r.id); } return next; });
+  const startAdjust = (invoiceIds: string[]) => { setError(''); setMessage(''); setAdjust({ invoiceIds, kind: role === 'headteacher' ? 'discount' : 'charge', label: '', amount: '', reason: '' }); };
 
   async function act(work: () => Promise<void>) { setBusy(true); setError(''); setMessage(''); try { await work(); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
   const send = <T,>(path: string, body: object) => request<T>(`/schools/${schoolId}${path}`, { method: 'POST', headers, body: JSON.stringify({ operationId: crypto.randomUUID(), ...body }) });
@@ -57,8 +62,15 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
   }); };
 
   const saveAdjustment = (e: FormEvent) => { e.preventDefault(); if (!adjust) return; void act(async () => {
-    const r = await send<{ balancePesewas: number }>(`/finance/invoices/${adjust.invoiceId}/adjustments`, { kind: adjust.kind, label: adjust.label, amountPesewas: toPesewas(adjust.amount), reason: adjust.reason });
-    setAdjust(null); setMessage(`${adjust.kind === 'discount' ? 'Discount' : 'Charge'} recorded. New balance ${cedis(r.balancePesewas)}.`);
+    const body = { kind: adjust.kind, label: adjust.label, amountPesewas: toPesewas(adjust.amount), reason: adjust.reason }, what = adjust.kind === 'discount' ? 'Discount' : 'Charge';
+    if (adjust.invoiceIds.length === 1) {
+      const r = await send<{ balancePesewas: number }>(`/finance/invoices/${adjust.invoiceIds[0]}/adjustments`, body);
+      setMessage(`${what} recorded. New balance ${cedis(r.balancePesewas)}.`);
+    } else {
+      const r = await send<{ count: number; totalPesewas: number }>('/finance/invoices/adjustments', { ...body, invoiceIds: adjust.invoiceIds });
+      setMessage(`${what} of ${cedis(body.amountPesewas)} recorded on ${r.count} bills (${cedis(r.totalPesewas)} in all).`); setSelected(new Map());
+    }
+    setAdjust(null);
   }); };
   const termPicker = <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>;
   const itemList = items.length ? <div className="table-wrap"><table><thead><tr><th>Item</th><th>Applies to</th><th className="num">Amount</th></tr></thead><tbody>{items.map(i => <tr key={i.id}><td>{i.name}</td><td>{i.class_name ?? i.level ?? 'All levels'}</td><td className="num">{cedis(i.amount_pesewas)}</td></tr>)}</tbody></table></div> : <Empty title="No fee items for this term"/>;
@@ -91,14 +103,16 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
             <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
             <button className="secondary" disabled={busy || !classId} onClick={generate}>Generate invoices for this class</button>
             <label><input type="checkbox" checked={owingOnly} onChange={e => setOwingOnly(e.target.checked)}/>Owing only</label>
+            {selected.size > 0 && <><button type="button" disabled={busy} onClick={() => startAdjust([...selected.keys()])}>Adjust {selected.size} selected</button><button type="button" className="secondary" onClick={() => setSelected(new Map())}>Clear selection</button></>}
             <span className="count">{invoices.length === 100 ? 'First 100 invoices · choose a class to see all' : `${invoices.length} invoices`}</span>
           </div>
-          {invoices.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">Billed</th><th className="num">Paid</th><th className="num">Balance</th><th></th></tr></thead><tbody>{invoices.map(inv => <tr key={inv.id}>
+          {invoices.length ? <div className="table-wrap"><table><thead><tr><th><input type="checkbox" aria-label="Select all bills shown" checked={invoices.every(i => selected.has(i.id))} onChange={e => toggle(invoices, e.target.checked)}/></th><th>Learner</th><th className="num">Billed</th><th className="num">Paid</th><th className="num">Balance</th><th></th></tr></thead><tbody>{invoices.map(inv => <tr key={inv.id}>
+            <td><input type="checkbox" aria-label={`Select ${inv.full_name}`} checked={selected.has(inv.id)} onChange={e => toggle([inv], e.target.checked)}/></td>
             <td>{inv.full_name}<span className="sub">{inv.admission_number} · {inv.class_name}</span></td>
             <td className="num">{cedis(inv.due_pesewas)}{inv.adjustments.map(a => <span key={a.id} className="sub">{a.kind === 'discount' ? '−' : '+'}{cedis(a.amountPesewas)} {a.label}</span>)}</td><td className="num">{cedis(inv.paid_pesewas)}</td>
             <td className="num">{inv.balance_pesewas > 0 ? <strong className="tone-critical">{cedis(inv.balance_pesewas)}</strong> : inv.balance_pesewas < 0 ? <Pill tone="info">Credit {cedis(-inv.balance_pesewas)}</Pill> : <Pill tone="positive">Settled</Pill>}{inv.arrears_pesewas > 0 ? <span className="sub tone-critical">+ {cedis(inv.arrears_pesewas)} from earlier terms</span> : inv.arrears_pesewas < 0 && <span className="sub">{cedis(-inv.arrears_pesewas)} credit from earlier terms</span>}</td>
             <td className="num"><div className="row-actions">{inv.balance_pesewas > 0 && <button type="button" className="secondary" onClick={() => { setError(''); setMessage(''); setPay({ invoiceId: inv.id, amount: '', method: 'cash', reference: '', receivedOn: today }); }}>Record payment</button>}
-              <button type="button" className="secondary" onClick={() => { setError(''); setMessage(''); setAdjust({ invoiceId: inv.id, kind: role === 'headteacher' ? 'discount' : 'charge', label: '', amount: '', reason: '' }); }}>Adjust</button></div></td>
+              <button type="button" className="secondary" onClick={() => startAdjust([inv.id])}>Adjust</button></div></td>
           </tr>)}</tbody></table></div> : <Empty title="No invoices yet" hint={classId ? 'Generate this class’s invoices from the fee items.' : 'Choose a class, then generate its invoices.'}/>}
         </Card>
         <Card title="Fee items" hint="Set by the headteacher in Settings." flush>{itemList}</Card>
@@ -114,8 +128,9 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
         <label>Date received<input type="date" value={pay.receivedOn} onChange={e => setPay({ ...pay, receivedOn: e.target.value })} required/></label></div>
         <div className="actions"><button disabled={busy}>Save payment</button><button type="button" className="secondary" onClick={() => setPay(null)}>Cancel</button></div></form>
     </Dialog>}
-    {adjust && <Dialog title="Adjust this bill" onClose={() => setAdjust(null)}>
+    {adjust && <Dialog title={adjust.invoiceIds.length === 1 ? 'Adjust this bill' : `Adjust ${adjust.invoiceIds.length} bills`} onClose={() => setAdjust(null)}>
       {messages}
+      {adjust.invoiceIds.length > 1 && <p><strong>The same {adjust.kind} and reason will be recorded on each of these bills:</strong> {adjust.invoiceIds.slice(0, 8).map(id => selected.get(id)).join(', ')}{adjust.invoiceIds.length > 8 ? ` and ${adjust.invoiceIds.length - 8} more` : ''}.{/^\d+(\.\d{1,2})?$/.test(adjust.amount.trim()) && ` ${cedis(toPesewas(adjust.amount) * adjust.invoiceIds.length)} in all.`}</p>}
       <p className="muted">Discounts (scholarship, staff ward, sibling) are the headteacher's decision. Charges add to the bill, for example a balance brought forward from the old fees book. Every adjustment is kept with its reason.</p>
       <form onSubmit={saveAdjustment}><div className="grid">
         <label>Type<select value={adjust.kind} onChange={e => setAdjust({ ...adjust, kind: e.target.value as 'discount' | 'charge' })}>{role === 'headteacher' && <option value="discount">Discount</option>}<option value="charge">Charge</option></select></label>
