@@ -346,6 +346,13 @@ test('class teacher remarks and the headteacher remark appear on the printed rep
   const card=page.getByRole('dialog',{name:'Report cards',exact:true}).locator('article.report-card');
   await expect(card.getByText(name)).toBeVisible();await expect(card.getByText('1 out of 1')).toBeVisible();await expect(card.getByText('A careful worker.')).toBeVisible();
   await expect(card.getByText('Well done.')).toBeVisible();await expect(card.getByText('Next term begins',{exact:true})).toBeVisible();await expect(card.getByText('1st of 1')).toBeVisible();
+  // The same cards for a whole level, one per printed page; a level with nothing published says so.
+  await page.getByRole('dialog',{name:'Report cards',exact:true}).getByRole('button',{name:'Close'}).click();
+  await panel.getByRole('combobox',{name:'Report cards for',exact:true}).selectOption('JHS');await panel.getByRole('button',{name:'Print report cards',exact:true}).click();
+  await expect(panel.getByRole('alert')).toContainText('No terminal reports have been published for JHS this term yet.');
+  await panel.getByRole('combobox',{name:'Report cards for',exact:true}).selectOption('Primary');await panel.getByRole('button',{name:'Print report cards',exact:true}).click();
+  const levelCards=page.getByRole('dialog',{name:'Report cards',exact:true}).locator('article.report-card');await expect(levelCards).toHaveCount(1);await expect(levelCards.getByText(name)).toBeVisible();
+  await page.emulateMedia({media:'print'});expect(await page.locator('.report-sheet article.report-card').first().evaluate(el=>getComputedStyle(el).breakAfter)).toBe('page');await page.emulateMedia({media:'screen'});
   await page.setViewportSize({width:375,height:812});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(errors).toEqual([]);
 });

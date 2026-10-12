@@ -252,6 +252,14 @@ export class AssessmentService {
       WHERE r.school_id=$1 AND r.term_id=$2 AND r.class_id=$3 ORDER BY r.learner_id,r.revision DESC`,[actor.schoolId,termId,classId])).rows
       .sort((a,b) => String(a.snapshot.learner.fullName).localeCompare(String(b.snapshot.learner.fullName)))};
   }
+  // Latest revision of every published report in the term, class by class, for printing one card per page.
+  async schoolReports(client: PoolClient, actor: Actor, termId: string, level?: string) {
+    await this.term(client,actor.schoolId,termId);
+    return {items:(await client.query(`SELECT r.id,r.learner_id,r.snapshot,r.published_at,r.revision,c.name AS class_name,c.level FROM (
+        SELECT DISTINCT ON (learner_id) * FROM terminal_reports WHERE school_id=$1 AND term_id=$2 ORDER BY learner_id,revision DESC) r
+      JOIN class_sections c ON c.school_id=r.school_id AND c.id=r.class_id
+      WHERE $3::text IS NULL OR c.level=$3 ORDER BY c.name,c.id,r.snapshot->'learner'->>'fullName',r.learner_id`,[actor.schoolId,termId,level ?? null])).rows};
+  }
   async guardianReports(client: PoolClient, actor: Actor, learnerId: string) {
     const link = (await client.query('SELECT id FROM guardian_links WHERE school_id=$1 AND learner_id=$2 AND guardian_membership_id=$3 AND academic=true AND verified_at IS NOT NULL AND revoked_at IS NULL FOR SHARE',[actor.schoolId,learnerId,actor.membershipId])).rows[0];
     if (!link) throw new NotFoundException('Child unavailable');

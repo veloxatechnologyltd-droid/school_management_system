@@ -32,6 +32,8 @@ export class RecordScoresDto extends OperationDto {
   @IsUUID() subjectId!: string;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @ValidateNested({each:true}) @Type(() => ScoreDto) scores!: ScoreDto[];
 }
+// Report cards for printing across the school: one term, optionally one level.
+export class SchoolReportsQueryDto { @IsUUID() termId!: string; @IsOptional() @IsIn(['Nursery','KG','Primary','JHS']) level?: string; }
 export class TermQueryDto { @IsUUID() termId!: string; @IsOptional() @IsUUID() subjectId?: string; }
 export class PublishDto extends OperationDto { @IsUUID() termId!: string; @IsOptional() @IsBoolean() acknowledgeIncomplete?: boolean; }
 export class ReopenDto extends OperationDto {

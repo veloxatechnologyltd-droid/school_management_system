@@ -1,6 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
-import { Card, Dialog, Empty, Pill, currentTerm } from '../lib/ui';
+import { Card, Dialog, Empty, Icon, Pill, currentTerm } from '../lib/ui';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -34,6 +34,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const [results, setResults] = useState<Result[]>([]);
   const [remarks, setRemarks] = useState<Remark[]>([]); const [remarkEdits, setRemarkEdits] = useState<Record<string, string>>({});
   const [printing, setPrinting] = useState<{ id: string; snapshot: Snapshot }[] | null>(null);
+  const [printLevel, setPrintLevel] = useState('');
   const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [newSubject, setNewSubject] = useState(''); const [newTerm, setNewTerm] = useState({ academicYearId: '', name: '', startDate: '', endDate: '' });
   const [policyForm, setPolicyForm] = useState({ caWeight: '30', examWeight: '70', bands: '80,A,Excellent\n65,B,Good\n50,C,Credit\n0,D,Needs support', sourceNote: '' });
@@ -111,6 +112,12 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     if (!r.items.length) throw new Error('No terminal reports have been published for this class and term yet.');
     setPrinting(r.items);
   });
+  // Every published report card in the term (or one level), one per printed page.
+  const openSchoolReportCards = () => void act(async () => {
+    const r = await request<{ items: { id: string; snapshot: Snapshot }[] }>(`/schools/${schoolId}/assessment/reports?termId=${termId}${printLevel ? `&level=${printLevel}` : ''}`);
+    if (!r.items.length) throw new Error(`No terminal reports have been published for ${printLevel || 'any class'} this term yet.`);
+    setPrinting(r.items);
+  });
   const preview = () => void act(async () => { setResults((await request<{ items: Result[] }>(`/schools/${schoolId}/assessment/classes/${classId}/results?termId=${termId}`)).items); });
   const publish = () => { if (!window.confirm('Publish terminal reports for this class? Scores will be locked and guardians can see them.')) return;
     void act(async () => {
@@ -138,6 +145,8 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     {view !== 'setup' && <>{!policy && <p className="muted">{head ? 'Set the grading policy above before scores can be recorded.' : 'The headteacher has not set the grading policy yet.'}</p>}
     <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
     <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
+    {head && <div className="actions"><label>Report cards for<select value={printLevel} onChange={e => setPrintLevel(e.target.value)}><option value="">The whole school</option>{['Nursery', 'KG', 'Primary', 'JHS'].map(l => <option key={l} value={l}>{l}</option>)}</select></label>
+      <button type="button" className="secondary" disabled={busy || !termId} onClick={openSchoolReportCards}><Icon name="print"/>Print report cards</button></div>}
     <label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">Choose a subject</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     {grid.length > 0 && <><div className="table-wrap"><table><thead><tr><th>Learner</th><th>Continuous assessment (0–100)</th><th>Exam (0–100)</th>{head && <th>Published report</th>}</tr></thead><tbody>
       {grid.map(row => <tr key={row.learnerId}><td>{row.fullName}</td>{(['ca', 'exam'] as const).map(kind => <td key={kind}><input type="number" min={0} max={100} step="0.01" aria-label={`${row.fullName} ${kind === 'ca' ? 'continuous assessment' : 'exam'}`} disabled={row.locked}

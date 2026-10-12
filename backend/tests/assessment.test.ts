@@ -109,3 +109,18 @@ test('published reports are corrected only by a reasoned reopening and a new rev
   assert.equal((await call(`/assessment/classes/${cls}/reissue`,'POST',{operationId:op(),termId,learnerId:kids[0]})).status,409);
   const actions=(await call('/audit?limit=100')).body.items.map((row:any)=>row.action);for(const a of ['assessment.report.reopened','assessment.report.reissued'])assert.ok(actions.includes(a),a);
 });
+
+test('report cards for the whole school or one level: latest revision of each, class by class, headteacher only',async()=>{
+  const jhs=randomUUID(),learner=randomUUID();
+  await owner.query("INSERT INTO class_sections(id,school_id,academic_year_id,name,level,capacity) VALUES($1,$2,$3,'JHS 1 Gold','JHS',30)",[jhs,school,year]);
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,'AS-JHS1','Yaw Junior')",[learner,school]);
+  await owner.query(`INSERT INTO terminal_reports(id,school_id,term_id,class_id,learner_id,snapshot,published_by) VALUES($1,$2,$3,$4,$5,'{"learner":{"fullName":"Yaw Junior"}}',$6)`,[randomUUID(),school,termId,jhs,learner,headM]);
+  assert.equal((await call(`/assessment/reports?termId=${termId}`,'GET',undefined,teacher)).status,403);
+  assert.equal((await call(`/assessment/reports?termId=${termId}&level=SHS`)).status,400);
+  const perClass=(await call(`/assessment/classes/${cls}/reports?termId=${termId}`)).body.items;
+  const all=(await call(`/assessment/reports?termId=${termId}`)).body.items;
+  assert.deepEqual(all.map((r:any)=>[r.class_name,r.id]),[['JHS 1 Gold',all[0].id],...perClass.map((r:any)=>['Primary 4 Blue',r.id])]);
+  assert.equal(new Set(all.map((r:any)=>r.learner_id)).size,all.length);
+  assert.deepEqual((await call(`/assessment/reports?termId=${termId}&level=JHS`)).body.items.map((r:any)=>r.snapshot.learner.fullName),['Yaw Junior']);
+  assert.equal((await call(`/assessment/reports?termId=${randomUUID()}`)).status,404);
+});
