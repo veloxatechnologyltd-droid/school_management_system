@@ -223,3 +223,30 @@ test('practice materials are references or links per indicator; teachers add the
   assert.equal(gap.resources,1,'retired materials are not counted');
   assert.deepEqual((await call(`/support-plans/${planB}`,'GET',undefined,teacher)).body.resources.map((r:any)=>r.title),['Fractions practice sheet']);
 });
+
+const {familyStatus}=require('../dist/modules/assessment/family.service');
+test('families always see published results; trends and home help only once the school shares them',async()=>{
+  assert.equal(familyStatus([60,70]),'not_enough');assert.equal(familyStatus([60,62,61,60]),'steady');assert.equal(familyStatus([50,52,60,62,64]),'improving');assert.equal(familyStatus([80,78,60,55,50]),'needs_attention');
+  await owner.query("INSERT INTO guardian_links(id,school_id,learner_id,guardian_membership_id,guardian_display_name,academic,billing,pickup,contact,verified_at,verified_by,verification_reason) VALUES($1,$2,$3,$4,'Abena Sample',true,false,false,false,now(),$5,'Synthetic academic access')",[randomUUID(),school,kids[2],guardianM,headM]);
+  const route=`/guardian/children/${kids[2]}/progress`;
+  assert.equal((await call(`/guardian/children/${kids[0]}/progress`,'GET',undefined,guardian)).status,404,'not their child');
+  assert.equal((await call(route,'GET',undefined,teacher)).status,403);
+  const closed=(await call(route,'GET',undefined,guardian)).body;
+  assert.equal(closed.shared,false);assert.deepEqual(closed.termResults.terms,[]);assert.equal(closed.subjects,undefined);
+  assert.equal((await call('/assessment/sharing','PUT',{operationId:randomUUID(),shareWithFamilies:true},teacher)).status,403);
+  assert.equal((await ok('/assessment/sharing','PUT',{shareWithFamilies:true},head,200)).version,1);
+  assert.equal((await call('/assessment/sharing','PUT',{operationId:randomUUID(),shareWithFamilies:false})).status,409,'stale version');
+  const homeSheet=(await ok(`/assessment/indicators/${fractions}/resources`,'POST',{kind:'activity',title:'Fraction strips at home',detail:'Fold paper strips into halves and quarters',forFamilies:true},teacher)).id;
+  const plan=(await ok(`/assessment/classes/${cls}/support-plans`,'POST',{termId,subjectId:maths,indicatorId:fractions,learnerIds:[kids[2],kids[1]],concern:'Kojo and Esi both below 50 on fractions',action:'Small group on Tuesdays',familyNote:'Ten minutes of fraction practice at home three evenings a week helps.',startDate:shift(-1),reviewDate:shift(10)},teacher)).id;
+  await ok(`/assessment/classes/${cls}/support-plans`,'POST',{termId,subjectId:maths,learnerIds:[kids[2]],concern:'Staff-only plan',action:'Seat nearer the board',startDate:shift(-1),reviewDate:shift(10)},teacher);
+  const open=(await call(route,'GET',undefined,guardian)).body;
+  assert.equal(open.shared,true);
+  assert.equal(open.subjects.find((s:any)=>s.name==='Mathematics').status,'needs_attention');
+  assert.ok(open.months.length>=1&&open.subjects[0].months.length===open.months.length);
+  assert.deepEqual(open.help.map((h:any)=>[h.subject,h.topic,h.note,h.teacher]),[['Mathematics','Adds and subtracts fractions with like denominators','Ten minutes of fraction practice at home three evenings a week helps.','Kofi Sample']],'only plans with a family note');
+  assert.deepEqual(open.help[0].practice.map((r:any)=>r.title),['Fraction strips at home'],'only materials marked for families');
+  assert.ok(!JSON.stringify(open).includes('Kojo'),'other learners and the staff concern never reach families');
+  await ok(`/support-plans/${plan}/reviews`,'POST',{outcome:'improved',note:'Done',decision:'close'},teacher);
+  assert.deepEqual((await call(route,'GET',undefined,guardian)).body.help,[],'closed plans drop off');
+  await ok(`/assessment/indicator-resources/${homeSheet}/retire`,'POST',{reason:'Test clean-up'},teacher);
+});

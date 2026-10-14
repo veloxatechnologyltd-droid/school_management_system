@@ -5,7 +5,7 @@ import { PracticeDialog, PracticeList, Resource } from './Practice';
 
 type Owner = { membershipId: string; name: string; classTeacher: boolean };
 type Evidence = { before: number | null; since: number | null; change: number | null; improved: number; dropped: number; compared: number };
-export type Plan = { id: string; class_id: string; indicator_id: string | null; class_name: string; subject_name: string; indicator_code: string | null; indicator_description: string | null; concern: string; action: string;
+export type Plan = { id: string; class_id: string; indicator_id: string | null; family_note: string | null; class_name: string; subject_name: string; indicator_code: string | null; indicator_description: string | null; concern: string; action: string;
   owner_name: string; start_date: string; review_date: string; closed: boolean; due: boolean; learners: { id: string; full_name: string }[]; evidence: Evidence };
 type Detail = Plan & { subject_id: string; indicator_id: string | null; evidence: { upTo: string; learners: { learnerId: string; fullName: string; before: number | null; beforeMarks: number; since: number | null; sinceMarks: number; change: number | null }[]; group: Evidence };
   reviews: { id: string; reviewed_on: string; outcome: string; note: string; decision: string; next_review_date: string | null }[]; today: string; resources: Resource[] };
@@ -24,7 +24,7 @@ export const reviewPill = (p: Pick<Plan, 'closed' | 'due' | 'review_date'>, toda
 export function SupportPlanDialog({ schoolId, csrfToken, classId, termId, draft, subjects, roster, onClose, onSaved }: { schoolId: string; csrfToken: string; classId: string; termId: string; draft: PlanDraft;
   subjects: { id: string; name: string }[]; roster: { learnerId: string; fullName: string }[]; onClose: () => void; onSaved: (id: string) => void }) {
   const today = todayInAccra();
-  const [form, setForm] = useState({ ...draft, action: '', ownerMembershipId: '', startDate: today, reviewDate: addDays(today, 14) });
+  const [form, setForm] = useState({ ...draft, action: '', familyNote: '', ownerMembershipId: '', startDate: today, reviewDate: addDays(today, 14) });
   const [owners, setOwners] = useState<Owner[]>([]); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   useEffect(() => { request<{ items: Owner[] }>(`/schools/${schoolId}/support-plans/owners?classId=${classId}`).then(r => { setOwners(r.items); setForm(f => ({ ...f, ownerMembershipId: f.ownerMembershipId || r.items[0]?.membershipId || '' })); }).catch(e => setError((e as Error).message)); }, [schoolId, classId]);
   const toggle = (id: string) => setForm(f => ({ ...f, learnerIds: f.learnerIds.includes(id) ? f.learnerIds.filter(x => x !== id) : [...f.learnerIds, id] }));
@@ -33,7 +33,7 @@ export function SupportPlanDialog({ schoolId, csrfToken, classId, termId, draft,
   const order = useMemo(() => [...roster].sort((a, b) => Number(draft.learnerIds.includes(b.learnerId)) - Number(draft.learnerIds.includes(a.learnerId))), [roster, draft.learnerIds]);
   const save = (e: FormEvent) => { e.preventDefault(); setBusy(true); setError('');
     request<{ id: string }>(`/schools/${schoolId}/assessment/classes/${classId}/support-plans`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), termId, subjectId: form.subjectId,
-      ...(form.indicatorId ? { indicatorId: form.indicatorId } : {}), learnerIds: form.learnerIds, concern: form.concern, action: form.action, ownerMembershipId: form.ownerMembershipId || undefined, startDate: form.startDate, reviewDate: form.reviewDate }) })
+      ...(form.indicatorId ? { indicatorId: form.indicatorId } : {}), learnerIds: form.learnerIds, concern: form.concern, action: form.action, ...(form.familyNote.trim() ? { familyNote: form.familyNote.trim() } : {}), ownerMembershipId: form.ownerMembershipId || undefined, startDate: form.startDate, reviewDate: form.reviewDate }) })
       .then(r => onSaved(r.id)).catch(e => setError((e as Error).message)).finally(() => setBusy(false)); };
   return <Dialog title="Plan support" wide onClose={onClose}>
     <form onSubmit={save}>
@@ -45,6 +45,8 @@ export function SupportPlanDialog({ schoolId, csrfToken, classId, termId, draft,
       <label>What we have noticed<textarea rows={2} value={form.concern} onChange={e => setForm({ ...form, concern: e.target.value })} required minLength={3} maxLength={500}/></label>
       <label>What we will do<textarea rows={2} value={form.action} onChange={e => setForm({ ...form, action: e.target.value })} required minLength={3} maxLength={500} placeholder="e.g. Re-teach fractions in a small group on Tuesdays and Thursdays"/></label>
       <div className="chip-row">{actions.map(a => <button key={a} type="button" className="chip" onClick={() => addAction(a)}>+ {a}</button>)}</div>
+      <label>Message for the family (optional)<textarea rows={2} value={form.familyNote} onChange={e => setForm({ ...form, familyNote: e.target.value })} maxLength={500} placeholder="e.g. Ten minutes of reading aloud together each evening will help."/></label>
+      <p className="muted field-hint">Shown to each learner's guardians when the school shares progress with families. Write it for one family: do not name other learners.</p>
       <label>Responsible<select value={form.ownerMembershipId} onChange={e => setForm({ ...form, ownerMembershipId: e.target.value })} disabled={owners.length < 2}>{owners.map(o => <option key={o.membershipId} value={o.membershipId}>{o.name}{o.classTeacher ? ' (class teacher)' : ''}</option>)}</select></label>
       <div className="field-row"><label>Starts<input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} required/></label>
         <label>Review on<input type="date" value={form.reviewDate} min={addDays(form.startDate, 1)} onChange={e => setForm({ ...form, reviewDate: e.target.value })} required/></label></div>
@@ -70,7 +72,7 @@ export function SupportPlanDrawer({ schoolId, csrfToken, planId, onClose, onChan
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {plan && <>
       <p>{reviewPill(plan, today)} <span className="muted">{plan.class_name} · started {shortDate(plan.start_date)} · {plan.owner_name}</span></p>
-      <dl className="plan-facts"><div><dt>Noticed</dt><dd>{plan.concern}</dd></div><div><dt>Action</dt><dd>{plan.action}</dd></div></dl>
+      <dl className="plan-facts"><div><dt>Noticed</dt><dd>{plan.concern}</dd></div><div><dt>Action</dt><dd>{plan.action}</dd></div>{plan.family_note && <div><dt>For the family</dt><dd>{plan.family_note}</dd></div>}</dl>
       {plan.indicator_id && <><h4>Practice for this topic</h4>
         {plan.resources.length ? <PracticeList items={plan.resources}/> : <p className="muted">No practice materials recorded for this topic yet.</p>}
         <p><button type="button" className="link-button" onClick={() => setPractice(true)}>{plan.resources.length ? 'Manage practice materials' : 'Add practice materials'}</button></p></>}

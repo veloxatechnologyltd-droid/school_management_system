@@ -64,8 +64,8 @@ export class SupportService {
         ownerId = owner.membership_id; ownerName = owner.display_name;
       }
       const id = randomUUID();
-      await client.query(`INSERT INTO support_plans(id,school_id,class_id,term_id,subject_id,indicator_id,concern,action,owner_membership_id,owner_name,start_date,first_review_date,created_by)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[id,actor.schoolId,classId,body.termId,body.subjectId,body.indicatorId ?? null,body.concern.trim(),body.action.trim(),ownerId,ownerName,body.startDate,body.reviewDate,actor.membershipId]);
+      await client.query(`INSERT INTO support_plans(id,school_id,class_id,term_id,subject_id,indicator_id,concern,action,owner_membership_id,owner_name,start_date,first_review_date,created_by,family_note)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,[id,actor.schoolId,classId,body.termId,body.subjectId,body.indicatorId ?? null,body.concern.trim(),body.action.trim(),ownerId,ownerName,body.startDate,body.reviewDate,actor.membershipId,body.familyNote?.trim() || null]);
       for (const learnerId of learnerIds) await client.query('INSERT INTO support_plan_learners(school_id,plan_id,learner_id) VALUES($1,$2,$3)',[actor.schoolId,id,learnerId]);
       await audit(client,actor,'assessment.support_plan.created',id,{classId,learners:learnerIds.length,ownerMembershipId:ownerId});
       return {id,ownerName,learners:learnerIds.length};
@@ -77,7 +77,7 @@ export class SupportService {
     const scope = actor.role === 'headteacher' ? '$2::uuid IS NOT NULL' : `(p.owner_membership_id=$2 OR EXISTS (SELECT 1 FROM teaching_assignments t WHERE t.school_id=p.school_id AND t.class_id=p.class_id AND t.teacher_membership_id=$2 AND ${LIVE}))`;
     if (actor.role !== 'headteacher' && actor.role !== 'teacher') throw new ForbiddenException('Your role cannot perform this action');
     const rows = (await client.query(`SELECT p.id,p.class_id,c.name AS class_name,p.term_id,p.subject_id,s.name AS subject_name,p.indicator_id,i.code AS indicator_code,i.description AS indicator_description,
-        p.concern,p.action,p.owner_membership_id,p.owner_name,p.start_date::text,p.first_review_date::text,p.created_at,${PLAN_STATE}
+        p.concern,p.action,p.family_note,p.owner_membership_id,p.owner_name,p.start_date::text,p.first_review_date::text,p.created_at,${PLAN_STATE}
       FROM support_plans p JOIN class_sections c ON c.school_id=p.school_id AND c.id=p.class_id JOIN subjects s ON s.school_id=p.school_id AND s.id=p.subject_id
       LEFT JOIN curriculum_indicators i ON i.school_id=p.school_id AND i.id=p.indicator_id
       WHERE p.school_id=$1 AND ${scope} AND ${where} ORDER BY p.created_at DESC,p.id`,[actor.schoolId,actor.membershipId,...params])).rows;

@@ -97,6 +97,8 @@ export class SupportPlanDto extends OperationDto {
   @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) concern!: string;
   @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) action!: string;
   @IsOptional() @IsUUID() ownerMembershipId?: string;
+  // Written for the learner's family: what helps at home. Never shown to staff as the concern, never names other learners.
+  @IsOptional() @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) familyNote?: string;
   @IsDateString({strict:true}) @date() startDate!: string;
   @IsDateString({strict:true}) @date() reviewDate!: string;
 }
@@ -117,3 +119,4 @@ export class ResourceDto extends OperationDto {
   @IsOptional() @IsString() @MaxLength(500) @Matches(/^https?:\/\/\S+$/,{message:'The link must start with http:// or https://'}) url?: string;
   @IsOptional() @IsBoolean() forFamilies?: boolean;
 }
+export class SharingDto extends OperationDto { @IsBoolean() shareWithFamilies!: boolean; @IsOptional() @IsInt() @Min(1) version?: number; }

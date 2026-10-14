@@ -412,6 +412,29 @@ async function main() {
       }
     }
 
+    step('Progress shared with families');
+    // The demo shares progress with families, and the parent persona's two children each have a plan with a note for home.
+    await head.call('PUT', '/assessment/sharing', { shareWithFamilies: true });
+    if (addDays(TODAY, -7) >= current.start) {
+      // Each child's plan is in their weakest core subject this term, on that subject's hardest topic.
+      const homeHelp: [string, string][] = [
+        ['Composition writing', 'Ask {name} to tell you about their day in three parts (beginning, middle, end) before writing it. Ten minutes, three evenings a week.'],
+        ['Fractions', 'Fold a sheet of paper into halves, quarters and eighths with {name} and ask which piece is bigger. A few minutes most evenings helps.'],
+        ['Energy and its forms', 'Go on an energy hunt at home with {name}: name ten things that use energy and say which kind (light, heat, sound, movement).'],
+        ['Map reading', 'Draw the way from home to school with {name}, marking three landmarks and which way is north.'],
+      ];
+      for (const l of learners.filter(l => l.guardian?.email === `parent@${DOMAIN}`)) {
+        const teacher = await new Person(staff[3 + l.classIndex]!.email).login();
+        const terms = (await teacher.get(`/assessment/learners/${l.id}/progress?period=term`)) as { buckets: { key: string }[]; subjects: { subjectId: string; points: { key: string; assessmentAverage: number | null }[] }[] };
+        const now = (subjectId: string) => terms.subjects.find(x => x.subjectId === subjectId)?.points.find(p => p.key === current.id)?.assessmentAverage ?? 100;
+        const s = [0, 1, 2, 3].sort((a, b) => now(subjectIds[a]!) - now(subjectIds[b]!))[0]!;
+        const [topic, note] = homeHelp[s]!, first = l.name.split(' ')[0]!;
+        await teacher.post(`/assessment/classes/${classes[l.classIndex]!.id}/support-plans`, { termId: current.id, subjectId: subjectIds[s], indicatorId: indicatorIds[s]![topics[s]!.findIndex(([d]) => d === topic)],
+          learnerIds: [l.id], concern: `${subjects[s]}: ${first}'s lowest subject this term (${now(subjectIds[s]!)}% in class work).`, action: 'Short practice in class twice a week.',
+          familyNote: note.replace('{name}', first), startDate: addDays(TODAY, -7), reviewDate: addDays(TODAY, 14) });
+      }
+    }
+
     console.log(`\n${SCHOOL_NAME} is ready: ${learners.length} learners in ${classes.length} classes, ${current.name} of ${Y}/${Y + 1}.`);
     console.log(`Sign in with any of these (password ${PASSWORD}):`);
     for (const [who, email] of [['Headteacher', `headteacher@${DOMAIN}`], ['Class teacher (JHS 3)', `teacher@${DOMAIN}`], ['Accountant', `accounts@${DOMAIN}`], ['Front desk', `frontdesk@${DOMAIN}`], ['Parent (two children)', `parent@${DOMAIN}`]]) console.log(`  ${who.padEnd(24)} ${email}`);

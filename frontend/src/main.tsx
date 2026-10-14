@@ -24,6 +24,7 @@ const AttendanceFollowUp=lazyModule(()=>import('./modules/AttendanceFollowUp'),'
 const Assessment=lazyModule(()=>import('./modules/Assessment'),'Assessment');
 const Progress=lazyModule(()=>import('./modules/Progress'),'Progress');
 const Curriculum=lazyModule(()=>import('./modules/Curriculum'),'Curriculum');
+const FamilyProgress=lazyModule(()=>import('./modules/FamilyProgress'),'FamilyProgress');
 const SupportDue=lazy(()=>import('./modules/Support').then(m=>({default:m.SupportDue})));
 const GuardianTerminalReports=lazyModule(()=>import('./modules/Assessment'),'GuardianTerminalReports');
 const Finance=lazyModule(()=>import('./modules/Finance'),'Finance');
@@ -55,7 +56,7 @@ type ModuleProps={schoolId:string;csrfToken:string;role:string};
 // Guardian portal: the child chosen at the top drives the report cards below it.
 function MyChildren({schoolId,csrfToken,role}:ModuleProps) {
   const [childId,setChildId]=useState('');
-  return <><Guardians schoolId={schoolId} csrfToken={csrfToken} role={role} onChildChange={setChildId}/>{childId&&<><EarlyYearsReports schoolId={schoolId} csrfToken={csrfToken} role={role} childId={childId}/><GuardianTerminalReports schoolId={schoolId} childId={childId}/></>}</>;
+  return <><Guardians schoolId={schoolId} csrfToken={csrfToken} role={role} onChildChange={setChildId}/>{childId&&<><FamilyProgress key={`family:${childId}`} schoolId={schoolId} childId={childId}/><EarlyYearsReports schoolId={schoolId} csrfToken={csrfToken} role={role} childId={childId}/><GuardianTerminalReports schoolId={schoolId} childId={childId}/></>}</>;
 }
 // Early years: observations and progress reports on tabs; headteachers open on the reports they review.
 function EarlyYearsWork({schoolId,csrfToken,role}:ModuleProps) {
@@ -169,7 +170,7 @@ function App() {
     {id:'staff',label:'Staff accounts',render:()=><Accounts key={`accounts:${sid}`} schoolId={sid} csrfToken={csrf}/>},
     {id:'assignments',label:'Teacher assignments',render:()=>teachingView},
     {id:'grading',label:'Subjects, terms & grading',render:()=><Assessment key={`setup:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>},
-    {id:'curriculum',label:'Curriculum indicators',render:()=><Curriculum key={`curriculum:${sid}`} schoolId={sid} csrfToken={csrf}/>},
+    {id:'curriculum',label:'Curriculum & family sharing',render:()=><Curriculum key={`curriculum:${sid}`} schoolId={sid} csrfToken={csrf}/>},
     {id:'fees',label:'Fee items',render:()=><Finance key={`setup:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>},
     {id:'early-years',label:'Early years policies',render:()=><EarlyYears key={`setup:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>},
     {id:'ai',label:'AI assistance',render:()=><AiSettings key={`ai:${sid}`} schoolId={sid} csrfToken={csrf}/>},

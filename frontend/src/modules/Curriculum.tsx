@@ -51,6 +51,7 @@ export function Curriculum({ schoolId, csrfToken }: { schoolId: string; csrfToke
   const current = shown.filter(i => !i.retired_at).length;
 
   return <section aria-label="Curriculum indicators">
+    <FamilySharing schoolId={schoolId} csrfToken={csrfToken}/>
     <h2>Curriculum indicators</h2>
     <p className="muted">Enter the indicators your school teaches for each subject, from your curriculum documents or scheme of work. Teachers tag them on class assessments, and Progress then shows which ones a class has not yet mastered. Mark codes as official only when copied from the official curriculum.</p>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
@@ -80,4 +81,19 @@ export function Curriculum({ schoolId, csrfToken }: { schoolId: string; csrfToke
       </form>
     </Dialog>}
   </section>;
+}
+
+// Whether families see weekly progress and home-help notes. Published report cards are always visible to them.
+function FamilySharing({ schoolId, csrfToken }: { schoolId: string; csrfToken: string }) {
+  const [setting, setSetting] = useState<{ shareWithFamilies: boolean; version: number | null } | null>(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  useEffect(() => { request<{ shareWithFamilies: boolean; version: number | null }>(`/schools/${schoolId}/assessment/sharing`).then(setSetting).catch(e => setError((e as Error).message)); }, [schoolId]);
+  const save = (share: boolean) => { if (!setting) return; setBusy(true); setError('');
+    request<{ shareWithFamilies: boolean; version: number }>(`/schools/${schoolId}/assessment/sharing`, { method: 'PUT', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), shareWithFamilies: share, ...(setting.version ? { version: setting.version } : {}) }) })
+      .then(setSetting).catch(e => setError((e as Error).message)).finally(() => setBusy(false)); };
+  return <Card title="Progress shared with families" hint="Report cards are always shown to verified guardians once published. Sharing adds each subject's monthly progress from class exercises, homework and tests, and the home-help notes teachers write in support plans.">
+    {error && <p role="alert">{error}</p>}
+    {setting && <div className="choice-row" role="radiogroup" aria-label="Progress shared with families">
+      <label className="check"><input type="radio" name="family-sharing" checked={!setting.shareWithFamilies} disabled={busy} onChange={() => save(false)}/><span>Report cards only</span></label>
+      <label className="check"><input type="radio" name="family-sharing" checked={setting.shareWithFamilies} disabled={busy} onChange={() => save(true)}/><span>Report cards, monthly progress and home-help notes</span></label></div>}
+  </Card>;
 }
