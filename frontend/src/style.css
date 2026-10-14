@@ -195,3 +195,6 @@ tr.selected td{background:var(--accent-soft)}tbody tr.selected:hover td{backgrou
 .trend-bar{display:block;height:4px;border-radius:999px;background:var(--sunken);overflow:hidden}.trend-fill{display:block;height:100%;border-radius:999px}
 .fill-positive{background:var(--positive)}.fill-caution{background:var(--caution)}.fill-critical{background:var(--accent)}.fill-neutral{background:var(--ink-3)}
 .trend-table th{white-space:nowrap}.trend-total td{font-weight:700;border-top:2px solid var(--line)}
+.indicator-picker{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 12px;min-width:0}.indicator-picker legend{font-weight:600;font-size:13px;padding:0 4px}
+.indicator-options{display:grid;gap:6px;max-height:240px;overflow-y:auto;margin-top:6px}.indicator-options .check{display:flex;align-items:flex-start;gap:8px;margin:0;font-weight:500}.indicator-options .check input{width:auto;height:auto;margin-top:3px;flex:none}
+.chip-list{display:flex;flex-wrap:wrap;gap:4px 12px}

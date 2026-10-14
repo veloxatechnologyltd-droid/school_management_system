@@ -102,3 +102,43 @@ test('learner progress shows weeks, months and term results; teachers only for t
   assert.deepEqual(yearView.buckets.map((b:any)=>b.label),['Progress year']);assert.equal(yearView.subjects[0].points[0].termResult,88.5);
   assert.equal((await call(`/assessment/learners/${kids[0]}/progress?period=decade`,'GET',undefined,head)).status,400);
 });
+
+let fractions:string,addition:string;
+test('headteachers add the school\'s indicators with their source; wording is kept and codes stay unique while current',async()=>{
+  const body={subjectId:maths,origin:'local',sourceNote:'Primary 5 scheme of work, Term 1',items:[{code:'P5.N.3',strand:'Number',subStrand:'Fractions',description:'Adds and subtracts fractions with like denominators'},{code:'P5.N.1',strand:'Number',description:'Adds whole numbers up to 1,000,000'}]};
+  assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),...body},teacher)).status,403);
+  assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),...body,origin:'national'})).status,400);
+  assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),...body,items:[body.items[0],{...body.items[1],code:'p5.n.3'}]})).status,400,'codes repeat within the batch');
+  assert.deepEqual(await ok('/assessment/indicators','POST',body),{added:2});
+  assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),...body,items:[body.items[0]]})).status,409,'code already in use');
+  const list=(await call(`/assessment/indicators?subjectId=${maths}`,'GET',undefined,teacher)).body.items;
+  assert.deepEqual(list.map((i:any)=>i.code),['P5.N.1','P5.N.3']);[addition,fractions]=list.map((i:any)=>i.id);
+  await assert.rejects(owner.query("UPDATE curriculum_indicators SET description='Changed wording' WHERE id=$1",[fractions]),/only be retired/);
+  await assert.rejects(owner.query('DELETE FROM curriculum_indicators WHERE id=$1',[fractions]),/retire one instead/);
+  const spare=(await ok('/assessment/indicators','POST',{...body,items:[{code:'P5.X.9',description:'Entered by mistake'}]})).added;assert.equal(spare,1);
+  const spareId=(await call(`/assessment/indicators?subjectId=${maths}`)).body.items.find((i:any)=>i.code==='P5.X.9').id;
+  assert.equal((await call(`/assessment/indicators/${spareId}/retire`,'POST',{operationId:randomUUID(),reason:'Typed in error'},teacher)).status,403);
+  await ok(`/assessment/indicators/${spareId}/retire`,'POST',{reason:'Typed in error'});
+  assert.equal((await call(`/assessment/indicators/${spareId}/retire`,'POST',{operationId:randomUUID(),reason:'Again'})).status,404);
+  await ok('/assessment/indicators','POST',{...body,items:[{code:'P5.X.9',description:'Entered again correctly'}]});
+  const retired=(await call(`/assessment/indicators?subjectId=${maths}`)).body.items.filter((i:any)=>i.code==='P5.X.9');
+  assert.deepEqual(retired.map((i:any)=>i.retirement_reason),[null,'Typed in error'],'current first, retired kept with its reason');
+  assert.equal((await call(`/assessment/classes/${cls}/assessments`,'POST',{operationId:randomUUID(),termId,subjectId:maths,kind:'quiz',title:'Retired tag',heldOn:shift(-1),maxMark:10,indicatorIds:[spareId]},teacher)).status,400);
+});
+
+test('gaps rank the indicators a class was tested on, weakest first, with who is below 50%',async()=>{
+  const science=(await ok('/assessment/subjects','POST',{name:'Science'})).id;
+  const base={termId,subjectId:maths,kind:'quiz',heldOn:shift(-1),maxMark:10};
+  assert.equal((await call(`/assessment/classes/${cls}/assessments`,'POST',{operationId:randomUUID(),...base,subjectId:science,title:'Wrong subject',indicatorIds:[fractions]},teacher)).status,400);
+  const x=await ok(`/assessment/classes/${cls}/assessments`,'POST',{...base,title:'Fractions quiz',indicatorIds:[fractions]},teacher);assert.equal(x.indicators,1);
+  const y=await ok(`/assessment/classes/${cls}/assessments`,'POST',{...base,title:'Mixed test',indicatorIds:[fractions,addition,fractions]},teacher);assert.equal(y.indicators,2);
+  await ok(`/assessment/classes/${cls}/assessments/${x.id}/marks`,'POST',{marks:[{learnerId:kids[0],mark:9},{learnerId:kids[1],mark:4},{learnerId:kids[2],mark:3}]},teacher);
+  await ok(`/assessment/classes/${cls}/assessments/${y.id}/marks`,'POST',{marks:[{learnerId:kids[0],mark:8},{learnerId:kids[1],mark:6},{learnerId:kids[2],mark:5}]},teacher);
+  assert.equal((await call(`/assessment/classes/${cls2}/gaps?termId=${termId}`,'GET',undefined,teacher)).status,404);
+  const gaps=(await call(`/assessment/classes/${cls}/gaps?termId=${termId}&subjectId=${maths}`,'GET',undefined,teacher)).body;
+  assert.deepEqual(gaps.items.map((g:any)=>[g.code,g.assessments,g.average,g.belowPass,g.belowShare]),[['P5.N.3',2,58.3,1,33],['P5.N.1',1,63.3,0,0]]);
+  assert.deepEqual(gaps.items[0].below,[{learnerId:kids[2],fullName:'Esi Struggling',average:40}]);
+  assert.equal(gaps.untaggedAssessments,5);
+  const listed=(await call(`/assessment/classes/${cls}/assessments?termId=${termId}`,'GET',undefined,teacher)).body.items.find((a:any)=>a.id===y.id);
+  assert.deepEqual(listed.indicators.map((i:any)=>i.code),['P5.N.1','P5.N.3']);
+});

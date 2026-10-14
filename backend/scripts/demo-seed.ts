@@ -333,13 +333,27 @@ async function main() {
     const weekly = [['classwork', 'Class exercise', 20], ['homework', 'Homework', 20], ['quiz', 'Quiz', 20], ['class_test', 'Class test', 50]] as const;
     const weeks: string[] = [];
     for (let d = firstMondayFrom(current.start); addDays(d, 3) <= TODAY && d <= current.end; d = addDays(d, 7)) weeks.push(addDays(d, 3));
+    // The school's own topic indicators for the core subjects (no official codes); harder topics score lower, so Gaps shows them.
+    const topics = [
+      [['Reading comprehension', 0], ['Spelling and vocabulary', 2], ['Grammar: tenses and agreement', -9], ['Composition writing', -12], ['Listening and speaking', 4]],
+      [['Place value and number sense', 3], ['Addition and subtraction', 5], ['Fractions', -14], ['Measurement: length, mass and capacity', -6], ['Reading tables and graphs', 0]],
+      [['Living things and their habitats', 4], ['Materials and their properties', 0], ['Energy and its forms', -10], ['Forces and movement', -5]],
+      [['Our environment', 3], ['Governance and citizenship', -8], ['Ghanaian culture and festivals', 5], ['Map reading', -11]],
+    ] as const;
+    const indicatorIds: string[][] = [];
+    for (const [s, list] of topics.entries()) {
+      await head.post('/assessment/indicators', { subjectId: subjectIds[s], origin: 'local', sourceNote: 'Sunrise International School scheme of work (demo)', items: list.map(([description]) => ({ description })) });
+      const added = (await head.get(`/assessment/indicators?subjectId=${subjectIds[s]}`)).items as { id: string; description: string }[];
+      indicatorIds.push(list.map(([description]) => added.find(i => i.description === description)!.id));
+    }
     for (const c of graded) {
       const teacher = await new Person(staff[3 + c.i]!.email).login();
       const own = learners.filter(l => l.classIndex === c.i);
       await inBatches(subjectIds.slice(0, 4).flatMap((subjectId, s) => weeks.map((heldOn, w) => ({ subjectId, s, heldOn, w }))), 6, async ({ subjectId, s, heldOn, w }) => {
         const [kind, label, maxMark] = weekly[w % weekly.length]!;
-        const a = await teacher.post(`/assessment/classes/${c.id}/assessments`, { termId: current.id, subjectId, kind, title: `${label} ${w + 1}: ${subjects[s]}`, heldOn, maxMark });
-        const marks = own.filter(() => chance(0.95)).map(l => ({ learnerId: l.id, mark: Math.round(clamp(normal(l.ability + (s % 3 - 1) * 4 + drift.get(l.id)! * w, 8), 5, 100) * maxMark / 50) / 2 }));
+        const t = (w + c.i) % topics[s]!.length, [topic, difficulty] = topics[s]![t]!;
+        const a = await teacher.post(`/assessment/classes/${c.id}/assessments`, { termId: current.id, subjectId, kind, title: `${label} ${w + 1}: ${topic}`, heldOn, maxMark, indicatorIds: [indicatorIds[s]![t]] });
+        const marks = own.filter(() => chance(0.95)).map(l => ({ learnerId: l.id, mark: Math.round(clamp(normal(l.ability + (s % 3 - 1) * 4 + difficulty + drift.get(l.id)! * w, 8), 5, 100) * maxMark / 50) / 2 }));
         if (marks.length) await teacher.post(`/assessment/classes/${c.id}/assessments/${a.id}/marks`, { marks });
       });
     }

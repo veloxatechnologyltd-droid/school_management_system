@@ -2,9 +2,9 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@
 import { Request } from 'express';
 import { Access } from '../../core/access';
 import { ProgressService } from './progress.service';
-import { AssessmentListQueryDto, CaSuggestionQueryDto, ClassAssessmentDto, ClassProgressQueryDto, LearnerProgressQueryDto, RecordMarksDto } from './assessment.dto';
+import { AddIndicatorsDto, AssessmentListQueryDto, CaSuggestionQueryDto, ClassAssessmentDto, ClassProgressQueryDto, GapsQueryDto, IndicatorQueryDto, LearnerProgressQueryDto, RecordMarksDto, RetireIndicatorDto } from './assessment.dto';
 
-const staff = ['headteacher','teacher'];
+const head = ['headteacher'], staff = ['headteacher','teacher'];
 @Controller('api/v1/schools/:schoolId')
 export class ProgressController {
   constructor(private readonly access: Access, private readonly progress: ProgressService) {}
@@ -35,5 +35,21 @@ export class ProgressController {
   @Get('assessment/learners/:learnerId/progress')
   learnerProgress(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('learnerId',new ParseUUIDPipe()) learnerId: string,@Query() query: LearnerProgressQueryDto) {
     return this.access.school(req,schoolId,staff,(client,actor) => this.progress.learnerProgress(client,actor,learnerId,(query.period ?? 'month') as 'week' | 'month' | 'term' | 'year'));
+  }
+  @Get('assessment/indicators')
+  indicators(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Query() query: IndicatorQueryDto) {
+    return this.access.school(req,schoolId,staff,client => this.progress.indicators(client,schoolId,query.subjectId));
+  }
+  @Post('assessment/indicators')
+  addIndicators(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Body() body: AddIndicatorsDto) {
+    return this.access.school(req,schoolId,head,(client,actor) => this.progress.addIndicators(client,actor,body),true);
+  }
+  @Post('assessment/indicators/:indicatorId/retire')
+  retireIndicator(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('indicatorId',new ParseUUIDPipe()) indicatorId: string,@Body() body: RetireIndicatorDto) {
+    return this.access.school(req,schoolId,head,(client,actor) => this.progress.retireIndicator(client,actor,indicatorId,body),true);
+  }
+  @Get('assessment/classes/:classId/gaps')
+  gaps(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: GapsQueryDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.progress.gaps(client,actor,classId,query.termId,query.subjectId));
   }
 }

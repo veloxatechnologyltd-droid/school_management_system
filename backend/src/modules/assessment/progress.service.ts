@@ -3,7 +3,7 @@ import { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
-import { ClassAssessmentDto, RecordMarksDto } from './assessment.dto';
+import { AddIndicatorsDto, ClassAssessmentDto, RecordMarksDto, RetireIndicatorDto } from './assessment.dto';
 import { AssessmentService, weightedTotal } from './assessment.service';
 
 type Mark = { assessment_id: string; learner_id: string; subject_id: string; held_on: string; percent: number };
@@ -40,10 +40,14 @@ export class ProgressService {
       const term = await this.assessment.term(client,actor.schoolId,body.termId);
       if (body.heldOn < term.start_date || body.heldOn > term.end_date) throw new BadRequestException('The assessment date must fall inside the term');
       if (!(await client.query('SELECT 1 FROM subjects WHERE school_id=$1 AND id=$2',[actor.schoolId,body.subjectId])).rowCount) throw new NotFoundException('Subject unavailable');
+      const indicatorIds = [...new Set(body.indicatorIds ?? [])];
+      if (indicatorIds.length && (await client.query('SELECT 1 FROM curriculum_indicators WHERE school_id=$1 AND id=ANY($2::uuid[]) AND subject_id=$3 AND retired_at IS NULL',[actor.schoolId,indicatorIds,body.subjectId])).rowCount !== indicatorIds.length)
+        throw new BadRequestException('Choose current indicators from this subject');
       const row = (await client.query(`INSERT INTO class_assessments(id,school_id,term_id,class_id,subject_id,kind,title,held_on,max_mark,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         RETURNING id,kind,title,held_on::text,max_mark::float`,[randomUUID(),actor.schoolId,body.termId,classId,body.subjectId,body.kind,body.title.trim(),body.heldOn,body.maxMark,actor.membershipId])).rows[0];
-      await audit(client,actor,'assessment.class_assessment.created',row.id,{classId,termId:body.termId,subjectId:body.subjectId});
-      return row;
+      for (const indicatorId of indicatorIds) await client.query('INSERT INTO class_assessment_indicators(school_id,assessment_id,indicator_id) VALUES($1,$2,$3)',[actor.schoolId,row.id,indicatorId]);
+      await audit(client,actor,'assessment.class_assessment.created',row.id,{classId,termId:body.termId,subjectId:body.subjectId,indicators:indicatorIds.length});
+      return {...row,indicators:indicatorIds.length};
     });
   }
 
@@ -52,7 +56,10 @@ export class ProgressService {
     const marks = await this.marks(client,actor.schoolId,'a.class_id=$2 AND a.term_id=$3',[classId,termId]);
     const rows = (await client.query(`SELECT a.id,a.subject_id,s.name AS subject_name,a.kind,a.title,a.held_on::text,a.max_mark::float FROM class_assessments a JOIN subjects s ON s.school_id=a.school_id AND s.id=a.subject_id
       WHERE a.school_id=$1 AND a.class_id=$2 AND a.term_id=$3 AND ($4::uuid IS NULL OR a.subject_id=$4) ORDER BY a.held_on DESC,a.created_at DESC,a.id`,[actor.schoolId,classId,termId,subjectId ?? null])).rows;
-    return {items:rows.map(row => { const own = marks.filter(m => m.assessment_id === row.id).map(m => m.percent); return {...row,marked:own.length,average:mean(own)}; })};
+    const tags = (await client.query(`SELECT x.assessment_id,i.id,i.code,i.description FROM class_assessment_indicators x JOIN curriculum_indicators i ON i.school_id=x.school_id AND i.id=x.indicator_id
+      WHERE x.school_id=$1 AND x.assessment_id=ANY($2::uuid[]) ORDER BY i.code NULLS LAST,i.description`,[actor.schoolId,rows.map(row => row.id)])).rows;
+    return {items:rows.map(row => { const own = marks.filter(m => m.assessment_id === row.id).map(m => m.percent);
+      return {...row,marked:own.length,average:mean(own),indicators:tags.filter(t => t.assessment_id === row.id).map(t => ({id:t.id,code:t.code,description:t.description}))}; })};
   }
 
   private async assessmentIn(client: PoolClient, actor: Actor, classId: string, assessmentId: string) {
@@ -113,6 +120,59 @@ export class ProgressService {
       return flag ? [{learnerId:l.id,fullName:l.full_name,subjectId:s.id,subject:s.name,...flag}] : [];
     }));
     return {class:section,term,period,buckets,overall,subjects:series,attention};
+  }
+
+  // Indicators for a subject (or all), current ones first; retired ones stay listed with why.
+  async indicators(client: PoolClient, schoolId: string, subjectId?: string) {
+    return {items:(await client.query(`SELECT i.id,i.subject_id,s.name AS subject_name,i.code,i.strand,i.sub_strand,i.description,i.origin,i.source_note,i.retired_at,i.retirement_reason
+      FROM curriculum_indicators i JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id WHERE i.school_id=$1 AND ($2::uuid IS NULL OR i.subject_id=$2)
+      ORDER BY s.name,i.retired_at IS NOT NULL,i.code NULLS LAST,i.created_at,i.id`,[schoolId,subjectId ?? null])).rows};
+  }
+  addIndicators(client: PoolClient, actor: Actor, body: AddIndicatorsDto) {
+    return command(client,actor,body.operationId,'assessment.indicators',body,async () => {
+      if (!(await client.query('SELECT 1 FROM subjects WHERE school_id=$1 AND id=$2',[actor.schoolId,body.subjectId])).rowCount) throw new NotFoundException('Subject unavailable');
+      const codes = body.items.map(item => item.code?.trim().toLowerCase()).filter(Boolean);
+      if (new Set(codes).size !== codes.length) throw new BadRequestException('Each code may appear once');
+      if (codes.length && (await client.query('SELECT 1 FROM curriculum_indicators WHERE school_id=$1 AND subject_id=$2 AND retired_at IS NULL AND lower(code)=ANY($3::text[])',[actor.schoolId,body.subjectId,codes])).rowCount)
+        throw new ConflictException('An indicator with one of these codes is already in use for this subject. Retire it first');
+      for (const item of body.items) await client.query(`INSERT INTO curriculum_indicators(id,school_id,subject_id,code,strand,sub_strand,description,origin,source_note,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [randomUUID(),actor.schoolId,body.subjectId,item.code?.trim() || null,item.strand?.trim() || null,item.subStrand?.trim() || null,item.description.trim(),body.origin,body.sourceNote.trim(),actor.membershipId]);
+      await audit(client,actor,'assessment.indicators.added',body.subjectId,{added:body.items.length,origin:body.origin});
+      return {added:body.items.length};
+    });
+  }
+  retireIndicator(client: PoolClient, actor: Actor, indicatorId: string, body: RetireIndicatorDto) {
+    return command(client,actor,body.operationId,'assessment.indicator.retire',{indicatorId,...body},async () => {
+      const row = (await client.query('UPDATE curriculum_indicators SET retired_at=now(),retired_by=$3,retirement_reason=$4 WHERE school_id=$1 AND id=$2 AND retired_at IS NULL RETURNING id',[actor.schoolId,indicatorId,actor.membershipId,body.reason.trim()])).rows[0];
+      if (!row) throw new NotFoundException('Indicator unavailable or already retired');
+      await audit(client,actor,'assessment.indicator.retired',indicatorId,{reason:body.reason.trim()});
+      return {retired:true};
+    });
+  }
+
+  // Each indicator tested in the class this term, weakest first: the class average (each learner's average over the
+  // indicator's assessments, every learner counting once) and who is below the pass line on it.
+  async gaps(client: PoolClient, actor: Actor, classId: string, termId: string, subjectId?: string) {
+    await this.assessment.classFor(client,actor,classId);
+    const term = await this.assessment.term(client,actor.schoolId,termId);
+    const marks = await this.marks(client,actor.schoolId,'a.class_id=$2 AND a.term_id=$3',[classId,termId]);
+    const links = (await client.query(`SELECT x.assessment_id,i.id,i.subject_id,s.name AS subject_name,i.code,i.strand,i.sub_strand,i.description,i.origin FROM class_assessment_indicators x
+      JOIN class_assessments a ON a.school_id=x.school_id AND a.id=x.assessment_id JOIN curriculum_indicators i ON i.school_id=x.school_id AND i.id=x.indicator_id
+      JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
+      WHERE x.school_id=$1 AND a.class_id=$2 AND a.term_id=$3 AND ($4::uuid IS NULL OR i.subject_id=$4)`,[actor.schoolId,classId,termId,subjectId ?? null])).rows;
+    const names = new Map((await this.assessment.learners(client,actor.schoolId,classId,term)).map(l => [l.id,l.full_name]));
+    const indicators = new Map<string, typeof links[number]>(); for (const link of links) indicators.set(link.id,link);
+    const items = [...indicators.values()].map(i => {
+      const assessmentIds = new Set(links.filter(l => l.id === i.id).map(l => l.assessment_id as string));
+      const own = marks.filter(m => assessmentIds.has(m.assessment_id));
+      const learners = [...new Set(own.map(m => m.learner_id))].map(learnerId => ({learnerId,fullName:names.get(learnerId) ?? '',average:mean(own.filter(m => m.learner_id === learnerId).map(m => m.percent))!}));
+      const below = learners.filter(l => l.average < PASS_LINE).sort((a,b) => a.average - b.average);
+      return {indicatorId:i.id,subjectId:i.subject_id,subject:i.subject_name,code:i.code,strand:i.strand,subStrand:i.sub_strand,description:i.description,origin:i.origin,
+        assessments:assessmentIds.size,learners:learners.length,average:mean(learners.map(l => l.average)),belowPass:below.length,belowShare:learners.length ? Math.round(below.length * 100 / learners.length) : null,below};
+    }).filter(i => i.learners > 0).sort((a,b) => a.average! - b.average! || (a.code ?? '').localeCompare(b.code ?? ''));
+    const tagged = new Set(links.map(l => l.assessment_id as string));
+    const untagged = (await client.query('SELECT count(*)::int AS n FROM class_assessments WHERE school_id=$1 AND class_id=$2 AND term_id=$3 AND ($4::uuid IS NULL OR subject_id=$4)',[actor.schoolId,classId,termId,subjectId ?? null])).rows[0].n - tagged.size;
+    return {items,untaggedAssessments:untagged};
   }
 
   // Heads see any learner; teachers see learners enrolled today in a class they are live-assigned to.

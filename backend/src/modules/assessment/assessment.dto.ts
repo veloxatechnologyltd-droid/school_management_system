@@ -63,6 +63,7 @@ export class ClassAssessmentDto extends OperationDto {
   @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) title!: string;
   @IsDateString({strict:true}) @date() heldOn!: string;
   @IsNumber({maxDecimalPlaces:2}) @Min(1) @Max(1000) maxMark!: number;
+  @IsOptional() @IsArray() @ArrayMaxSize(10) @IsUUID('all',{each:true}) indicatorIds?: string[];
 }
 export class AssessmentListQueryDto { @IsUUID() termId!: string; @IsOptional() @IsUUID() subjectId?: string; }
 export class MarkDto { @IsUUID() learnerId!: string; @IsNumber({maxDecimalPlaces:2}) @Min(0) @Max(1000) mark!: number; }
@@ -70,3 +71,19 @@ export class RecordMarksDto extends OperationDto { @IsArray() @ArrayMinSize(1) @
 export class CaSuggestionQueryDto { @IsUUID() termId!: string; @IsUUID() subjectId!: string; }
 export class ClassProgressQueryDto { @IsUUID() termId!: string; @IsOptional() @IsIn(['week','month']) period?: string; }
 export class LearnerProgressQueryDto { @IsOptional() @IsIn(['week','month','term','year']) period?: string; }
+// The school's curriculum indicators: pasted in bulk per subject, with where they come from.
+export class IndicatorDto {
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(40) @Matches(/\S/) code?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) strand?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) subStrand?: string;
+  @IsString() @MinLength(3) @MaxLength(400) @Matches(/\S.*\S/) description!: string;
+}
+export class AddIndicatorsDto extends OperationDto {
+  @IsUUID() subjectId!: string;
+  @IsIn(['official','local']) origin!: string;
+  @IsString() @MinLength(3) @MaxLength(300) @Matches(/\S.*\S/) sourceNote!: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(300) @ValidateNested({each:true}) @Type(() => IndicatorDto) items!: IndicatorDto[];
+}
+export class RetireIndicatorDto extends OperationDto { @IsString() @MinLength(3) @MaxLength(300) @Matches(/\S.*\S/) reason!: string; }
+export class IndicatorQueryDto { @IsOptional() @IsUUID() subjectId?: string; }
+export class GapsQueryDto { @IsUUID() termId!: string; @IsOptional() @IsUUID() subjectId?: string; }

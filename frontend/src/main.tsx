@@ -23,6 +23,7 @@ const EarlyYearsReports=lazyModule(()=>import('./modules/EarlyYearsReports'),'Ea
 const AttendanceFollowUp=lazyModule(()=>import('./modules/AttendanceFollowUp'),'AttendanceFollowUp');
 const Assessment=lazyModule(()=>import('./modules/Assessment'),'Assessment');
 const Progress=lazyModule(()=>import('./modules/Progress'),'Progress');
+const Curriculum=lazyModule(()=>import('./modules/Curriculum'),'Curriculum');
 const GuardianTerminalReports=lazyModule(()=>import('./modules/Assessment'),'GuardianTerminalReports');
 const Finance=lazyModule(()=>import('./modules/Finance'),'Finance');
 const GuardianStatement=lazyModule(()=>import('./modules/Finance'),'GuardianStatement');
@@ -167,6 +168,7 @@ function App() {
     {id:'staff',label:'Staff accounts',render:()=><Accounts key={`accounts:${sid}`} schoolId={sid} csrfToken={csrf}/>},
     {id:'assignments',label:'Teacher assignments',render:()=>teachingView},
     {id:'grading',label:'Subjects, terms & grading',render:()=><Assessment key={`setup:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>},
+    {id:'curriculum',label:'Curriculum indicators',render:()=><Curriculum key={`curriculum:${sid}`} schoolId={sid} csrfToken={csrf}/>},
     {id:'fees',label:'Fee items',render:()=><Finance key={`setup:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>},
     {id:'early-years',label:'Early years policies',render:()=><EarlyYears key={`setup:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>},
     {id:'ai',label:'AI assistance',render:()=><AiSettings key={`ai:${sid}`} schoolId={sid} csrfToken={csrf}/>},
