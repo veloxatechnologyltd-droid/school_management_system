@@ -8,10 +8,10 @@ type Subject = { id: string; name: string };
 type Term = { id: string; name: string; year_name: string; start_date: string; end_date: string };
 type ClassOption = { id: string; name: string; year_name: string };
 type Assessment = { id: string; subject_id: string; subject_name: string; kind: string; title: string; held_on: string; max_mark: number; marked: number; average: number | null; indicators?: { id: string; code: string | null; description: string }[] };
-type Indicator = { id: string; code: string | null; strand: string | null; sub_strand: string | null; description: string; retired_at: string | null };
+type Indicator = { id: string; grade: string | null; code: string | null; strand: string | null; sub_strand: string | null; description: string; retired_at: string | null };
 type Gap = { indicatorId: string; subjectId: string; subject: string; code: string | null; strand: string | null; subStrand: string | null; description: string; assessments: number; learners: number; average: number | null; belowPass: number; belowShare: number | null; below: { learnerId: string; fullName: string; average: number }[] };
 type RosterRow = { learnerId: string; fullName: string; left: boolean; mark: number | null };
-type ClassProgress = { buckets: string[]; overall: { start: string; average: number | null }[]; subjects: { subjectId: string; name: string; points: { start: string; average: number | null; marks: number }[] }[];
+type ClassProgress = { classSize: number; buckets: string[]; overall: { start: string; average: number | null; learners: number }[]; subjects: { subjectId: string; name: string; points: { start: string; average: number | null; marks: number }[] }[];
   attention: { learnerId: string; fullName: string; subjectId: string; subject: string; reason: 'dropping' | 'below_pass'; recent: number; earlier: number | null }[] };
 type LearnerProgress = { learner: { fullName: string; admissionNumber: string }; buckets: { key: string; label: string }[]; overall: { key: string; assessmentAverage: number | null }[];
   subjects: { subjectId: string; name: string; points: { key: string; assessmentAverage: number | null; marks: number; termResult: number | null }[] }[] };
@@ -35,7 +35,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const [plans, setPlans] = useState<{ today: string; items: Plan[] } | null>(null); const [planScope, setPlanScope] = useState<'class' | 'school'>(head ? 'school' : 'class'); const [planStatus, setPlanStatus] = useState<'open' | 'closed'>('open');
   const [draft, setDraft] = useState<PlanDraft | null>(null); const [planId, setPlanId] = useState('');
   const [gaps, setGaps] = useState<{ items: Gap[]; untaggedAssessments: number } | null>(null);
-  const [indicators, setIndicators] = useState<Indicator[]>([]); const [chosen, setChosen] = useState<string[]>([]); const [indicatorSearch, setIndicatorSearch] = useState('');
+  const [indicators, setIndicators] = useState<Indicator[]>([]); const [allGrades, setAllGrades] = useState(false); const [chosen, setChosen] = useState<string[]>([]); const [indicatorSearch, setIndicatorSearch] = useState('');
   const [assessments, setAssessments] = useState<Assessment[]>([]); const [progress, setProgress] = useState<ClassProgress | null>(null);
   const [period, setPeriod] = useState<'week' | 'month'>('week');
   const [creating, setCreating] = useState(false); const [form, setForm] = useState({ subjectId: '', kind: 'classwork', title: '', heldOn: todayInAccra(), maxMark: '20' });
@@ -87,6 +87,13 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const shownPlans = (plans?.items ?? []).filter(p => (planStatus === 'closed' ? p.closed : !p.closed) && (planScope === 'school' || p.class_id === classId));
   const planFor = (d: PlanDraft) => { setMessage(''); setDraft(d); };
 
+  // Indicators for this class's grade (named like the class, e.g. "Basic 5" for "Basic 5 Blue") and ones with no grade come first;
+  // other grades stay one tick away.
+  const className = (classes.find(c => c.id === classId)?.name ?? '').toLowerCase();
+  const ownGrade = (i: Indicator) => !i.grade || className === i.grade.toLowerCase() || className.startsWith(`${i.grade.toLowerCase()} `);
+  const otherGrades = indicators.filter(i => !ownGrade(i)).length;
+  const pickable = allGrades ? [...indicators].sort((a, b) => Number(ownGrade(b)) - Number(ownGrade(a))) : indicators.filter(ownGrade);
+
   async function act(work: () => Promise<void>) {
     setBusy(true); setError(''); setMessage('');
     try { await work(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -109,7 +116,13 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   });
 
   const attentionCount = progress?.attention.length ?? 0;
-  const lastOverall = progress?.overall.filter(o => o.average !== null).slice(-2) ?? [];
+  // One row per learner, most flags first, then the lowest recent average.
+  const flagged = Object.values((progress?.attention ?? []).reduce<Record<string, { learnerId: string; fullName: string; flags: ClassProgress['attention'] }>>((acc, a) => {
+    (acc[a.learnerId] ??= { learnerId: a.learnerId, fullName: a.fullName, flags: [] }).flags.push(a); return acc; }, {}))
+    .sort((a, b) => b.flags.length - a.flags.length || Math.min(...a.flags.map(f => f.recent)) - Math.min(...b.flags.map(f => f.recent)));
+  // Headline figures use periods where most of the class (two thirds or more) has marks, so a remedial test given to
+  // a group of learners does not stand in for the whole class.
+  const lastOverall = progress?.overall.filter(o => o.average !== null && o.learners * 3 >= progress.classSize * 2).slice(-2) ?? [];
   const change = lastOverall.length === 2 ? Math.round((lastOverall[1]!.average! - lastOverall[0]!.average!) * 10) / 10 : null;
   return <section aria-label="Learner progress" className="page">
     <PageHeader eyebrow="Teaching" title="Progress" blurb="Record class exercises, homework and tests as they happen, and follow each class and learner week by week."
@@ -155,17 +168,18 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
     </Card>
     {tab === 'trends' && progress && progress.buckets.length > 0 && <>
       <div className="stats">
-        <Stat label="Class average" value={lastOverall.length ? `${lastOverall[lastOverall.length - 1]!.average}%` : '–'} caption={`Latest ${period}`} icon="insights" tone={tone(lastOverall[lastOverall.length - 1]?.average ?? null)}/>
-        <Stat label={`Change on last ${period}`} value={change === null ? '–' : `${change > 0 ? '+' : ''}${change}`} caption="Percentage points" icon={change !== null && change < 0 ? 'trending_down' : 'trending_up'} tone={change === null ? 'neutral' : change < 0 ? 'critical' : 'positive'}/>
-        <Stat label="Need attention" value={attentionCount} caption="Learner and subject pairs" icon="flag" tone={attentionCount ? 'caution' : 'neutral'}/>
+        <Stat label="Class average" value={lastOverall.length ? `${lastOverall[lastOverall.length - 1]!.average}%` : '–'} caption={lastOverall.length ? bucketLabel(lastOverall[lastOverall.length - 1]!.start, period) : `Latest ${period}`} icon="insights" tone={tone(lastOverall[lastOverall.length - 1]?.average ?? null)}/>
+        <Stat label={`Change on previous ${period}`} value={change === null ? '–' : `${change > 0 ? '+' : ''}${change}`} caption="Percentage points" icon={change !== null && change < 0 ? 'trending_down' : 'trending_up'} tone={change === null ? 'neutral' : change < 0 ? 'critical' : 'positive'}/>
+        <Stat label="Learners needing attention" value={flagged.length} caption={`${attentionCount} subject flag${attentionCount === 1 ? '' : 's'}`} icon="flag" tone={flagged.length ? 'caution' : 'neutral'}/>
       </div>
-      <Card title="Needs attention" hint={`Last 3 marks in a subject average below 50%, or are 10 or more points below the learner's earlier marks this term.`} flush>
+      <Card title="Needs attention" hint={`Last 3 marks in a subject average below 50%, or are 10 or more points below the learner's earlier marks this term. Most flags first.`} flush>
         {!attentionCount ? <Empty title="Nobody flagged" hint="Every learner with three or more marks is holding steady."/>
-          : <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Subject</th><th>Why</th><th>Recent</th><th>Earlier</th><th/></tr></thead><tbody>
-            {progress.attention.map(a => <tr key={`${a.learnerId}:${a.subject}`}><td><button type="button" className="link-button" onClick={() => setLearnerId(a.learnerId)}>{a.fullName}</button></td><td>{a.subject}</td>
-              <td><Pill tone={a.reason === 'dropping' ? 'critical' : 'caution'}>{a.reason === 'dropping' ? 'Dropping' : 'Below 50%'}</Pill></td><td><Score value={a.recent}/></td><td><Score value={a.earlier}/></td>
-              <td>{plans?.items.some(p => !p.closed && p.subject_name === a.subject && p.learners.some(l => l.id === a.learnerId)) ? <Pill tone="info">Plan open</Pill>
-                : <button type="button" className="secondary small" onClick={() => planFor({ subjectId: a.subjectId, learnerIds: [a.learnerId], concern: a.reason === 'dropping' ? `${a.subject}: last 3 marks average ${a.recent}%, down from ${a.earlier}% earlier this term.` : `${a.subject}: last 3 marks average ${a.recent}%, below 50%.` })}>Plan support</button>}</td></tr>)}</tbody></table></div>}
+          : <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Subjects</th></tr></thead><tbody>
+            {flagged.map(f => <tr key={f.learnerId}><td><button type="button" className="link-button" onClick={() => setLearnerId(f.learnerId)}>{f.fullName}</button><span className="sub">{f.flags.length} subject{f.flags.length === 1 ? '' : 's'}</span></td>
+              <td><ul className="flag-list">{f.flags.map(a => <li key={a.subjectId}><span className="flag-subject">{a.subject}</span>
+                <Pill tone={a.reason === 'dropping' ? 'critical' : 'caution'}>{a.reason === 'dropping' ? `Dropping ${a.earlier}% → ${a.recent}%` : `Below 50%: ${a.recent}%`}</Pill>
+                {plans?.items.some(p => !p.closed && p.subject_name === a.subject && p.learners.some(l => l.id === a.learnerId)) ? <Pill tone="info">Plan open</Pill>
+                  : <button type="button" className="secondary small" onClick={() => planFor({ subjectId: a.subjectId, learnerIds: [a.learnerId], concern: a.reason === 'dropping' ? `${a.subject}: last 3 marks average ${a.recent}%, down from ${a.earlier}% earlier this term.` : `${a.subject}: last 3 marks average ${a.recent}%, below 50%.` })}>Plan</button>}</li>)}</ul></td></tr>)}</tbody></table></div>}
       </Card>
     </>}
     {creating && <Dialog title="New assessment" onClose={() => setCreating(false)}>
@@ -176,8 +190,9 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
         <label>Date<input type="date" value={form.heldOn} onChange={e => setForm({ ...form, heldOn: e.target.value })} required/></label>
         <label>Marked out of<input type="number" min={1} max={1000} step="0.5" value={form.maxMark} onChange={e => setForm({ ...form, maxMark: e.target.value })} required/></label>
         {indicators.length > 0 && <fieldset className="indicator-picker"><legend>Curriculum indicators tested (optional)</legend>
-          {indicators.length > 8 && <input type="search" aria-label="Search indicators" placeholder="Search by code or words" value={indicatorSearch} onChange={e => setIndicatorSearch(e.target.value)}/>}
-          <div className="indicator-options">{indicators.filter(i => !indicatorSearch || `${i.code ?? ''} ${i.description} ${i.strand ?? ''} ${i.sub_strand ?? ''}`.toLowerCase().includes(indicatorSearch.toLowerCase())).slice(0, 40).map(i =>
+          {otherGrades > 0 && <label className="check"><input type="checkbox" checked={allGrades} onChange={e => setAllGrades(e.target.checked)}/><span>Show other grades too ({otherGrades} more)</span></label>}
+          {pickable.length > 8 && <input type="search" aria-label="Search indicators" placeholder="Search by code or words" value={indicatorSearch} onChange={e => setIndicatorSearch(e.target.value)}/>}
+          <div className="indicator-options">{pickable.filter(i => !indicatorSearch || `${i.code ?? ''} ${i.description} ${i.strand ?? ''} ${i.sub_strand ?? ''}`.toLowerCase().includes(indicatorSearch.toLowerCase())).slice(0, 40).map(i =>
             <label key={i.id} className="check"><input type="checkbox" checked={chosen.includes(i.id)} disabled={!chosen.includes(i.id) && chosen.length >= 10} onChange={e => setChosen(e.target.checked ? [...chosen, i.id] : chosen.filter(id => id !== i.id))}/><span>{i.code && <strong>{i.code} </strong>}{i.description}</span></label>)}</div>
           {chosen.length > 0 && <p className="muted">{chosen.length} chosen</p>}</fieldset>}
         <button disabled={busy}>Add and enter marks</button>

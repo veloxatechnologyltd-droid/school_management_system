@@ -346,6 +346,10 @@ async function main() {
       const added = (await head.get(`/assessment/indicators?subjectId=${subjectIds[s]}`)).items as { id: string; description: string }[];
       indicatorIds.push(list.map(([description]) => added.find(i => i.description === description)!.id));
     }
+    // A few grade-specific indicators too, so tagging shows a class its own grade first.
+    for (const [subject, grade, items] of [[0, 'JHS 3', ['Argumentative essay writing', 'Summary writing', 'Letter writing: formal and informal']], [0, 'Basic 4', ['Reading aloud with expression', 'Using capital letters and full stops']],
+      [1, 'Basic 5', ['Adding and subtracting decimals', 'Finding percentages of quantities']], [1, 'JHS 3', ['Solving linear equations', 'Simple and compound interest']]] as const)
+      await head.post('/assessment/indicators', { subjectId: subjectIds[subject], origin: 'local', grade, sourceNote: 'Sunrise International School scheme of work (demo)', items: items.map(description => ({ description })) });
     for (const c of graded) {
       const teacher = await new Person(staff[3 + c.i]!.email).login();
       const own = learners.filter(l => l.classIndex === c.i);
@@ -377,6 +381,17 @@ async function main() {
       if (second) {
         const p = await plan({ subjectId: second.subjectId, learnerIds: [second.learnerId], concern: concern(second), action: 'Pair with a peer helper.', startDate: addDays(TODAY, -24), reviewDate: addDays(TODAY, -10) });
         await teacher.post(`/support-plans/${p.id}/reviews`, { reviewedOn: addDays(TODAY, -10), outcome: 'improved', note: 'Working well with a peer helper and completing class exercises. Closing the plan.', decision: 'close' });
+      }
+    }
+
+    // The JHS 3 class teacher (the teacher persona) has one review due today, so Today shows the reminder.
+    if (addDays(TODAY, -7) >= current.start) {
+      const jhs3 = graded.find(c => c.name === 'JHS 3');
+      if (jhs3) {
+        const teacher = await new Person(`teacher@${DOMAIN}`).login();
+        const flagged = (await teacher.get(`/assessment/classes/${jhs3.id}/progress?termId=${current.id}&period=week`)).attention as { learnerId: string; subjectId: string; subject: string; recent: number }[];
+        const a = flagged[0];
+        if (a) await teacher.post(`/assessment/classes/${jhs3.id}/support-plans`, { termId: current.id, subjectId: a.subjectId, learnerIds: [a.learnerId], concern: `${a.subject}: last 3 marks average ${a.recent}%.`, action: 'Extra practice exercises. Meet the guardian.', startDate: addDays(TODAY, -7), reviewDate: TODAY });
       }
     }
 

@@ -196,3 +196,12 @@ test('teachers see plans for their classes; the review shows marks before and si
   assert.deepEqual((await call('/support-plans?status=closed','GET',undefined,teacher)).body.items.map((p:any)=>p.id),[planB]);
   assert.equal((await call(`/support-plans?classId=${cls2}`)).body.items.length,1,'head sees every class');
 });
+
+test('indicators can name their grade; the grade is kept like the wording',async()=>{
+  await ok('/assessment/indicators','POST',{subjectId:maths,origin:'official',sourceNote:'Synthetic Primary 6 curriculum',grade:'Primary 6',items:[{code:'P6.N.1',description:'Multiplies decimals by whole numbers'}]});
+  const p6=(await call(`/assessment/indicators?subjectId=${maths}`,'GET',undefined,teacher)).body.items.find((i:any)=>i.code==='P6.N.1');
+  assert.equal(p6.grade,'Primary 6');
+  assert.equal((await call(`/assessment/indicators?subjectId=${maths}`)).body.items.find((i:any)=>i.code==='P5.N.3').grade,null,'no grade suits every class');
+  await assert.rejects(owner.query("UPDATE curriculum_indicators SET grade='Primary 5' WHERE id=$1",[p6.id]),/only be retired/);
+  assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),subjectId:maths,origin:'official',sourceNote:'Too long grade',grade:'x'.repeat(41),items:[{description:'Anything at all'}]})).status,400);
+});

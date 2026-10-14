@@ -82,6 +82,7 @@ export class AddIndicatorsDto extends OperationDto {
   @IsUUID() subjectId!: string;
   @IsIn(['official','local']) origin!: string;
   @IsString() @MinLength(3) @MaxLength(300) @Matches(/\S.*\S/) sourceNote!: string;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(40) @Matches(/\S/) grade?: string;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(300) @ValidateNested({each:true}) @Type(() => IndicatorDto) items!: IndicatorDto[];
 }
 export class RetireIndicatorDto extends OperationDto { @IsString() @MinLength(3) @MaxLength(300) @Matches(/\S.*\S/) reason!: string; }

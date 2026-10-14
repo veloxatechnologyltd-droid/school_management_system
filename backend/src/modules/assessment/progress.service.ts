@@ -114,19 +114,19 @@ export class ProgressService {
     const bucketOf = (day: string) => period === 'month' ? `${day.slice(0,7)}-01` : mondayOf(day);
     const buckets = [...new Set(marks.map(m => bucketOf(m.held_on)))].sort();
     const series = subjects.map(s => ({subjectId:s.id,name:s.name,points:buckets.map(start => { const p = marks.filter(m => m.subject_id === s.id && bucketOf(m.held_on) === start).map(m => m.percent); return {start,average:mean(p),marks:p.length}; })}));
-    const overall = buckets.map(start => ({start,average:mean(marks.filter(m => bucketOf(m.held_on) === start).map(m => m.percent))}));
+    const overall = buckets.map(start => { const own = marks.filter(m => bucketOf(m.held_on) === start); return {start,average:mean(own.map(m => m.percent)),learners:new Set(own.map(m => m.learner_id)).size}; });
     const attention = learners.filter(l => !l.left).flatMap(l => subjects.flatMap(s => {
       const flag = attentionFor(marks.filter(m => m.learner_id === l.id && m.subject_id === s.id).map(m => m.percent));
       return flag ? [{learnerId:l.id,fullName:l.full_name,subjectId:s.id,subject:s.name,...flag}] : [];
     }));
-    return {class:section,term,period,buckets,overall,subjects:series,attention};
+    return {class:section,term,period,classSize:learners.filter(l => !l.left).length,buckets,overall,subjects:series,attention};
   }
 
   // Indicators for a subject (or all), current ones first; retired ones stay listed with why.
   async indicators(client: PoolClient, schoolId: string, subjectId?: string) {
-    return {items:(await client.query(`SELECT i.id,i.subject_id,s.name AS subject_name,i.code,i.strand,i.sub_strand,i.description,i.origin,i.source_note,i.retired_at,i.retirement_reason
+    return {items:(await client.query(`SELECT i.id,i.subject_id,s.name AS subject_name,i.code,i.strand,i.sub_strand,i.description,i.grade,i.origin,i.source_note,i.retired_at,i.retirement_reason
       FROM curriculum_indicators i JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id WHERE i.school_id=$1 AND ($2::uuid IS NULL OR i.subject_id=$2)
-      ORDER BY s.name,i.retired_at IS NOT NULL,i.code NULLS LAST,i.created_at,i.id`,[schoolId,subjectId ?? null])).rows};
+      ORDER BY s.name,i.retired_at IS NOT NULL,i.grade NULLS FIRST,i.code NULLS LAST,i.created_at,i.id`,[schoolId,subjectId ?? null])).rows};
   }
   addIndicators(client: PoolClient, actor: Actor, body: AddIndicatorsDto) {
     return command(client,actor,body.operationId,'assessment.indicators',body,async () => {
@@ -135,9 +135,9 @@ export class ProgressService {
       if (new Set(codes).size !== codes.length) throw new BadRequestException('Each code may appear once');
       if (codes.length && (await client.query('SELECT 1 FROM curriculum_indicators WHERE school_id=$1 AND subject_id=$2 AND retired_at IS NULL AND lower(code)=ANY($3::text[])',[actor.schoolId,body.subjectId,codes])).rowCount)
         throw new ConflictException('An indicator with one of these codes is already in use for this subject. Retire it first');
-      for (const item of body.items) await client.query(`INSERT INTO curriculum_indicators(id,school_id,subject_id,code,strand,sub_strand,description,origin,source_note,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [randomUUID(),actor.schoolId,body.subjectId,item.code?.trim() || null,item.strand?.trim() || null,item.subStrand?.trim() || null,item.description.trim(),body.origin,body.sourceNote.trim(),actor.membershipId]);
-      await audit(client,actor,'assessment.indicators.added',body.subjectId,{added:body.items.length,origin:body.origin});
+      for (const item of body.items) await client.query(`INSERT INTO curriculum_indicators(id,school_id,subject_id,code,strand,sub_strand,description,origin,source_note,created_by,grade) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [randomUUID(),actor.schoolId,body.subjectId,item.code?.trim() || null,item.strand?.trim() || null,item.subStrand?.trim() || null,item.description.trim(),body.origin,body.sourceNote.trim(),actor.membershipId,body.grade?.trim() || null]);
+      await audit(client,actor,'assessment.indicators.added',body.subjectId,{added:body.items.length,origin:body.origin,grade:body.grade?.trim() || null});
       return {added:body.items.length};
     });
   }

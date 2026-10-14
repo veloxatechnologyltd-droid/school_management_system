@@ -206,3 +206,4 @@ button.small{height:30px;padding:0 12px;font-size:13px;margin-top:6px}
 .choice-row{border:0;padding:0;margin:0 0 12px;display:flex;flex-wrap:wrap;gap:6px 18px}.choice-row legend{font-weight:600;font-size:13px;margin-bottom:6px}.choice-row .check{display:flex;align-items:center;gap:6px;margin:0;font-weight:500}.choice-row input{width:auto;height:auto}
 .review-form{border-top:1px solid var(--line);margin-top:16px;padding-top:4px}
 .follow-up{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:8px 0}.follow-up button.small{margin-top:0}
+.flag-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}.flag-list li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.flag-subject{font-weight:600;min-width:120px}.flag-list button.small{margin-top:0;height:26px}

@@ -106,3 +106,14 @@ export function SupportList({ plans, today, showClass, onOpen }: { plans: Plan[]
       <td>{p.subject_name}{(p.indicator_code || p.indicator_description) && <span className="sub">{p.indicator_code ?? p.indicator_description}</span>}</td><td>{p.action}</td><td>{p.owner_name}</td><td>{reviewPill(p, today)}</td>
       <td className={`num tone-${changeTone(p.evidence.change)}`}>{signed(p.evidence.change)}<span className="sub">{p.evidence.before ?? '–'} → {p.evidence.since ?? '–'}</span></td></tr>)}</tbody></table></div>;
 }
+
+// Today page: the support reviews this person is due to do, linking to the Support tab. Nothing shows when none are due.
+export function SupportDue({ schoolId }: { schoolId: string }) {
+  const [plans, setPlans] = useState<{ today: string; items: Plan[] } | null>(null);
+  useEffect(() => { request<{ today: string; items: Plan[] }>(`/schools/${schoolId}/support-plans?status=open`).then(setPlans).catch(() => setPlans(null)); }, [schoolId]);
+  const due = plans?.items.filter(p => p.due) ?? [];
+  if (!plans || !due.length) return null;
+  return <section aria-label="Support reviews due" className="page"><div className="banner"><span className="icon" aria-hidden="true">event_upcoming</span>
+    <span><strong>{due.length} support review{due.length === 1 ? ' is' : 's are'} due:</strong> {due.map(p => `${p.class_name} ${p.subject_name} (${p.learners.length === 1 ? p.learners[0]!.full_name : `${p.learners.length} learners`})`).join(', ')}.</span>
+    <a className="button secondary" href="#/progress/support">Review now</a></div></section>;
+}
