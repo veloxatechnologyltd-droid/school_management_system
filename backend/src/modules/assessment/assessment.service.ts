@@ -56,7 +56,7 @@ export class AssessmentService {
       return row;
     });
   }
-  private async term(client: PoolClient, schoolId: string, termId: string) {
+  async term(client: PoolClient, schoolId: string, termId: string) {
     const term = (await client.query('SELECT id,name,start_date::text,end_date::text FROM terms WHERE school_id=$1 AND id=$2',[schoolId,termId])).rows[0];
     if (!term) throw new NotFoundException('Term unavailable');
     return term;
@@ -71,7 +71,7 @@ export class AssessmentService {
     } else if (actor.role !== 'headteacher') throw new ForbiddenException('Your role cannot perform this action');
     return section;
   }
-  private async learners(client: PoolClient, schoolId: string, classId: string, term: { start_date: string; end_date: string }) {
+  async learners(client: PoolClient, schoolId: string, classId: string, term: { start_date: string; end_date: string }) {
     // left: every enrolment in this class ended before the term's last day (withdrawn or moved during the term).
     return (await client.query(`SELECT l.id,l.full_name,l.admission_number,bool_and(e.end_date IS NOT NULL AND e.end_date<=$4) AS left FROM enrolments e JOIN learners l ON l.school_id=e.school_id AND l.id=e.learner_id
       WHERE e.school_id=$1 AND e.class_id=$2 AND e.superseded_at IS NULL AND e.start_date<$4 AND (e.end_date IS NULL OR e.end_date>$3) GROUP BY l.id ORDER BY l.full_name,l.id`,[schoolId,classId,term.start_date,term.end_date])).rows as Learner[];

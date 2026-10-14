@@ -326,6 +326,24 @@ async function main() {
       }
     }
 
+    step('Weekly class exercises, homework and tests');
+    // Each Primary/JHS class teacher records one dated assessment a week in the core subjects, so Progress shows
+    // weekly trends. Most learners hold steady; a few slip week by week and appear under "Needs attention".
+    const drift = new Map(learners.map(l => [l.id, chance(0.08) ? -4.5 : normal(0, 1)]));
+    const weekly = [['classwork', 'Class exercise', 20], ['homework', 'Homework', 20], ['quiz', 'Quiz', 20], ['class_test', 'Class test', 50]] as const;
+    const weeks: string[] = [];
+    for (let d = firstMondayFrom(current.start); addDays(d, 3) <= TODAY && d <= current.end; d = addDays(d, 7)) weeks.push(addDays(d, 3));
+    for (const c of graded) {
+      const teacher = await new Person(staff[3 + c.i]!.email).login();
+      const own = learners.filter(l => l.classIndex === c.i);
+      await inBatches(subjectIds.slice(0, 4).flatMap((subjectId, s) => weeks.map((heldOn, w) => ({ subjectId, s, heldOn, w }))), 6, async ({ subjectId, s, heldOn, w }) => {
+        const [kind, label, maxMark] = weekly[w % weekly.length]!;
+        const a = await teacher.post(`/assessment/classes/${c.id}/assessments`, { termId: current.id, subjectId, kind, title: `${label} ${w + 1}: ${subjects[s]}`, heldOn, maxMark });
+        const marks = own.filter(() => chance(0.95)).map(l => ({ learnerId: l.id, mark: Math.round(clamp(normal(l.ability + (s % 3 - 1) * 4 + drift.get(l.id)! * w, 8), 5, 100) * maxMark / 50) / 2 }));
+        if (marks.length) await teacher.post(`/assessment/classes/${c.id}/assessments/${a.id}/marks`, { marks });
+      });
+    }
+
     console.log(`\n${SCHOOL_NAME} is ready: ${learners.length} learners in ${classes.length} classes, ${current.name} of ${Y}/${Y + 1}.`);
     console.log(`Sign in with any of these (password ${PASSWORD}):`);
     for (const [who, email] of [['Headteacher', `headteacher@${DOMAIN}`], ['Class teacher (JHS 3)', `teacher@${DOMAIN}`], ['Accountant', `accounts@${DOMAIN}`], ['Front desk', `frontdesk@${DOMAIN}`], ['Parent (two children)', `parent@${DOMAIN}`]]) console.log(`  ${who.padEnd(24)} ${email}`);

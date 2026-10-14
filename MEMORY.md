@@ -181,3 +181,8 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** At Evans's explicit request, migration 033 (learner corrections) was previewed then applied to Supabase with the reviewed runner; the hosted ledger is at 033.
 **Why:** The CSV learner-correction feature is pushed and production refuses to start on an outdated ledger.
 **What was rejected:** Deploying before the hosted apply.
+
+## 2026-10-14, Progress tracking from dated assessments; CA is suggested, not derived
+**What was decided:** Weekly/monthly progress comes from new dated class assessments with marks (migration 034), kept separate from the term's CA/exam score entries. Report cards still use the CA and exam scores teachers save; "Fill CA from assessments" only pre-fills the CA boxes with the average percentage of the term's assessments (each assessment counts equally) for the teacher to review and save. Termly/yearly views use the term result (CA + exam under the school policy). Attention flags are fixed rules: last 3 marks below 50%, or 10+ points below the learner's earlier marks this term.
+**Why:** Evans asked for performance over time (weekly, monthly, termly, yearly); the system only held one CA and one exam score per subject per term. Keeping CA a reviewed human entry leaves published reports, locks and corrections unchanged.
+**What was rejected:** Computing CA automatically from assessments (would silently change report-card inputs and existing trial-school data); per-school configurable thresholds and curriculum indicators in this slice (later slices).

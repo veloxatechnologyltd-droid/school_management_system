@@ -190,3 +190,8 @@ tr.selected td{background:var(--accent-soft)}tbody tr.selected:hover td{backgrou
 .report-facts div,.report-remarks div{display:flex;flex-wrap:wrap;gap:0 8px;min-width:0}.report-facts dt,.report-remarks dt{font-weight:600;color:var(--ink-2);flex:none}.report-facts dd,.report-remarks dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .card-actions{padding:12px 22px}
 @media print{.report-sheet,.report-sheet *{visibility:visible}.report-sheet{position:absolute;left:0;top:0;width:100%;background:#fff}.report-card{break-after:page;border:0}}
+/* Progress trends: a percentage with a short bar under it. */
+.trend-cell{display:inline-flex;flex-direction:column;gap:4px;min-width:72px}.trend-value{font-weight:700;font-variant-numeric:tabular-nums}
+.trend-bar{display:block;height:4px;border-radius:999px;background:var(--sunken);overflow:hidden}.trend-fill{display:block;height:100%;border-radius:999px}
+.fill-positive{background:var(--positive)}.fill-caution{background:var(--caution)}.fill-critical{background:var(--accent)}.fill-neutral{background:var(--ink-3)}
+.trend-table th{white-space:nowrap}.trend-total td{font-weight:700;border-top:2px solid var(--line)}

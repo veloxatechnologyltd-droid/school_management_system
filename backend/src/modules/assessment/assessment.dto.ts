@@ -55,3 +55,18 @@ export class RemarksDto extends OperationDto {
   @IsIn(['class_teacher','headteacher']) author!: string;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(300) @ValidateNested({each:true}) @Type(() => RemarkDto) items!: RemarkDto[];
 }
+// Dated class assessments and the progress views built from them.
+export class ClassAssessmentDto extends OperationDto {
+  @IsUUID() termId!: string;
+  @IsUUID() subjectId!: string;
+  @IsIn(['classwork','homework','quiz','class_test','project']) kind!: string;
+  @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) title!: string;
+  @IsDateString({strict:true}) @date() heldOn!: string;
+  @IsNumber({maxDecimalPlaces:2}) @Min(1) @Max(1000) maxMark!: number;
+}
+export class AssessmentListQueryDto { @IsUUID() termId!: string; @IsOptional() @IsUUID() subjectId?: string; }
+export class MarkDto { @IsUUID() learnerId!: string; @IsNumber({maxDecimalPlaces:2}) @Min(0) @Max(1000) mark!: number; }
+export class RecordMarksDto extends OperationDto { @IsArray() @ArrayMinSize(1) @ArrayMaxSize(300) @ValidateNested({each:true}) @Type(() => MarkDto) marks!: MarkDto[]; }
+export class CaSuggestionQueryDto { @IsUUID() termId!: string; @IsUUID() subjectId!: string; }
+export class ClassProgressQueryDto { @IsUUID() termId!: string; @IsOptional() @IsIn(['week','month']) period?: string; }
+export class LearnerProgressQueryDto { @IsOptional() @IsIn(['week','month','term','year']) period?: string; }

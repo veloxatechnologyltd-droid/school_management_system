@@ -92,6 +92,15 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     const result = await send<{ written: number }>(`/assessment/classes/${classId}/scores`, 'POST', { termId, subjectId, scores });
     await loadGrid(); setMessage(`Saved ${result.written} score(s).`);
   });
+  // Fills the CA boxes with each learner's average over the term's dated assessments; nothing is saved until the teacher saves.
+  const fillCa = () => void act(async () => {
+    if (!subjectId) throw new Error('Choose a subject first.');
+    const r = await request<{ items: { learnerId: string; ca: number | null; assessments: number }[] }>(`/schools/${schoolId}/assessment/classes/${classId}/ca-suggestion?termId=${termId}&subjectId=${subjectId}`);
+    const filled = r.items.filter(i => i.ca !== null && grid.some(row => row.learnerId === i.learnerId && !row.locked));
+    if (!filled.length) throw new Error('No assessment marks have been recorded for this subject this term. Add them on the Progress page.');
+    setEdits(prior => ({ ...prior, ...Object.fromEntries(filled.map(i => [`${i.learnerId}:ca`, String(i.ca)])) }));
+    setMessage(`Filled the continuous assessment for ${filled.length} learner(s) from their assessments this term. Check the scores, then save.`);
+  });
   const reopen = (row: GridRow) => { const reason = window.prompt(`Why is ${row.fullName}'s published report being corrected? This is recorded.`); if (!reason || reason.trim().length < 3) return;
     void act(async () => { await send(`/assessment/classes/${classId}/reopen`, 'POST', { termId, learnerId: row.learnerId, reason }); await loadGrid(); setMessage(`${row.fullName}'s report is open for correction. Fix the scores, then publish the corrected report.`); }); };
   const reissue = (row: GridRow) => void act(async () => { const r = await send<{ revision: number }>(`/assessment/classes/${classId}/reissue`, 'POST', { termId, learnerId: row.learnerId, acknowledgeIncomplete: false }); await loadGrid(); setMessage(`Corrected report published (revision ${r.revision}).`); });
@@ -151,7 +160,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     {grid.length > 0 && <><div className="table-wrap"><table><thead><tr><th>Learner</th><th>Continuous assessment (0–100)</th><th>Exam (0–100)</th>{head && <th>Published report</th>}</tr></thead><tbody>
       {grid.map(row => <tr key={row.learnerId}><td>{row.fullName}</td>{(['ca', 'exam'] as const).map(kind => <td key={kind}><input type="number" min={0} max={100} step="0.01" aria-label={`${row.fullName} ${kind === 'ca' ? 'continuous assessment' : 'exam'}`} disabled={row.locked}
         value={edits[`${row.learnerId}:${kind}`] ?? (row[kind] ?? '')} onChange={e => setEdits({ ...edits, [`${row.learnerId}:${kind}`]: e.target.value })}/></td>)}{head && <td>{row.locked ? <button type="button" className="secondary" disabled={busy} onClick={() => reopen(row)}>Correct this report</button> : row.published ? <button type="button" disabled={busy} onClick={() => reissue(row)}>Publish corrected report</button> : '–'}</td>}</tr>)}</tbody></table></div>
-      <div className="actions"><button disabled={busy || !policy} onClick={saveScores}>Save scores</button>{head && <button className="secondary" disabled={busy} onClick={preview}>Preview results</button>}</div></>}
+      <div className="actions"><button disabled={busy || !policy} onClick={saveScores}>Save scores</button><button className="secondary" disabled={busy || !subjectId} onClick={fillCa}>Fill CA from assessments</button>{head && <button className="secondary" disabled={busy} onClick={preview}>Preview results</button>}</div></>}
     {results.length > 0 && <><h3>Results preview</h3><ul className="history">{results.map(r => <li key={r.learnerId}><strong>{r.fullName}{r.position ? ` · position ${r.position}` : ''}</strong><span>{r.complete ? `Average ${r.average}` : 'Missing scores'} · {r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</span></li>)}</ul>
       <button disabled={busy} onClick={publish}>Publish terminal reports</button></>}
     {remarks.length > 0 && <Card title="Report card remarks" hint={head ? 'Class teachers fill conduct, attitude, interest and their remark; you add the headteacher\'s remark. Locked once the report is published.' : 'Conduct, attitude, interest and your remark for each learner. Locked once the report is published.'} flush>

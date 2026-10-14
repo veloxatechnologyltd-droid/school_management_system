@@ -22,6 +22,7 @@ const EarlyYears=lazyModule(()=>import('./modules/EarlyYears'),'EarlyYears');
 const EarlyYearsReports=lazyModule(()=>import('./modules/EarlyYearsReports'),'EarlyYearsReports');
 const AttendanceFollowUp=lazyModule(()=>import('./modules/AttendanceFollowUp'),'AttendanceFollowUp');
 const Assessment=lazyModule(()=>import('./modules/Assessment'),'Assessment');
+const Progress=lazyModule(()=>import('./modules/Progress'),'Progress');
 const GuardianTerminalReports=lazyModule(()=>import('./modules/Assessment'),'GuardianTerminalReports');
 const Finance=lazyModule(()=>import('./modules/Finance'),'Finance');
 const GuardianStatement=lazyModule(()=>import('./modules/Finance'),'GuardianStatement');
@@ -35,10 +36,10 @@ const navByRole:Record<string,{group:string;items:NavItem[]}[]>={
   headteacher:[
     {group:'Overview',items:[nav('today','Home','space_dashboard')]},
     {group:'People',items:[nav('attendance','Attendance','event_available'),nav('learners','Learners','groups'),nav('guardians','Guardians','family_restroom'),nav('collection','Pickup','directions_walk')]},
-    {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('early-years','Early years','child_care')]},
+    {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('early-years','Early years','child_care')]},
     {group:'Office',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign'),nav('promotion','Promotion','trending_up')]},
     {group:'Administration',items:[nav('settings','Settings','settings')]}],
-  teacher:[{group:'My work',items:[nav('today','Today','today'),nav('assessment','Assessment','school'),nav('early-years','Early years','child_care')]}],
+  teacher:[{group:'My work',items:[nav('today','Today','today'),nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('early-years','Early years','child_care')]}],
   accountant:[{group:'Money',items:[nav('fees','Fees','receipt_long')]}],
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
   guardian:[{group:'My family',items:[nav('children','My children','child_care'),nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]}]
@@ -180,6 +181,7 @@ function App() {
     guardians:()=><Guardians key={`guardians:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     promotion:()=><Promotion key={`promotion:${sid}`} schoolId={sid} csrfToken={csrf}/>,
     assessment:()=><Assessment key={`assessment:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
+    progress:()=><Progress key={`progress:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     'early-years':()=><EarlyYearsWork key={`early-years:${sid}:${role}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     fees:()=>role==='guardian'?<GuardianStatement key={`statement:${sid}`} schoolId={sid}/>:<Finance key={`finance:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
     notices:()=>role==='guardian'?<GuardianNotices key={`gnotices:${sid}`} schoolId={sid}/>:<Notices key={`notices:${sid}`} schoolId={sid} csrfToken={csrf}/>,
