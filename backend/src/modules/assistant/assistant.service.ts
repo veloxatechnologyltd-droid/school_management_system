@@ -76,7 +76,7 @@ export class AssistantService {
     const messages: Anthropic.Beta.BetaMessageParam[] = turns.map(t => ({ role: t.role, content: t.text }));
     const usage = { input: 0, output: 0, cacheRead: 0 }, used: string[] = [];
     const system: Anthropic.Beta.BetaTextBlockParam[] = [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: `School: ${context.school}. The person asking is a ${context.role}${context.role === 'teacher' ? ' and sees only the classes assigned to them' : ''}. Today is ${context.weekday} ${context.today} (Africa/Accra).` }];
+      { type: 'text', text: `School: ${context.school}. The person asking is a ${context.role}${context.role === 'teacher' ? ' and sees only the classes assigned to them. Fees and other classes are available to the headteacher, who can ask here' : ''}. Today is ${context.weekday} ${context.today} (Africa/Accra).` }];
     const tools = this.tools.definitions(context.role);
     let reply = '', stop = '';
     for (let step = 0; step < MAX_STEPS; step++) {
