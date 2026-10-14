@@ -31,18 +31,19 @@ const Finance=lazyModule(()=>import('./modules/Finance'),'Finance');
 const GuardianStatement=lazyModule(()=>import('./modules/Finance'),'GuardianStatement');
 const Promotion=lazyModule(()=>import('./modules/Promotion'),'Promotion');
 const AiSettings=lazyModule(()=>import('./modules/AiSettings'),'AiSettings');
+const Assistant=lazyModule(()=>import('./modules/Assistant'),'Assistant');
 const Accounts=lazyModule(()=>import('./modules/Accounts'),'Accounts');
 const GettingStarted=lazyModule(()=>import('./modules/GettingStarted'),'GettingStarted');
 type NavItem={id:string;label:string;icon:string};
 const nav=(id:string,label:string,icon:string):NavItem=>({id,label,icon});
 const navByRole:Record<string,{group:string;items:NavItem[]}[]>={
   headteacher:[
-    {group:'Overview',items:[nav('today','Home','space_dashboard')]},
+    {group:'Overview',items:[nav('today','Home','space_dashboard'),nav('ask','Ask','forum')]},
     {group:'People',items:[nav('attendance','Attendance','event_available'),nav('learners','Learners','groups'),nav('guardians','Guardians','family_restroom'),nav('collection','Pickup','directions_walk')]},
     {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('early-years','Early years','child_care')]},
     {group:'Office',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign'),nav('promotion','Promotion','trending_up')]},
     {group:'Administration',items:[nav('settings','Settings','settings')]}],
-  teacher:[{group:'My work',items:[nav('today','Today','today'),nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('early-years','Early years','child_care')]}],
+  teacher:[{group:'My work',items:[nav('today','Today','today'),nav('ask','Ask','forum'),nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('early-years','Early years','child_care')]}],
   accountant:[{group:'Money',items:[nav('fees','Fees','receipt_long')]}],
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
   guardian:[{group:'My family',items:[nav('children','My children','child_care'),nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]}]
@@ -50,6 +51,7 @@ const navByRole:Record<string,{group:string;items:NavItem[]}[]>={
 // Page headers for modules that do not draw their own (the other pages do).
 const pageMeta:Record<string,{eyebrow:string;title:string;blurb:string}>={
   assessment:{eyebrow:'Teaching',title:'Assessment',blurb:'Class scores, terminal results and published report cards.'},
+  ask:{eyebrow:'Assistant',title:'Ask',blurb:'Plain-language questions about your school, answered from your own records.'},
   settings:{eyebrow:'Administration',title:'Settings',blurb:'Set up your school once, in this order. Daily pages stay for daily work.'},
 };
 type ModuleProps={schoolId:string;csrfToken:string;role:string};
@@ -180,6 +182,7 @@ function App() {
   const views:Record<string,()=>React.ReactNode>={
     today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} displayName={session.displayName} csrfToken={csrf}><AttendanceFollowUp key={`followup:${sid}`} schoolId={sid}/></GettingStarted>:<><SupportDue key={`support-due:${sid}`} schoolId={sid}/>{attendanceView}{teachingView}</>,
     attendance:()=>attendanceView,
+    ask:()=><Assistant key={`ask:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     collection:()=><Collection key={'collection:'+sid} schoolId={sid} csrfToken={csrf} role={role}/>,
     learners:()=><Admissions key={sid} schoolId={sid} csrfToken={csrf} role={role} view={role==='headteacher'?'work':undefined} initialTab={subId==='applications'?'applications':'roll'}/>,
     guardians:()=><Guardians key={`guardians:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
