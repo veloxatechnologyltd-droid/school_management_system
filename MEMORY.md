@@ -196,3 +196,8 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** At Evans's explicit request, 034 and then 035 were each previewed (only pending migration) and applied to Supabase, 035 before its code was pushed; a second preview reports all applied and `db:check:supabase` connects as `school_app`. Curriculum indicators (migration 035) are entered by each school with a source note and marked official or school; the platform ships no curriculum content. Gaps rank indicators by class average, each learner counted once.
 **Why:** Production refuses to start on an outdated ledger and Render auto-deploys main. Curriculum redistribution rights are unconfirmed and official codes are unverified (RESEARCH.md), so schools enter what they use.
 **What was rejected:** Bundling NaCCA indicators; per-grade indicator catalogues and coverage of untaught indicators in this slice; re-tagging existing assessments (assessments stay append-only).
+
+## 2026-10-14, Every feature is exercised on the demo school before it ships
+**What was decided:** Each new feature is added to the demo loader (`backend/scripts/demo-seed.ts`) and to the currently loaded `school_demo` school through the API (not by wiping it), then walked through in the browser as each affected role at desktop and phone width. Issues found are fixed before the commit is pushed, and the handoff lists them.
+**Why:** Evans wants realistic demo data to surface issues and errors; the support-plans walkthrough found five problems that the automated tests missed.
+**What was rejected:** Relying on backend and browser tests alone; loading feature data only into fresh demo resets.
