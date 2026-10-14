@@ -26,12 +26,13 @@ export function attentionFor(percents: number[]) {
 export class ProgressService {
   constructor(private readonly assessment: AssessmentService) {}
 
-  // Latest mark per learner for each assessment, as a percentage of its maximum.
-  private async marks(client: PoolClient, schoolId: string, where: string, params: unknown[]) {
+  // Latest mark per learner for each assessment, as a percentage of its maximum. Class work only unless asked:
+  // mock exams are kept apart from trends, the CA suggestion and gaps.
+  private async marks(client: PoolClient, schoolId: string, where: string, params: unknown[], withMocks = false) {
     return (await client.query(`SELECT a.id AS assessment_id,m.learner_id,a.subject_id,a.held_on::text,round(m.mark*100/a.max_mark,1)::float AS percent
       FROM class_assessments a JOIN LATERAL (SELECT DISTINCT ON (x.learner_id) x.learner_id,x.mark FROM class_assessment_marks x
         WHERE x.school_id=a.school_id AND x.assessment_id=a.id ORDER BY x.learner_id,x.created_at DESC,x.id DESC) m ON true
-      WHERE a.school_id=$1 AND ${where} ORDER BY a.held_on,a.created_at,a.id`,[schoolId,...params])).rows as Mark[];
+      WHERE a.school_id=$1 AND ${where} AND (${withMocks} OR a.kind<>'mock') ORDER BY a.held_on,a.created_at,a.id`,[schoolId,...params])).rows as Mark[];
   }
 
   create(client: PoolClient, actor: Actor, classId: string, body: ClassAssessmentDto) {
@@ -53,7 +54,7 @@ export class ProgressService {
 
   async list(client: PoolClient, actor: Actor, classId: string, termId: string, subjectId?: string) {
     await this.assessment.classFor(client,actor,classId);
-    const marks = await this.marks(client,actor.schoolId,'a.class_id=$2 AND a.term_id=$3',[classId,termId]);
+    const marks = await this.marks(client,actor.schoolId,'a.class_id=$2 AND a.term_id=$3',[classId,termId],true);
     const rows = (await client.query(`SELECT a.id,a.subject_id,s.name AS subject_name,a.kind,a.title,a.held_on::text,a.max_mark::float FROM class_assessments a JOIN subjects s ON s.school_id=a.school_id AND s.id=a.subject_id
       WHERE a.school_id=$1 AND a.class_id=$2 AND a.term_id=$3 AND ($4::uuid IS NULL OR a.subject_id=$4) ORDER BY a.held_on DESC,a.created_at DESC,a.id`,[actor.schoolId,classId,termId,subjectId ?? null])).rows;
     const tags = (await client.query(`SELECT x.assessment_id,i.id,i.code,i.description FROM class_assessment_indicators x JOIN curriculum_indicators i ON i.school_id=x.school_id AND i.id=x.indicator_id
@@ -227,7 +228,7 @@ export class ProgressService {
     const marks = (await client.query(`SELECT a.subject_id,a.held_on::text,a.term_id,t.academic_year_id,round(m.mark*100/a.max_mark,1)::float AS percent
       FROM class_assessments a JOIN terms t ON t.school_id=a.school_id AND t.id=a.term_id
       JOIN LATERAL (SELECT x.mark FROM class_assessment_marks x WHERE x.school_id=a.school_id AND x.assessment_id=a.id AND x.learner_id=$2 ORDER BY x.created_at DESC,x.id DESC LIMIT 1) m ON true
-      WHERE a.school_id=$1 ORDER BY a.held_on,a.created_at,a.id`,[actor.schoolId,learnerId])).rows as { subject_id: string; held_on: string; term_id: string; academic_year_id: string; percent: number }[];
+      WHERE a.school_id=$1 AND a.kind<>'mock' ORDER BY a.held_on,a.created_at,a.id`,[actor.schoolId,learnerId])).rows as { subject_id: string; held_on: string; term_id: string; academic_year_id: string; percent: number }[];
     const policy = await this.assessment.policy(client,actor.schoolId);
     const scores = (await client.query(`SELECT DISTINCT ON (term_id,subject_id,kind) term_id,subject_id,kind,score::float AS score FROM assessment_score_entries
       WHERE school_id=$1 AND learner_id=$2 ORDER BY term_id,subject_id,kind,created_at DESC,id DESC`,[actor.schoolId,learnerId])).rows as { term_id: string; subject_id: string; kind: string; score: number }[];

@@ -435,6 +435,21 @@ async function main() {
       }
     }
 
+    step('BECE mock exams for JHS 2 and JHS 3');
+    // Two mock rounds in every subject, entered as a teacher would from the results sheet; most learners improve a little.
+    if (addDays(TODAY, -21) >= current.start) for (const c of graded.filter(c => c.name === 'JHS 2' || c.name === 'JHS 3')) {
+      const teacher = await new Person(staff[3 + c.i]!.email).login();
+      for (const [round, heldOn] of [[1, addDays(TODAY, -21)], [2, addDays(TODAY, -6)]] as const) {
+        await teacher.post(`/assessment/classes/${c.id}/mocks`, { termId: current.id, title: `Mock ${round}`, heldOn, maxMark: 100, subjectIds });
+        const rounds = (await teacher.get(`/assessment/classes/${c.id}/mocks`)).rounds as { title: string; subjects: { assessmentId: string; subjectId: string }[] }[];
+        for (const sub of rounds.find(r => r.title === `Mock ${round}`)!.subjects) {
+          const s = subjectIds.indexOf(sub.subjectId);
+          await teacher.post(`/assessment/classes/${c.id}/assessments/${sub.assessmentId}/marks`, { marks: learners.filter(l => l.classIndex === c.i && chance(0.97))
+            .map(l => ({ learnerId: l.id, mark: Math.round(clamp(normal(l.ability + (s % 3 - 1) * 4 - 6 + round * 3, 9), 5, 99)) })) });
+        }
+      }
+    }
+
     console.log(`\n${SCHOOL_NAME} is ready: ${learners.length} learners in ${classes.length} classes, ${current.name} of ${Y}/${Y + 1}.`);
     console.log(`Sign in with any of these (password ${PASSWORD}):`);
     for (const [who, email] of [['Headteacher', `headteacher@${DOMAIN}`], ['Class teacher (JHS 3)', `teacher@${DOMAIN}`], ['Accountant', `accounts@${DOMAIN}`], ['Front desk', `frontdesk@${DOMAIN}`], ['Parent (two children)', `parent@${DOMAIN}`]]) console.log(`  ${who.padEnd(24)} ${email}`);

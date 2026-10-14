@@ -120,3 +120,11 @@ export class ResourceDto extends OperationDto {
   @IsOptional() @IsBoolean() forFamilies?: boolean;
 }
 export class SharingDto extends OperationDto { @IsBoolean() shareWithFamilies!: boolean; @IsOptional() @IsInt() @Min(1) version?: number; }
+// A mock exam round: one dated assessment per subject sharing the round's title.
+export class MockRoundDto extends OperationDto {
+  @IsUUID() termId!: string;
+  @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) title!: string;
+  @IsDateString({strict:true}) @date() heldOn!: string;
+  @IsNumber({maxDecimalPlaces:2}) @Min(1) @Max(1000) maxMark!: number;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @IsUUID('all',{each:true}) subjectIds!: string[];
+}

@@ -250,3 +250,29 @@ test('families always see published results; trends and home help only once the 
   assert.deepEqual((await call(route,'GET',undefined,guardian)).body.help,[],'closed plans drop off');
   await ok(`/assessment/indicator-resources/${homeSheet}/retire`,'POST',{reason:'Test clean-up'},teacher);
 });
+
+test('mock rounds sit apart from class work and show each learner\'s readiness without predicting grades',async()=>{
+  const science=(await call('/assessment/subjects')).body.items.find((s:any)=>s.name==='Science').id;
+  const before=JSON.stringify([(await call(`/assessment/classes/${cls}/progress?termId=${termId}`,'GET',undefined,teacher)).body,(await call(`/assessment/classes/${cls}/ca-suggestion?termId=${termId}&subjectId=${maths}`,'GET',undefined,teacher)).body,(await call(`/assessment/learners/${kids[2]}/progress?period=term`,'GET',undefined,teacher)).body]);
+  const route=`/assessment/classes/${cls}/mocks`;
+  assert.equal((await call(`/assessment/classes/${cls}/assessments`,'POST',{operationId:randomUUID(),termId,subjectId:maths,kind:'mock',title:'Sneaky mock',heldOn:shift(-2),maxMark:100},teacher)).status,400,'mocks only come in rounds');
+  assert.equal((await call(`/assessment/classes/${cls2}/mocks`,'POST',{operationId:randomUUID(),termId,title:'Mock 1',heldOn:shift(-20),maxMark:100,subjectIds:[maths]},teacher)).status,404);
+  await ok(route,'POST',{termId,title:'Mock 1',heldOn:shift(-20),maxMark:100,subjectIds:[maths,science]},teacher);
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),termId,title:'mock 1',heldOn:shift(-19),maxMark:100,subjectIds:[maths]},teacher)).status,409,'one round per title in a year');
+  await ok(route,'POST',{termId,title:'Mock 2',heldOn:shift(-3),maxMark:50,subjectIds:[maths,science]},teacher);
+  let r=(await call(route,'GET',undefined,teacher)).body;
+  assert.deepEqual(r.rounds.map((x:any)=>[x.title,x.subjects.length]),[['Mock 1',2],['Mock 2',2]]);
+  const id=(round:number,subject:string)=>r.rounds[round].subjects.find((s:any)=>s.subjectId===subject).assessmentId;
+  const marks:[number,string,number[]][]=[[0,maths,[70,55,40]],[0,science,[80,50,45]],[1,maths,[40,25,15]],[1,science,[42,30,24]]];
+  for(const [round,subject,values] of marks)await ok(`/assessment/classes/${cls}/assessments/${id(round,subject)}/marks`,'POST',{marks:kids.map((learnerId,i)=>({learnerId,mark:values[i]}))},teacher);
+  r=(await call(route,'GET',undefined,teacher)).body;
+  const by=(name:string)=>r.learners.find((l:any)=>l.fullName===name);
+  assert.deepEqual(by('Ama Steady').latest,{key:'mock 2',average:82,change:7,below:[],atRisk:false});
+  assert.deepEqual(by('Kojo Falling').latest,{key:'mock 2',average:55,change:2.5,below:[],atRisk:false});
+  assert.deepEqual(by('Esi Struggling').latest,{key:'mock 2',average:39,change:-3.5,below:['Mathematics','Science'],atRisk:true});
+  assert.equal(r.learners[0].fullName,'Esi Struggling','weakest first');
+  assert.deepEqual(r.summary.map((s:any)=>[s.key,s.sat,s.atRisk]),[['mock 1',3,1],['mock 2',3,1]]);
+  const after=JSON.stringify([(await call(`/assessment/classes/${cls}/progress?termId=${termId}`,'GET',undefined,teacher)).body,(await call(`/assessment/classes/${cls}/ca-suggestion?termId=${termId}&subjectId=${maths}`,'GET',undefined,teacher)).body,(await call(`/assessment/learners/${kids[2]}/progress?period=term`,'GET',undefined,teacher)).body]);
+  assert.equal(after,before,'trends, the CA suggestion and learner progress leave mocks out');
+  assert.equal((await call(`/assessment/classes/${cls}/assessments?termId=${termId}`,'GET',undefined,teacher)).body.items.filter((a:any)=>a.kind==='mock').length,4,'mocks still listed with the assessments');
+});

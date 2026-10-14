@@ -93,7 +93,7 @@ export class SupportService {
       FROM class_assessments a JOIN LATERAL (SELECT DISTINCT ON (y.learner_id) y.learner_id,y.mark FROM class_assessment_marks y
         WHERE y.school_id=a.school_id AND y.assessment_id=a.id AND y.learner_id=ANY($4::uuid[]) ORDER BY y.learner_id,y.created_at DESC,y.id DESC) m ON true
       LEFT JOIN class_assessment_indicators x ON x.school_id=a.school_id AND x.assessment_id=a.id
-      WHERE a.school_id=$1 AND a.class_id=ANY($2::uuid[]) AND a.subject_id=ANY($3::uuid[])
+      WHERE a.school_id=$1 AND a.class_id=ANY($2::uuid[]) AND a.subject_id=ANY($3::uuid[]) AND a.kind<>'mock'
       GROUP BY a.id,a.class_id,a.subject_id,a.held_on,a.max_mark,m.learner_id,m.mark`,
       [schoolId,[...new Set(plans.map(p => p.class_id))],[...new Set(plans.map(p => p.subject_id))],[...new Set(plans.flatMap(p => p.learners.map(l => l.id)))]])).rows as Mark[];
   }

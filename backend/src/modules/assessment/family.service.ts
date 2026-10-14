@@ -53,7 +53,7 @@ export class FamilyService {
     const marks = (await client.query(`SELECT s.name AS subject,a.term_id,a.held_on::text,round(m.mark*100/a.max_mark,1)::float AS percent FROM class_assessments a
       JOIN subjects s ON s.school_id=a.school_id AND s.id=a.subject_id
       JOIN LATERAL (SELECT x.mark FROM class_assessment_marks x WHERE x.school_id=a.school_id AND x.assessment_id=a.id AND x.learner_id=$2 ORDER BY x.created_at DESC,x.id DESC LIMIT 1) m ON true
-      WHERE a.school_id=$1 AND a.held_on>=$3 AND a.held_on<=$4 ORDER BY a.held_on,a.created_at,a.id`,[actor.schoolId,learnerId,addDays(today,-183),today])).rows as { subject: string; term_id: string; held_on: string; percent: number }[];
+      WHERE a.school_id=$1 AND a.kind<>'mock' AND a.held_on>=$3 AND a.held_on<=$4 ORDER BY a.held_on,a.created_at,a.id`,[actor.schoolId,learnerId,addDays(today,-183),today])).rows as { subject: string; term_id: string; held_on: string; percent: number }[];
     const months = [...new Set(marks.map(m => `${m.held_on.slice(0,7)}-01`))].sort();
     const names = [...new Set(marks.map(m => m.subject))].sort();
     const subjects = names.map(name => {

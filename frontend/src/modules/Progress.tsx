@@ -3,11 +3,12 @@ import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, Tabs, currentTerm, todayInAccra } from '../lib/ui';
 import { Plan, PlanDraft, SupportList, SupportPlanDialog, SupportPlanDrawer } from './Support';
 import { PracticeDialog } from './Practice';
+import { Mocks } from './Mocks';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
 type Term = { id: string; name: string; year_name: string; start_date: string; end_date: string };
-type ClassOption = { id: string; name: string; year_name: string };
+type ClassOption = { id: string; name: string; level?: string; year_name: string };
 type Assessment = { id: string; subject_id: string; subject_name: string; kind: string; title: string; held_on: string; max_mark: number; marked: number; average: number | null; indicators?: { id: string; code: string | null; description: string }[] };
 type Indicator = { id: string; grade: string | null; code: string | null; strand: string | null; sub_strand: string | null; description: string; retired_at: string | null };
 type Gap = { resources: number; indicatorId: string; subjectId: string; subject: string; code: string | null; strand: string | null; subStrand: string | null; description: string; assessments: number; learners: number; average: number | null; belowPass: number; belowShare: number | null; below: { learnerId: string; fullName: string; average: number }[] };
@@ -18,7 +19,7 @@ type LearnerProgress = { learner: { fullName: string; admissionNumber: string };
   subjects: { subjectId: string; name: string; points: { key: string; assessmentAverage: number | null; marks: number; termResult: number | null }[] }[] };
 
 const kinds = [['classwork', 'Class exercise'], ['homework', 'Homework'], ['quiz', 'Quiz'], ['class_test', 'Class test'], ['project', 'Project']] as const;
-const kindLabel = (kind: string) => kinds.find(([id]) => id === kind)?.[1] ?? kind;
+const kindLabel = (kind: string) => kind === 'mock' ? 'Mock exam' : kinds.find(([id]) => id === kind)?.[1] ?? kind;
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short' });
 const monthName = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', month: 'short', year: 'numeric' });
 const bucketLabel = (start: string, period: string) => period === 'month' ? monthName(start) : `Week of ${shortDate(start)}`;
@@ -31,7 +32,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const head = role === 'headteacher';
   const [subjects, setSubjects] = useState<Subject[]>([]); const [terms, setTerms] = useState<Term[]>([]); const [classes, setClasses] = useState<ClassOption[]>([]);
   const [classId, setClassId] = useState(''); const [termId, setTermId] = useState(''); const [subjectId, setSubjectId] = useState('');
-  const [tab, setTab] = useState<'assessments' | 'trends' | 'gaps' | 'support'>(initialTab === 'support' ? 'support' : 'trends');
+  const [tab, setTab] = useState<'assessments' | 'trends' | 'gaps' | 'support' | 'mocks'>(initialTab === 'support' ? 'support' : 'trends');
   // Support plans: every plan this person can see (for the due-review banner), and the ones shown on the Support tab.
   const [plans, setPlans] = useState<{ today: string; items: Plan[] } | null>(null); const [planScope, setPlanScope] = useState<'class' | 'school'>(head ? 'school' : 'class'); const [planStatus, setPlanStatus] = useState<'open' | 'closed'>('open');
   const [draft, setDraft] = useState<PlanDraft | null>(null); const [practiceFor, setPracticeFor] = useState(''); const [planId, setPlanId] = useState('');
@@ -95,6 +96,10 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const otherGrades = indicators.filter(i => !ownGrade(i)).length;
   const pickable = allGrades ? [...indicators].sort((a, b) => Number(ownGrade(b)) - Number(ownGrade(a))) : indicators.filter(ownGrade);
 
+  // Mock exams are a JHS matter (BECE preparation).
+  const isJhs = (classes.find(c => c.id === classId)?.level ?? 'JHS') === 'JHS';
+  useEffect(() => { if (!isJhs && tab === 'mocks') setTab('trends'); }, [isJhs, tab]);
+
   async function act(work: () => Promise<void>) {
     setBusy(true); setError(''); setMessage('');
     try { await work(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -135,7 +140,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
       <div className="toolbar">
         <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
         <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
-        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'trends', label: 'Trends' }, { id: 'gaps', label: 'Gaps' }, { id: 'support', label: `Support${plans ? ` (${plans.items.filter(p => !p.closed).length})` : ''}` }, { id: 'assessments', label: 'Assessments' }]}/>
+        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'trends', label: 'Trends' }, { id: 'gaps', label: 'Gaps' }, { id: 'support', label: `Support${plans ? ` (${plans.items.filter(p => !p.closed).length})` : ''}` }, { id: 'assessments', label: 'Assessments' }, ...(isJhs ? [{ id: 'mocks' as const, label: 'Mocks' }] : [])]}/>
       </div>
       {!classId || !termId ? (loaded && <Empty title={classes.length ? 'Choose a class and term' : 'No classes yet'} hint={classes.length ? undefined : head ? 'Add classes in Settings first.' : 'You have no class assigned today.'}/>)
         : tab === 'assessments' ? <>
@@ -144,7 +149,9 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
             : <div className="table-wrap"><table><thead><tr><th>Date</th><th>Assessment</th><th>Subject</th><th className="num">Marked</th><th>Class average</th><th/></tr></thead><tbody>
               {assessments.map(a => <tr key={a.id}><td>{shortDate(a.held_on)}</td><td>{a.title}<span className="sub">{kindLabel(a.kind)} · out of {a.max_mark}{a.indicators?.length ? ` · ${a.indicators.map(i => i.code ?? i.description).join(', ')}` : ''}</span></td><td>{a.subject_name}</td><td className="num">{a.marked}</td><td><Score value={a.average}/></td>
                 <td><button type="button" className="secondary" disabled={busy} onClick={() => void act(() => openMarks(a))}>Enter marks</button></td></tr>)}</tbody></table></div>}
-        </> : tab === 'support' ? <>
+        </> : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects}
+          onPlan={(id, subject, concern) => planFor({ subjectId: subject, learnerIds: [id], concern })}/>
+        : tab === 'support' ? <>
           <div className="toolbar"><Tabs label="Plan status" value={planStatus} onChange={setPlanStatus} options={[{ id: 'open', label: 'Open' }, { id: 'closed', label: 'Closed' }]}/>
             <Tabs label="Which classes" value={planScope} onChange={setPlanScope} options={[{ id: 'class', label: 'This class' }, { id: 'school', label: head ? 'Whole school' : 'All my classes' }]}/>
             <button type="button" className="secondary" disabled={!roster.length || !subjects.length} onClick={() => planFor({ subjectId: subjectId || subjects[0]!.id, learnerIds: [], concern: '' })}><Icon name="add"/>New plan</button></div>

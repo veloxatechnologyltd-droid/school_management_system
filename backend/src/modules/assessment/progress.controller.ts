@@ -2,12 +2,13 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@
 import { Request } from 'express';
 import { Access } from '../../core/access';
 import { ProgressService } from './progress.service';
-import { AddIndicatorsDto, AssessmentListQueryDto, CaSuggestionQueryDto, ClassAssessmentDto, ClassProgressQueryDto, GapsQueryDto, IndicatorQueryDto, LearnerProgressQueryDto, RecordMarksDto, ResourceDto, RetireIndicatorDto } from './assessment.dto';
+import { MocksService } from './mocks.service';
+import { AddIndicatorsDto, AssessmentListQueryDto, CaSuggestionQueryDto, ClassAssessmentDto, ClassProgressQueryDto, GapsQueryDto, IndicatorQueryDto, LearnerProgressQueryDto, RecordMarksDto, ResourceDto, RetireIndicatorDto, MockRoundDto } from './assessment.dto';
 
 const head = ['headteacher'], staff = ['headteacher','teacher'];
 @Controller('api/v1/schools/:schoolId')
 export class ProgressController {
-  constructor(private readonly access: Access, private readonly progress: ProgressService) {}
+  constructor(private readonly access: Access, private readonly progress: ProgressService, private readonly mocks: MocksService) {}
   @Get('assessment/classes/:classId/assessments')
   list(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: AssessmentListQueryDto) {
     return this.access.school(req,schoolId,staff,(client,actor) => this.progress.list(client,actor,classId,query.termId,query.subjectId));
@@ -63,5 +64,13 @@ export class ProgressController {
   @Post('assessment/indicator-resources/:resourceId/retire')
   retireResource(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('resourceId',new ParseUUIDPipe()) resourceId: string,@Body() body: RetireIndicatorDto) {
     return this.access.school(req,schoolId,staff,(client,actor) => this.progress.retireResource(client,actor,resourceId,body),true);
+  }
+  @Get('assessment/classes/:classId/mocks')
+  mockRounds(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.mocks.rounds(client,actor,classId));
+  }
+  @Post('assessment/classes/:classId/mocks')
+  createMockRound(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Body() body: MockRoundDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.mocks.createRound(client,actor,classId,body),true);
   }
 }
