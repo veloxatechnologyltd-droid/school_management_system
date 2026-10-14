@@ -84,7 +84,14 @@ export class MorningController {
           .filter(row => row.learners > 0 && (row.missing > 0 || (row.not_started && (row.level === 'Primary' || row.level === 'JHS'))));
         scores = {term:when.term_name,endsOn:when.term_end,daysLeft:when.days_left,classes};
       }
-      return {day,weekStart,open:when.open,registers,absences,fees,scores};
+      // Support plans whose review falls on or before the day and that are still open.
+      const support = (await client.query(`
+        SELECT p.id,c.name AS class_name,s.name AS subject_name,p.owner_name,coalesce(lr.next_review_date,p.first_review_date)::text AS review_date,
+          (SELECT count(*)::int FROM support_plan_learners x WHERE x.school_id=p.school_id AND x.plan_id=p.id) AS learners
+        FROM support_plans p JOIN class_sections c ON c.school_id=p.school_id AND c.id=p.class_id JOIN subjects s ON s.school_id=p.school_id AND s.id=p.subject_id
+        LEFT JOIN LATERAL (SELECT r.decision,r.next_review_date FROM support_plan_reviews r WHERE r.school_id=p.school_id AND r.plan_id=p.id ORDER BY r.created_at DESC,r.id DESC LIMIT 1) lr ON true
+        WHERE p.school_id=$1 AND lr.decision IS DISTINCT FROM 'close' AND coalesce(lr.next_review_date,p.first_review_date)<=$2 ORDER BY 5,c.name,p.id`,[schoolId,day])).rows;
+      return {day,weekStart,open:when.open,registers,absences,fees,scores,support};
     });
   }
 }

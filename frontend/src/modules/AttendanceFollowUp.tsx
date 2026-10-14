@@ -13,6 +13,7 @@ type Morning = {
   absences: Absent[];
   fees: { term: string; collectedPesewas: number; previous: { term: string; collectedPesewas: number } | null } | null;
   scores: { term: string; endsOn: string; daysLeft: number; classes: { class_id: string; name: string; missing: number; subjects: string[]; not_started: boolean }[] } | null;
+  support?: { id: string; class_name: string; subject_name: string; owner_name: string; review_date: string; learners: number }[];
 };
 type ClassOption = { id: string; name: string; level: string; year_name: string };
 type RosterLearner = { id: string; full_name: string; admission_number: string };
@@ -93,6 +94,8 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
       detail: week.previous ? `${cedis(week.previous.collectedPesewas)} in the same week of ${week.previous.term}` : `No earlier term to compare with`, href: '#/fees', go: 'Open fees' }] : []),
     ...(scoreGaps.length ? [{ icon: 'grading', tone: 'caution' as Tone, text: `${plural(scoreGaps.length, 'class is', 'classes are')} missing scores`,
       detail: `${morning!.scores!.term} ends ${morning!.scores!.daysLeft > 0 ? `in ${plural(morning!.scores!.daysLeft, 'day', 'days')}` : 'today'}: ${names(scoreGaps.map(c => c.not_started ? `${c.name} (none yet)` : `${c.name} (${c.subjects.join(', ')})`))}`, href: '#/assessment', go: 'Open scores' }] : []),
+    ...(morning?.support?.length ? [{ icon: 'event_upcoming', tone: 'caution' as Tone, text: `${plural(morning.support.length, 'support review is', 'support reviews are')} due`,
+      detail: names(morning.support.map(p => `${p.class_name} ${p.subject_name} (${p.owner_name})`)), href: '#/progress/support', go: 'Review plans' }] : []),
     ...(fees && fees.outstandingPesewas > 0 ? [{ icon: 'account_balance_wallet', tone: 'critical' as Tone, text: `${cedis(fees.outstandingPesewas)} in fees outstanding`, detail: `${Math.round(fees.outstandingPesewas / Math.max(fees.billedPesewas, 1) * 100)}% of the ${cedis(fees.billedPesewas)} billed for ${fees.term}`, href: '#/fees', go: 'Open fees' }] : []),
     ...(waiting ? [{ icon: 'how_to_reg', tone: 'info' as Tone, text: `${plural(waiting, 'admission is', 'admissions are')} waiting for a decision`, detail: 'New applications and applications under review.', href: '#/learners/applications', go: 'Review applications' }] : []),
   ];

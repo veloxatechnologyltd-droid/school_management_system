@@ -1,6 +1,7 @@
 import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, Tabs, currentTerm, todayInAccra } from '../lib/ui';
+import { Plan, PlanDraft, SupportList, SupportPlanDialog, SupportPlanDrawer } from './Support';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -8,10 +9,10 @@ type Term = { id: string; name: string; year_name: string; start_date: string; e
 type ClassOption = { id: string; name: string; year_name: string };
 type Assessment = { id: string; subject_id: string; subject_name: string; kind: string; title: string; held_on: string; max_mark: number; marked: number; average: number | null; indicators?: { id: string; code: string | null; description: string }[] };
 type Indicator = { id: string; code: string | null; strand: string | null; sub_strand: string | null; description: string; retired_at: string | null };
-type Gap = { indicatorId: string; subject: string; code: string | null; strand: string | null; subStrand: string | null; description: string; assessments: number; learners: number; average: number | null; belowPass: number; belowShare: number | null; below: { learnerId: string; fullName: string; average: number }[] };
+type Gap = { indicatorId: string; subjectId: string; subject: string; code: string | null; strand: string | null; subStrand: string | null; description: string; assessments: number; learners: number; average: number | null; belowPass: number; belowShare: number | null; below: { learnerId: string; fullName: string; average: number }[] };
 type RosterRow = { learnerId: string; fullName: string; left: boolean; mark: number | null };
 type ClassProgress = { buckets: string[]; overall: { start: string; average: number | null }[]; subjects: { subjectId: string; name: string; points: { start: string; average: number | null; marks: number }[] }[];
-  attention: { learnerId: string; fullName: string; subject: string; reason: 'dropping' | 'below_pass'; recent: number; earlier: number | null }[] };
+  attention: { learnerId: string; fullName: string; subjectId: string; subject: string; reason: 'dropping' | 'below_pass'; recent: number; earlier: number | null }[] };
 type LearnerProgress = { learner: { fullName: string; admissionNumber: string }; buckets: { key: string; label: string }[]; overall: { key: string; assessmentAverage: number | null }[];
   subjects: { subjectId: string; name: string; points: { key: string; assessmentAverage: number | null; marks: number; termResult: number | null }[] }[] };
 
@@ -25,11 +26,14 @@ const tone = (n: number | null) => n === null ? 'neutral' : n >= 70 ? 'positive'
 const Score = ({ value, sub }: { value: number | null; sub?: string }) => value === null ? <span className="muted">–</span>
   : <span className="trend-cell"><span className={`trend-value tone-${tone(value)}`}>{value}%</span><span className="trend-bar"><span className={`trend-fill fill-${tone(value)}`} style={{ width: `${Math.min(100, value)}%` }}/></span>{sub && <span className="sub">{sub}</span>}</span>;
 
-export function Progress({ schoolId, csrfToken, role }: { schoolId: string; csrfToken: string; role: string }) {
+export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: string; csrfToken: string; role: string; initialTab?: string }) {
   const head = role === 'headteacher';
   const [subjects, setSubjects] = useState<Subject[]>([]); const [terms, setTerms] = useState<Term[]>([]); const [classes, setClasses] = useState<ClassOption[]>([]);
   const [classId, setClassId] = useState(''); const [termId, setTermId] = useState(''); const [subjectId, setSubjectId] = useState('');
-  const [tab, setTab] = useState<'assessments' | 'trends' | 'gaps'>('trends');
+  const [tab, setTab] = useState<'assessments' | 'trends' | 'gaps' | 'support'>(initialTab === 'support' ? 'support' : 'trends');
+  // Support plans: every plan this person can see (for the due-review banner), and the ones shown on the Support tab.
+  const [plans, setPlans] = useState<{ today: string; items: Plan[] } | null>(null); const [planScope, setPlanScope] = useState<'class' | 'school'>(head ? 'school' : 'class'); const [planStatus, setPlanStatus] = useState<'open' | 'closed'>('open');
+  const [draft, setDraft] = useState<PlanDraft | null>(null); const [planId, setPlanId] = useState('');
   const [gaps, setGaps] = useState<{ items: Gap[]; untaggedAssessments: number } | null>(null);
   const [indicators, setIndicators] = useState<Indicator[]>([]); const [chosen, setChosen] = useState<string[]>([]); const [indicatorSearch, setIndicatorSearch] = useState('');
   const [assessments, setAssessments] = useState<Assessment[]>([]); const [progress, setProgress] = useState<ClassProgress | null>(null);
@@ -75,6 +79,14 @@ export function Progress({ schoolId, csrfToken, role }: { schoolId: string; csrf
     request<Page<Indicator>>(`/schools/${schoolId}/assessment/indicators?subjectId=${form.subjectId}`).then(r => { if (live) setIndicators(r.items.filter(i => !i.retired_at)); }).catch(e => { if (live) setError((e as Error).message); });
     return () => { live = false; }; }, [schoolId, creating, form.subjectId]);
 
+  const loadPlans = useCallback(async () => {
+    try { setPlans(await request<{ today: string; items: Plan[] }>(`/schools/${schoolId}/support-plans?status=all`)); } catch (e) { setError((e as Error).message); }
+  }, [schoolId]);
+  useEffect(() => { void loadPlans(); }, [loadPlans]);
+  const due = plans?.items.filter(p => p.due) ?? [];
+  const shownPlans = (plans?.items ?? []).filter(p => (planStatus === 'closed' ? p.closed : !p.closed) && (planScope === 'school' || p.class_id === classId));
+  const planFor = (d: PlanDraft) => { setMessage(''); setDraft(d); };
+
   async function act(work: () => Promise<void>) {
     setBusy(true); setError(''); setMessage('');
     try { await work(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -103,11 +115,13 @@ export function Progress({ schoolId, csrfToken, role }: { schoolId: string; csrf
     <PageHeader eyebrow="Teaching" title="Progress" blurb="Record class exercises, homework and tests as they happen, and follow each class and learner week by week."
       actions={<button disabled={!classId || !termId || !subjects.length} onClick={() => { setForm(f => ({ ...f, subjectId: f.subjectId || subjectId || subjects[0]?.id || '' })); setCreating(true); }}><Icon name="add"/>New assessment</button>}/>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
+    {due.length > 0 && <div className="banner"><Icon name="event_upcoming"/><span><strong>{due.length} support review{due.length === 1 ? ' is' : 's are'} due.</strong> Check whether each plan is working and record what happens next.</span>
+      <button type="button" className="secondary" onClick={() => { setPlanStatus('open'); setPlanScope(due.some(p => p.class_id !== classId) ? 'school' : 'class'); setTab('support'); }}>Review now</button></div>}
     <Card flush>
       <div className="toolbar">
         <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
         <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
-        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'trends', label: 'Trends' }, { id: 'gaps', label: 'Gaps' }, { id: 'assessments', label: 'Assessments' }]}/>
+        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'trends', label: 'Trends' }, { id: 'gaps', label: 'Gaps' }, { id: 'support', label: `Support${plans ? ` (${plans.items.filter(p => !p.closed).length})` : ''}` }, { id: 'assessments', label: 'Assessments' }]}/>
       </div>
       {!classId || !termId ? (loaded && <Empty title={classes.length ? 'Choose a class and term' : 'No classes yet'} hint={classes.length ? undefined : head ? 'Add classes in Settings first.' : 'You have no class assigned today.'}/>)
         : tab === 'assessments' ? <>
@@ -116,13 +130,19 @@ export function Progress({ schoolId, csrfToken, role }: { schoolId: string; csrf
             : <div className="table-wrap"><table><thead><tr><th>Date</th><th>Assessment</th><th>Subject</th><th className="num">Marked</th><th>Class average</th><th/></tr></thead><tbody>
               {assessments.map(a => <tr key={a.id}><td>{shortDate(a.held_on)}</td><td>{a.title}<span className="sub">{kindLabel(a.kind)} · out of {a.max_mark}{a.indicators?.length ? ` · ${a.indicators.map(i => i.code ?? i.description).join(', ')}` : ''}</span></td><td>{a.subject_name}</td><td className="num">{a.marked}</td><td><Score value={a.average}/></td>
                 <td><button type="button" className="secondary" disabled={busy} onClick={() => void act(() => openMarks(a))}>Enter marks</button></td></tr>)}</tbody></table></div>}
+        </> : tab === 'support' ? <>
+          <div className="toolbar"><Tabs label="Plan status" value={planStatus} onChange={setPlanStatus} options={[{ id: 'open', label: 'Open' }, { id: 'closed', label: 'Closed' }]}/>
+            <Tabs label="Which classes" value={planScope} onChange={setPlanScope} options={[{ id: 'class', label: 'This class' }, { id: 'school', label: head ? 'Whole school' : 'All my classes' }]}/>
+            <button type="button" className="secondary" disabled={!roster.length || !subjects.length} onClick={() => planFor({ subjectId: subjectId || subjects[0]!.id, learnerIds: [], concern: '' })}><Icon name="add"/>New plan</button></div>
+          {!plans ? <p className="muted card-body" role="status">Loading…</p> : <SupportList plans={shownPlans} today={plans.today} showClass={planScope === 'school'} onOpen={setPlanId}/>}
         </> : tab === 'gaps' ? <>
           <div className="toolbar"><label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">All subjects</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label><span className="count">Weakest first</span></div>
           {!gaps ? <p className="muted card-body" role="status">Loading…</p> : !gaps.items.length ? <Empty title="No indicators tested yet this term" hint={head ? 'Add your curriculum indicators in Settings, then tag them when creating assessments.' : 'Tag curriculum indicators when you create an assessment to see which ones the class has not mastered.'}/>
             : <div className="table-wrap"><table><thead><tr><th>Indicator</th><th>Class average</th><th>Below 50%</th><th>Learners below 50%</th></tr></thead><tbody>
               {gaps.items.map(g => <tr key={g.indicatorId}><td>{g.code && <strong>{g.code} </strong>}{g.description}<span className="sub">{[g.subject, g.strand, g.subStrand].filter(Boolean).join(' · ')} · {g.assessments} assessment{g.assessments === 1 ? '' : 's'}</span></td>
                 <td><Score value={g.average}/></td><td className="num">{g.belowPass} of {g.learners}{g.belowShare !== null && <span className="sub">{g.belowShare}%</span>}</td>
-                <td>{g.below.length ? <span className="chip-list">{g.below.map(b => <button key={b.learnerId} type="button" className="link-button" onClick={() => setLearnerId(b.learnerId)}>{b.fullName} ({b.average}%)</button>)}</span> : <span className="muted">None</span>}</td></tr>)}</tbody></table></div>}
+                <td>{g.below.length ? <><span className="chip-list">{g.below.map(b => <button key={b.learnerId} type="button" className="link-button" onClick={() => setLearnerId(b.learnerId)}>{b.fullName} ({b.average}%)</button>)}</span>
+                  <button type="button" className="secondary small" onClick={() => planFor({ subjectId: g.subjectId, indicatorId: g.indicatorId, indicatorLabel: g.code ?? g.description, learnerIds: g.below.map(b => b.learnerId), concern: `Below 50% on ${g.code ? `${g.code} ` : ''}${g.description} (class average ${g.average}%) across ${g.assessments} assessment${g.assessments === 1 ? '' : 's'} this term.` })}>Plan support for {g.below.length}</button></> : <span className="muted">None</span>}</td></tr>)}</tbody></table></div>}
           {gaps && gaps.untaggedAssessments > 0 && <p className="muted card-body">{gaps.untaggedAssessments} assessment(s) this term have no indicators tagged, so they are not counted here.</p>}
         </> : <>
           <div className="toolbar"><Tabs label="Group by" value={period} onChange={setPeriod} options={[{ id: 'week', label: 'Weekly' }, { id: 'month', label: 'Monthly' }]}/>
@@ -141,9 +161,11 @@ export function Progress({ schoolId, csrfToken, role }: { schoolId: string; csrf
       </div>
       <Card title="Needs attention" hint={`Last 3 marks in a subject average below 50%, or are 10 or more points below the learner's earlier marks this term.`} flush>
         {!attentionCount ? <Empty title="Nobody flagged" hint="Every learner with three or more marks is holding steady."/>
-          : <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Subject</th><th>Why</th><th>Recent</th><th>Earlier</th></tr></thead><tbody>
+          : <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Subject</th><th>Why</th><th>Recent</th><th>Earlier</th><th/></tr></thead><tbody>
             {progress.attention.map(a => <tr key={`${a.learnerId}:${a.subject}`}><td><button type="button" className="link-button" onClick={() => setLearnerId(a.learnerId)}>{a.fullName}</button></td><td>{a.subject}</td>
-              <td><Pill tone={a.reason === 'dropping' ? 'critical' : 'caution'}>{a.reason === 'dropping' ? 'Dropping' : 'Below 50%'}</Pill></td><td><Score value={a.recent}/></td><td><Score value={a.earlier}/></td></tr>)}</tbody></table></div>}
+              <td><Pill tone={a.reason === 'dropping' ? 'critical' : 'caution'}>{a.reason === 'dropping' ? 'Dropping' : 'Below 50%'}</Pill></td><td><Score value={a.recent}/></td><td><Score value={a.earlier}/></td>
+              <td>{plans?.items.some(p => !p.closed && p.subject_name === a.subject && p.learners.some(l => l.id === a.learnerId)) ? <Pill tone="info">Plan open</Pill>
+                : <button type="button" className="secondary small" onClick={() => planFor({ subjectId: a.subjectId, learnerIds: [a.learnerId], concern: a.reason === 'dropping' ? `${a.subject}: last 3 marks average ${a.recent}%, down from ${a.earlier}% earlier this term.` : `${a.subject}: last 3 marks average ${a.recent}%, below 50%.` })}>Plan support</button>}</td></tr>)}</tbody></table></div>}
       </Card>
     </>}
     {creating && <Dialog title="New assessment" onClose={() => setCreating(false)}>
@@ -167,6 +189,10 @@ export function Progress({ schoolId, csrfToken, role }: { schoolId: string; csrf
         <td><input type="number" min={0} max={marking.assessment.max_mark} step="0.5" aria-label={`${row.fullName} mark`} value={marks[row.learnerId] ?? (row.mark ?? '')} onChange={e => setMarks({ ...marks, [row.learnerId]: e.target.value })}/></td></tr>)}</tbody></table></div>
       <div className="actions"><button disabled={busy} onClick={saveMarks}>Save marks</button></div>
     </Dialog>}
+    {draft && <SupportPlanDialog schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} draft={draft} subjects={subjects} roster={roster} onClose={() => setDraft(null)}
+      onSaved={id => { setDraft(null); setMessage('Support plan started.'); void loadPlans(); setPlanId(id); }}/>}
+    {planId && <SupportPlanDrawer schoolId={schoolId} csrfToken={csrfToken} planId={planId} onClose={() => setPlanId('')} onChanged={() => void loadPlans()}
+      onFollowUp={({ classId: planClass, ...d }) => { setPlanId(''); if (planClass !== classId) setClassId(planClass); planFor(d); }}/>}
     {learnerId && <LearnerProgressDrawer schoolId={schoolId} learnerId={learnerId} onClose={() => setLearnerId('')}/>}
   </section>;
 }

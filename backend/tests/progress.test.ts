@@ -142,3 +142,57 @@ test('gaps rank the indicators a class was tested on, weakest first, with who is
   const listed=(await call(`/assessment/classes/${cls}/assessments?termId=${termId}`,'GET',undefined,teacher)).body.items.find((a:any)=>a.id===y.id);
   assert.deepEqual(listed.indicators.map((i:any)=>i.code),['P5.N.1','P5.N.3']);
 });
+
+const {evidenceFor}=require('../dist/modules/assessment/support.service');
+let planA:string,planB:string,planElsewhere:string;
+test('evidence compares each learner\'s marks before the plan and since, counting each learner once',()=>{
+  const plan={class_id:'c',subject_id:'s',indicator_id:null,start_date:'2026-10-05',learners:[{id:'a',full_name:'A'},{id:'b',full_name:'B'}]};
+  const m=(learner_id:string,held_on:string,percent:number,indicators:string[]=[])=>({class_id:'c',subject_id:'s',held_on,learner_id,percent,indicators});
+  const e=evidenceFor(plan,[m('b','2026-10-05',30),m('a','2026-09-28',40),m('a','2026-10-06',60),m('a','2026-10-20',70),m('b','2026-10-06',50),{...m('a','2026-10-06',99),subject_id:'other'}],'2026-10-10');
+  assert.deepEqual(e.learners.map((l:any)=>[l.before,l.since,l.change]),[[40,60,20],[30,50,20]],'start-day marks are before; later marks and other subjects ignored');
+  assert.deepEqual(e.group,{before:35,since:55,change:20,improved:2,dropped:0,compared:2});
+  assert.equal(evidenceFor({...plan,indicator_id:'i'},[m('a','2026-10-06',60,['i']),m('a','2026-10-07',10)],'2026-10-10').learners[0].since,60);
+});
+
+test('support plans name the learners, an owner and a review date; only the headteacher assigns other owners',async()=>{
+  const body={termId,subjectId:maths,learnerIds:[kids[1],kids[2]],concern:'Recent maths marks have fallen',action:'Small-group re-teaching of fractions twice a week',startDate:shift(-10),reviewDate:shift(4)};
+  const route=`/assessment/classes/${cls}/support-plans`;
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),...body},guardian)).status,403);
+  assert.equal((await call(`/assessment/classes/${cls2}/support-plans`,'POST',{operationId:randomUUID(),...body,learnerIds:[elsewhere]},teacher)).status,404);
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),...body,learnerIds:[elsewhere]},teacher)).status,404);
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),...body,reviewDate:shift(-10)},teacher)).status,400);
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),...body,startDate:shift(-60)},teacher)).status,400);
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),...body,ownerMembershipId:headM},teacher)).status,403);
+  const a=await ok(route,'POST',body,teacher);assert.equal(a.learners,2);planA=a.id;
+  const owners=(await call(`/support-plans/owners?classId=${cls}`)).body.items;
+  assert.equal(owners[0].membershipId,teacherM);assert.equal(owners[0].classTeacher,true);assert.ok(owners.some((o:any)=>o.membershipId===headM));
+  assert.deepEqual((await call(`/support-plans/owners?classId=${cls}`,'GET',undefined,teacher)).body.items.map((o:any)=>o.membershipId),[teacherM]);
+  planB=(await ok(route,'POST',{...body,learnerIds:[kids[2]],indicatorId:fractions,concern:'Below 50% on fractions',action:'Extra fractions practice at home',startDate:shift(-2),reviewDate:shift(0),ownerMembershipId:teacherM})).id;
+  planElsewhere=(await ok(`/assessment/classes/${cls2}/support-plans`,'POST',{...body,learnerIds:[elsewhere]})).id;
+  await assert.rejects(owner.query("UPDATE support_plans SET action='Changed' WHERE id=$1",[planA]),/append-only/);
+});
+
+test('teachers see plans for their classes; the review shows marks before and since, and a closed plan stays closed',async()=>{
+  const mine=(await call(`/support-plans`,'GET',undefined,teacher)).body;
+  assert.deepEqual(mine.items.map((p:any)=>p.id).sort(),[planA,planB].sort(),'not the other class');
+  assert.equal((await call(`/support-plans/${planElsewhere}`,'GET',undefined,teacher)).status,404);
+  assert.deepEqual(mine.items.map((p:any)=>[p.id,p.due]),[[planB,true],[planA,false]],'due first');
+  const a=(await call(`/support-plans/${planA}`,'GET',undefined,teacher)).body;
+  assert.deepEqual(a.evidence.learners.map((l:any)=>[l.fullName,l.before,l.since,l.change]),[['Esi Struggling',45,42,-3],['Kojo Falling',72.7,51.3,-21.4]]);
+  const b=(await call(`/support-plans/${planB}`,'GET',undefined,teacher)).body;
+  assert.deepEqual(b.evidence.learners.map((l:any)=>[l.before,l.since]),[[null,40]],'only fractions-tagged marks');
+  assert.equal(b.indicator_code,'P5.N.3');
+  const morning=(await call('/home/morning')).body;assert.deepEqual(morning.support.map((s:any)=>[s.id,s.learners]),[[planB,1]]);
+  const reviews=`/support-plans/${planB}/reviews`;
+  assert.equal((await call(reviews,'POST',{operationId:randomUUID(),outcome:'no_change',note:'Still struggling',decision:'continue'},teacher)).status,400,'continue needs a next date');
+  assert.equal((await call(reviews,'POST',{operationId:randomUUID(),outcome:'no_change',note:'Too early',decision:'continue',nextReviewDate:shift(7),reviewedOn:shift(-5)},teacher)).status,400,'before the plan began');
+  await ok(reviews,'POST',{outcome:'no_change',note:'Practising at home; marks not up yet',decision:'continue',nextReviewDate:shift(7)},teacher);
+  const after=(await call(`/support-plans/${planB}`,'GET',undefined,teacher)).body;
+  assert.equal(after.review_date,shift(7));assert.equal(after.due,false);assert.equal(after.reviews[0].evidence.learners[0].since,40,'evidence kept with the review');
+  assert.deepEqual((await call('/home/morning')).body.support,[]);
+  await ok(reviews,'POST',{outcome:'improved',note:'Fractions secure now',decision:'close'});
+  assert.equal((await call(reviews,'POST',{operationId:randomUUID(),outcome:'improved',note:'Again',decision:'close'},teacher)).status,409);
+  await assert.rejects(owner.query("INSERT INTO support_plan_reviews(id,school_id,plan_id,reviewed_on,outcome,note,decision,evidence,recorded_by) VALUES($1,$2,$3,$4,'improved','Direct','continue','{}',$5)",[randomUUID(),school,planB,shift(0),teacherM]),/closed|check/);
+  assert.deepEqual((await call('/support-plans?status=closed','GET',undefined,teacher)).body.items.map((p:any)=>p.id),[planB]);
+  assert.equal((await call(`/support-plans?classId=${cls2}`)).body.items.length,1,'head sees every class');
+});

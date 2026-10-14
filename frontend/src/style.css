@@ -198,3 +198,11 @@ tr.selected td{background:var(--accent-soft)}tbody tr.selected:hover td{backgrou
 .indicator-picker{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 12px;min-width:0}.indicator-picker legend{font-weight:600;font-size:13px;padding:0 4px}
 .indicator-options{display:grid;gap:6px;max-height:240px;overflow-y:auto;margin-top:6px}.indicator-options .check{display:flex;align-items:flex-start;gap:8px;margin:0;font-weight:500}.indicator-options .check input{width:auto;height:auto;margin-top:3px;flex:none}
 .chip-list{display:flex;flex-wrap:wrap;gap:4px 12px}
+.banner{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 16px;margin:0 0 16px;border-radius:14px;background:var(--caution-soft);color:var(--ink)}.banner>span:not(.icon){flex:1 1 240px}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 12px}.chip{height:30px;padding:0 12px;font-size:13px;font-weight:600;background:var(--sunken);color:var(--ink-2);border:1px solid var(--line);border-radius:999px}
+.field-row{display:flex;flex-wrap:wrap;gap:0 16px}.field-row>label{flex:1 1 160px}
+button.small{height:30px;padding:0 12px;font-size:13px;margin-top:6px}
+.plan-facts{display:grid;gap:8px;margin:12px 0}.plan-facts div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px}.plan-facts dt{font-weight:600;color:var(--ink-2)}.plan-facts dd{margin:0}
+.choice-row{border:0;padding:0;margin:0 0 12px;display:flex;flex-wrap:wrap;gap:6px 18px}.choice-row legend{font-weight:600;font-size:13px;margin-bottom:6px}.choice-row .check{display:flex;align-items:center;gap:6px;margin:0;font-weight:500}.choice-row input{width:auto;height:auto}
+.review-form{border-top:1px solid var(--line);margin-top:16px;padding-top:4px}
+.follow-up{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:8px 0}.follow-up button.small{margin-top:0}

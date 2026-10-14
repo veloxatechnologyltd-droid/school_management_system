@@ -87,3 +87,24 @@ export class AddIndicatorsDto extends OperationDto {
 export class RetireIndicatorDto extends OperationDto { @IsString() @MinLength(3) @MaxLength(300) @Matches(/\S.*\S/) reason!: string; }
 export class IndicatorQueryDto { @IsOptional() @IsUUID() subjectId?: string; }
 export class GapsQueryDto { @IsUUID() termId!: string; @IsOptional() @IsUUID() subjectId?: string; }
+// Support plans: who needs help in what, the agreed action, its owner and when it is reviewed.
+export class SupportPlanDto extends OperationDto {
+  @IsUUID() termId!: string;
+  @IsUUID() subjectId!: string;
+  @IsOptional() @IsUUID() indicatorId?: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(40) @IsUUID('all',{each:true}) learnerIds!: string[];
+  @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) concern!: string;
+  @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) action!: string;
+  @IsOptional() @IsUUID() ownerMembershipId?: string;
+  @IsDateString({strict:true}) @date() startDate!: string;
+  @IsDateString({strict:true}) @date() reviewDate!: string;
+}
+export class SupportReviewDto extends OperationDto {
+  @IsOptional() @IsDateString({strict:true}) @date() reviewedOn?: string;
+  @IsIn(['improved','no_change','worse']) outcome!: string;
+  @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) note!: string;
+  @IsIn(['continue','close']) decision!: string;
+  @IsOptional() @IsDateString({strict:true}) @date() nextReviewDate?: string;
+}
+export class SupportListQueryDto { @IsOptional() @IsUUID() classId?: string; @IsOptional() @IsUUID() termId?: string; @IsOptional() @IsIn(['open','closed','all']) status?: string; }
+export class OwnersQueryDto { @IsUUID() classId!: string; }

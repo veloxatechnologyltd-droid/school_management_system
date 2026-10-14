@@ -358,6 +358,28 @@ async function main() {
       });
     }
 
+    step('Support plans for learners who are behind');
+    // Built from what Progress flags: a group plan for the class's weakest topic (review overdue), one learner's plan reviewed
+    // once and continuing, and one that worked and was closed. Skipped in the first weeks of a term.
+    if (addDays(TODAY, -24) >= current.start) for (const c of graded.filter((_, n) => n % 3 === 1)) {
+      const teacher = await new Person(staff[3 + c.i]!.email).login();
+      const plan = (body: Record<string, unknown>) => teacher.post(`/assessment/classes/${c.id}/support-plans`, { termId: current.id, ...body });
+      const gap = (await teacher.get(`/assessment/classes/${c.id}/gaps?termId=${current.id}`)).items.find((g: { belowPass: number }) => g.belowPass >= 2);
+      if (gap) await plan({ subjectId: gap.subjectId, indicatorId: gap.indicatorId, learnerIds: gap.below.map((b: { learnerId: string }) => b.learnerId),
+        concern: `Below 50% on ${gap.description} (class average ${gap.average}%) across ${gap.assessments} assessments this term.`, action: 'Re-teach in a small group on Tuesdays and Thursdays. Extra practice exercises.', startDate: addDays(TODAY, -17), reviewDate: addDays(TODAY, -3) });
+      const flagged = (await teacher.get(`/assessment/classes/${c.id}/progress?termId=${current.id}&period=week`)).attention as { learnerId: string; subjectId: string; subject: string; reason: string; recent: number; earlier: number | null }[];
+      const concern = (a: typeof flagged[number]) => a.reason === 'dropping' ? `${a.subject}: last 3 marks average ${a.recent}%, down from ${a.earlier}% earlier this term.` : `${a.subject}: last 3 marks average ${a.recent}%, below 50%.`;
+      const [first, second] = flagged;
+      if (first) {
+        const p = await plan({ subjectId: first.subjectId, learnerIds: [first.learnerId], concern: concern(first), action: 'One-to-one help during break. Practice at home with the guardian.', startDate: addDays(TODAY, -17), reviewDate: addDays(TODAY, -7) });
+        await teacher.post(`/support-plans/${p.id}/reviews`, { reviewedOn: addDays(TODAY, -7), outcome: 'no_change', note: 'Attending the break sessions; guardian has started home practice. Too early to see a change.', decision: 'continue', nextReviewDate: addDays(TODAY, 7) });
+      }
+      if (second) {
+        const p = await plan({ subjectId: second.subjectId, learnerIds: [second.learnerId], concern: concern(second), action: 'Pair with a peer helper.', startDate: addDays(TODAY, -24), reviewDate: addDays(TODAY, -10) });
+        await teacher.post(`/support-plans/${p.id}/reviews`, { reviewedOn: addDays(TODAY, -10), outcome: 'improved', note: 'Working well with a peer helper and completing class exercises. Closing the plan.', decision: 'close' });
+      }
+    }
+
     console.log(`\n${SCHOOL_NAME} is ready: ${learners.length} learners in ${classes.length} classes, ${current.name} of ${Y}/${Y + 1}.`);
     console.log(`Sign in with any of these (password ${PASSWORD}):`);
     for (const [who, email] of [['Headteacher', `headteacher@${DOMAIN}`], ['Class teacher (JHS 3)', `teacher@${DOMAIN}`], ['Accountant', `accounts@${DOMAIN}`], ['Front desk', `frontdesk@${DOMAIN}`], ['Parent (two children)', `parent@${DOMAIN}`]]) console.log(`  ${who.padEnd(24)} ${email}`);
