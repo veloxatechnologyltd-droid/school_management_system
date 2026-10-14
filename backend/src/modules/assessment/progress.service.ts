@@ -1,9 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
-import { AddIndicatorsDto, ClassAssessmentDto, RecordMarksDto, RetireIndicatorDto } from './assessment.dto';
+import { AddIndicatorsDto, ClassAssessmentDto, RecordMarksDto, ResourceDto, RetireIndicatorDto } from './assessment.dto';
 import { AssessmentService, weightedTotal } from './assessment.service';
 
 type Mark = { assessment_id: string; learner_id: string; subject_id: string; held_on: string; percent: number };
@@ -150,6 +150,35 @@ export class ProgressService {
     });
   }
 
+  // Practice materials for an indicator, current ones first.
+  async resources(client: PoolClient, actor: Actor, indicatorId: string) {
+    const indicator = (await client.query('SELECT code,description,retired_at FROM curriculum_indicators WHERE school_id=$1 AND id=$2',[actor.schoolId,indicatorId])).rows[0];
+    if (!indicator) throw new NotFoundException('Indicator unavailable');
+    return {indicator,canRetireAny:actor.role === 'headteacher',items:(await client.query(`SELECT id,kind,title,detail,url,for_families,created_by=$3 AS mine,created_at,retired_at,retirement_reason FROM indicator_resources
+      WHERE school_id=$1 AND indicator_id=$2 ORDER BY retired_at IS NOT NULL,created_at,id`,[actor.schoolId,indicatorId,actor.membershipId])).rows};
+  }
+  addResource(client: PoolClient, actor: Actor, indicatorId: string, body: ResourceDto) {
+    return command(client,actor,body.operationId,'assessment.indicator_resource',{indicatorId,...body},async () => {
+      if (!(await client.query('SELECT 1 FROM curriculum_indicators WHERE school_id=$1 AND id=$2 AND retired_at IS NULL',[actor.schoolId,indicatorId])).rowCount) throw new NotFoundException('Indicator unavailable or retired');
+      if (!body.detail?.trim() && !body.url) throw new BadRequestException('Give the pages, instructions or a link');
+      const row = (await client.query(`INSERT INTO indicator_resources(id,school_id,indicator_id,kind,title,detail,url,for_families,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [randomUUID(),actor.schoolId,indicatorId,body.kind,body.title.trim(),body.detail?.trim() || null,body.url || null,body.forFamilies ?? false,actor.membershipId])).rows[0];
+      await audit(client,actor,'assessment.indicator_resource.added',row.id,{indicatorId,kind:body.kind});
+      return row;
+    });
+  }
+  // The headteacher, or whoever added it, may retire a practice material.
+  retireResource(client: PoolClient, actor: Actor, resourceId: string, body: RetireIndicatorDto) {
+    return command(client,actor,body.operationId,'assessment.indicator_resource.retire',{resourceId,...body},async () => {
+      const row = (await client.query('SELECT created_by,retired_at FROM indicator_resources WHERE school_id=$1 AND id=$2',[actor.schoolId,resourceId])).rows[0];
+      if (!row || row.retired_at) throw new NotFoundException('Practice material unavailable or already retired');
+      if (actor.role !== 'headteacher' && row.created_by !== actor.membershipId) throw new ForbiddenException('Only the headteacher or the person who added it can retire this');
+      await client.query('UPDATE indicator_resources SET retired_at=now(),retired_by=$3,retirement_reason=$4 WHERE school_id=$1 AND id=$2',[actor.schoolId,resourceId,actor.membershipId,body.reason.trim()]);
+      await audit(client,actor,'assessment.indicator_resource.retired',resourceId,{reason:body.reason.trim()});
+      return {retired:true};
+    });
+  }
+
   // Each indicator tested in the class this term, weakest first: the class average (each learner's average over the
   // indicator's assessments, every learner counting once) and who is below the pass line on it.
   async gaps(client: PoolClient, actor: Actor, classId: string, termId: string, subjectId?: string) {
@@ -170,6 +199,9 @@ export class ProgressService {
       return {indicatorId:i.id,subjectId:i.subject_id,subject:i.subject_name,code:i.code,strand:i.strand,subStrand:i.sub_strand,description:i.description,origin:i.origin,
         assessments:assessmentIds.size,learners:learners.length,average:mean(learners.map(l => l.average)),belowPass:below.length,belowShare:learners.length ? Math.round(below.length * 100 / learners.length) : null,below};
     }).filter(i => i.learners > 0).sort((a,b) => a.average! - b.average! || (a.code ?? '').localeCompare(b.code ?? ''));
+    const counts = new Map((await client.query('SELECT indicator_id,count(*)::int AS n FROM indicator_resources WHERE school_id=$1 AND indicator_id=ANY($2::uuid[]) AND retired_at IS NULL GROUP BY indicator_id',
+      [actor.schoolId,items.map(i => i.indicatorId)])).rows.map(r => [r.indicator_id as string,r.n as number]));
+    for (const item of items) (item as typeof item & { resources: number }).resources = counts.get(item.indicatorId) ?? 0;
     const tagged = new Set(links.map(l => l.assessment_id as string));
     const untagged = (await client.query('SELECT count(*)::int AS n FROM class_assessments WHERE school_id=$1 AND class_id=$2 AND term_id=$3 AND ($4::uuid IS NULL OR subject_id=$4)',[actor.schoolId,classId,termId,subjectId ?? null])).rows[0].n - tagged.size;
     return {items,untaggedAssessments:untagged};

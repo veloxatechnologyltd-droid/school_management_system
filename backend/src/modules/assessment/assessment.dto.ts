@@ -109,3 +109,11 @@ export class SupportReviewDto extends OperationDto {
 }
 export class SupportListQueryDto { @IsOptional() @IsUUID() classId?: string; @IsOptional() @IsUUID() termId?: string; @IsOptional() @IsIn(['open','closed','all']) status?: string; }
 export class OwnersQueryDto { @IsUUID() classId!: string; }
+// Practice materials for an indicator: a reference or link, never the material itself.
+export class ResourceDto extends OperationDto {
+  @IsIn(['worksheet','textbook','link','activity']) kind!: string;
+  @IsString() @MinLength(3) @MaxLength(160) @Matches(/\S.*\S/) title!: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(500) @Matches(/\S.*\S/) detail?: string;
+  @IsOptional() @IsString() @MaxLength(500) @Matches(/^https?:\/\/\S+$/,{message:'The link must start with http:// or https://'}) url?: string;
+  @IsOptional() @IsBoolean() forFamilies?: boolean;
+}

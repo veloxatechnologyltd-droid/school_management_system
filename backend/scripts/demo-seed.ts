@@ -346,6 +346,23 @@ async function main() {
       const added = (await head.get(`/assessment/indicators?subjectId=${subjectIds[s]}`)).items as { id: string; description: string }[];
       indicatorIds.push(list.map(([description]) => added.find(i => i.description === description)!.id));
     }
+    // Practice materials the school uses for the hardest topics; some are marked for families to use at home.
+    const practice: [number, string, { kind: string; title: string; detail?: string; url?: string; forFamilies?: boolean }[]][] = [
+      [1, 'Fractions', [{ kind: 'textbook', title: 'Class maths textbook: fractions chapter', detail: 'Exercises 1 to 4; check answers with a partner' },
+        { kind: 'activity', title: 'Fraction strips', detail: 'Fold paper strips into halves, quarters and eighths and compare them', forFamilies: true },
+        { kind: 'worksheet', title: 'Fractions practice sheet 1', url: 'https://example.org/sunrise/maths/fractions-sheet-1' }]],
+      [3, 'Map reading', [{ kind: 'activity', title: 'Map of the school compound', detail: 'Draw the compound with a key and a north arrow' },
+        { kind: 'activity', title: 'Map from home to school', detail: 'Draw the way to school and mark three landmarks', forFamilies: true }]],
+      [0, 'Composition writing', [{ kind: 'activity', title: 'Plan, write, check', detail: 'Plan three paragraphs, write, then a partner checks capitals, full stops and paragraphs' },
+        { kind: 'activity', title: 'Tell the story first', detail: 'Talk through what happened before writing it down', forFamilies: true }]],
+      [0, 'Grammar: tenses and agreement', [{ kind: 'textbook', title: 'English textbook: tenses unit', detail: 'Exercises A to C' }]],
+      [2, 'Energy and its forms', [{ kind: 'activity', title: 'Energy hunt', detail: 'List ten things at home that use energy and say which form', forFamilies: true }]],
+      [3, 'Governance and citizenship', [{ kind: 'worksheet', title: 'Who does what? Local and national government', url: 'https://example.org/sunrise/social/governance-sheet' }]],
+    ];
+    for (const [s, topic, items] of practice) {
+      const indicatorId = indicatorIds[s]![topics[s]!.findIndex(([d]) => d === topic)]!;
+      for (const r of items) await head.post(`/assessment/indicators/${indicatorId}/resources`, r);
+    }
     // A few grade-specific indicators too, so tagging shows a class its own grade first.
     for (const [subject, grade, items] of [[0, 'JHS 3', ['Argumentative essay writing', 'Summary writing', 'Letter writing: formal and informal']], [0, 'Basic 4', ['Reading aloud with expression', 'Using capital letters and full stops']],
       [1, 'Basic 5', ['Adding and subtracting decimals', 'Finding percentages of quantities']], [1, 'JHS 3', ['Solving linear equations', 'Simple and compound interest']]] as const)

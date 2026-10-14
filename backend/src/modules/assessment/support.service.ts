@@ -119,7 +119,8 @@ export class SupportService {
     const plan = await this.plan(client,actor,planId), today = todayInAccra();
     const reviews = (await client.query(`SELECT r.id,r.reviewed_on::text,r.outcome,r.note,r.decision,r.next_review_date::text,r.evidence,r.created_at,r.recorded_by
       FROM support_plan_reviews r WHERE r.school_id=$1 AND r.plan_id=$2 ORDER BY r.created_at,r.id`,[actor.schoolId,planId])).rows;
-    return {...plan,due:!plan.closed && plan.review_date <= today,today,evidence:evidenceFor(plan,await this.marksFor(client,actor.schoolId,[plan]),today),reviews};
+    const resources = plan.indicator_id ? (await client.query(`SELECT id,kind,title,detail,url,for_families FROM indicator_resources WHERE school_id=$1 AND indicator_id=$2 AND retired_at IS NULL ORDER BY created_at,id`,[actor.schoolId,plan.indicator_id])).rows : [];
+    return {...plan,due:!plan.closed && plan.review_date <= today,today,evidence:evidenceFor(plan,await this.marksFor(client,actor.schoolId,[plan]),today),reviews,resources};
   }
 
   review(client: PoolClient, actor: Actor, planId: string, body: SupportReviewDto) {

@@ -1,13 +1,14 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { request } from '../lib/api';
 import { Dialog, Empty, Pill, Tone, todayInAccra } from '../lib/ui';
+import { PracticeDialog, PracticeList, Resource } from './Practice';
 
 type Owner = { membershipId: string; name: string; classTeacher: boolean };
 type Evidence = { before: number | null; since: number | null; change: number | null; improved: number; dropped: number; compared: number };
-export type Plan = { id: string; class_id: string; class_name: string; subject_name: string; indicator_code: string | null; indicator_description: string | null; concern: string; action: string;
+export type Plan = { id: string; class_id: string; indicator_id: string | null; class_name: string; subject_name: string; indicator_code: string | null; indicator_description: string | null; concern: string; action: string;
   owner_name: string; start_date: string; review_date: string; closed: boolean; due: boolean; learners: { id: string; full_name: string }[]; evidence: Evidence };
 type Detail = Plan & { subject_id: string; indicator_id: string | null; evidence: { upTo: string; learners: { learnerId: string; fullName: string; before: number | null; beforeMarks: number; since: number | null; sinceMarks: number; change: number | null }[]; group: Evidence };
-  reviews: { id: string; reviewed_on: string; outcome: string; note: string; decision: string; next_review_date: string | null }[]; today: string };
+  reviews: { id: string; reviewed_on: string; outcome: string; note: string; decision: string; next_review_date: string | null }[]; today: string; resources: Resource[] };
 export type PlanDraft = { subjectId: string; indicatorId?: string; indicatorLabel?: string; learnerIds: string[]; concern: string };
 
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
@@ -54,7 +55,7 @@ export function SupportPlanDialog({ schoolId, csrfToken, classId, termId, draft,
 
 // One plan: the agreed action, each learner's marks before and since it began, earlier reviews, and the next review.
 export function SupportPlanDrawer({ schoolId, csrfToken, planId, onClose, onChanged, onFollowUp }: { schoolId: string; csrfToken: string; planId: string; onClose: () => void; onChanged: () => void; onFollowUp?: (draft: PlanDraft & { classId: string }) => void }) {
-  const [plan, setPlan] = useState<Detail | null>(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
+  const [plan, setPlan] = useState<Detail | null>(null); const [practice, setPractice] = useState(false); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
   const [review, setReview] = useState({ outcome: '', note: '', decision: 'continue', nextReviewDate: '' });
   const load = () => request<Detail>(`/schools/${schoolId}/support-plans/${planId}`).then(p => { setPlan(p);
     // Suggest the outcome the marks point to; the teacher decides.
@@ -70,6 +71,10 @@ export function SupportPlanDrawer({ schoolId, csrfToken, planId, onClose, onChan
     {plan && <>
       <p>{reviewPill(plan, today)} <span className="muted">{plan.class_name} · started {shortDate(plan.start_date)} · {plan.owner_name}</span></p>
       <dl className="plan-facts"><div><dt>Noticed</dt><dd>{plan.concern}</dd></div><div><dt>Action</dt><dd>{plan.action}</dd></div></dl>
+      {plan.indicator_id && <><h4>Practice for this topic</h4>
+        {plan.resources.length ? <PracticeList items={plan.resources}/> : <p className="muted">No practice materials recorded for this topic yet.</p>}
+        <p><button type="button" className="link-button" onClick={() => setPractice(true)}>{plan.resources.length ? 'Manage practice materials' : 'Add practice materials'}</button></p></>}
+      {practice && plan.indicator_id && <PracticeDialog schoolId={schoolId} csrfToken={csrfToken} indicatorId={plan.indicator_id} onClose={() => { setPractice(false); void load(); }}/>}
       <h4>Marks before the plan and since</h4>
       <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">Before</th><th className="num">Since</th><th className="num">Change</th></tr></thead><tbody>
         {plan.evidence.learners.map(l => <tr key={l.learnerId}><td>{l.fullName}</td><td className="num">{l.before === null ? '–' : `${l.before}%`}<span className="sub">{l.beforeMarks} mark{l.beforeMarks === 1 ? '' : 's'}</span></td>

@@ -205,3 +205,21 @@ test('indicators can name their grade; the grade is kept like the wording',async
   await assert.rejects(owner.query("UPDATE curriculum_indicators SET grade='Primary 5' WHERE id=$1",[p6.id]),/only be retired/);
   assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),subjectId:maths,origin:'official',sourceNote:'Too long grade',grade:'x'.repeat(41),items:[{description:'Anything at all'}]})).status,400);
 });
+
+test('practice materials are references or links per indicator; teachers add them, only the head or the adder retires them',async()=>{
+  const route=`/assessment/indicators/${fractions}/resources`;
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),kind:'textbook',title:'No pages given'},teacher)).status,400);
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),kind:'link',title:'Bad link',url:'drive.example/file'},teacher)).status,400);
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),kind:'video',title:'Wrong kind',detail:'Anything'},teacher)).status,400);
+  assert.equal((await call(route,'POST',{operationId:randomUUID(),kind:'textbook',title:'Pages',detail:'Bk 5 pp. 1-2'},guardian)).status,403);
+  const book=(await ok(route,'POST',{kind:'textbook',title:'Primary Maths Book 5',detail:'Pages 34 to 36, exercises 1 to 4',forFamilies:true},teacher)).id;
+  const sheet=(await ok(route,'POST',{kind:'worksheet',title:'Fractions practice sheet',url:'https://drive.example.com/fractions-1'})).id;
+  const list=(await call(route,'GET',undefined,teacher)).body.items;
+  assert.deepEqual(list.map((r:any)=>[r.title,r.for_families]),[['Primary Maths Book 5',true],['Fractions practice sheet',false]]);
+  assert.equal((await call(`/assessment/indicator-resources/${sheet}/retire`,'POST',{operationId:randomUUID(),reason:'Not mine to retire'},teacher)).status,403);
+  await ok(`/assessment/indicator-resources/${book}/retire`,'POST',{reason:'Replaced by the new edition'},teacher);
+  await assert.rejects(owner.query("UPDATE indicator_resources SET title='Changed' WHERE id=$1",[sheet]),/only be retired/);
+  const gap=(await call(`/assessment/classes/${cls}/gaps?termId=${termId}&subjectId=${maths}`,'GET',undefined,teacher)).body.items.find((g:any)=>g.code==='P5.N.3');
+  assert.equal(gap.resources,1,'retired materials are not counted');
+  assert.deepEqual((await call(`/support-plans/${planB}`,'GET',undefined,teacher)).body.resources.map((r:any)=>r.title),['Fractions practice sheet']);
+});

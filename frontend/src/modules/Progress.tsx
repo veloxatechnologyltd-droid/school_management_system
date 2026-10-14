@@ -2,6 +2,7 @@ import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'reac
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, Tabs, currentTerm, todayInAccra } from '../lib/ui';
 import { Plan, PlanDraft, SupportList, SupportPlanDialog, SupportPlanDrawer } from './Support';
+import { PracticeDialog } from './Practice';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -9,7 +10,7 @@ type Term = { id: string; name: string; year_name: string; start_date: string; e
 type ClassOption = { id: string; name: string; year_name: string };
 type Assessment = { id: string; subject_id: string; subject_name: string; kind: string; title: string; held_on: string; max_mark: number; marked: number; average: number | null; indicators?: { id: string; code: string | null; description: string }[] };
 type Indicator = { id: string; grade: string | null; code: string | null; strand: string | null; sub_strand: string | null; description: string; retired_at: string | null };
-type Gap = { indicatorId: string; subjectId: string; subject: string; code: string | null; strand: string | null; subStrand: string | null; description: string; assessments: number; learners: number; average: number | null; belowPass: number; belowShare: number | null; below: { learnerId: string; fullName: string; average: number }[] };
+type Gap = { resources: number; indicatorId: string; subjectId: string; subject: string; code: string | null; strand: string | null; subStrand: string | null; description: string; assessments: number; learners: number; average: number | null; belowPass: number; belowShare: number | null; below: { learnerId: string; fullName: string; average: number }[] };
 type RosterRow = { learnerId: string; fullName: string; left: boolean; mark: number | null };
 type ClassProgress = { classSize: number; buckets: string[]; overall: { start: string; average: number | null; learners: number }[]; subjects: { subjectId: string; name: string; points: { start: string; average: number | null; marks: number }[] }[];
   attention: { learnerId: string; fullName: string; subjectId: string; subject: string; reason: 'dropping' | 'below_pass'; recent: number; earlier: number | null }[] };
@@ -33,7 +34,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const [tab, setTab] = useState<'assessments' | 'trends' | 'gaps' | 'support'>(initialTab === 'support' ? 'support' : 'trends');
   // Support plans: every plan this person can see (for the due-review banner), and the ones shown on the Support tab.
   const [plans, setPlans] = useState<{ today: string; items: Plan[] } | null>(null); const [planScope, setPlanScope] = useState<'class' | 'school'>(head ? 'school' : 'class'); const [planStatus, setPlanStatus] = useState<'open' | 'closed'>('open');
-  const [draft, setDraft] = useState<PlanDraft | null>(null); const [planId, setPlanId] = useState('');
+  const [draft, setDraft] = useState<PlanDraft | null>(null); const [practiceFor, setPracticeFor] = useState(''); const [planId, setPlanId] = useState('');
   const [gaps, setGaps] = useState<{ items: Gap[]; untaggedAssessments: number } | null>(null);
   const [indicators, setIndicators] = useState<Indicator[]>([]); const [allGrades, setAllGrades] = useState(false); const [chosen, setChosen] = useState<string[]>([]); const [indicatorSearch, setIndicatorSearch] = useState('');
   const [assessments, setAssessments] = useState<Assessment[]>([]); const [progress, setProgress] = useState<ClassProgress | null>(null);
@@ -152,10 +153,18 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
           <div className="toolbar"><label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">All subjects</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label><span className="count">Weakest first</span></div>
           {!gaps ? <p className="muted card-body" role="status">Loading…</p> : !gaps.items.length ? <Empty title="No indicators tested yet this term" hint={head ? 'Add your curriculum indicators in Settings, then tag them when creating assessments.' : 'Tag curriculum indicators when you create an assessment to see which ones the class has not mastered.'}/>
             : <div className="table-wrap"><table><thead><tr><th>Indicator</th><th>Class average</th><th>Below 50%</th><th>Learners below 50%</th></tr></thead><tbody>
-              {gaps.items.map(g => <tr key={g.indicatorId}><td>{g.code && <strong>{g.code} </strong>}{g.description}<span className="sub">{[g.subject, g.strand, g.subStrand].filter(Boolean).join(' · ')} · {g.assessments} assessment{g.assessments === 1 ? '' : 's'}</span></td>
+              {gaps.items.map(g => <tr key={g.indicatorId}><td>{g.code && <strong>{g.code} </strong>}{g.description}<span className="sub">{[g.subject, g.strand, g.subStrand].filter(Boolean).join(' · ')} · {g.assessments} assessment{g.assessments === 1 ? '' : 's'}</span>
+                  <button type="button" className={g.resources ? 'secondary small' : 'link-button small-link'} onClick={() => setPracticeFor(g.indicatorId)}>{g.resources ? `Practice (${g.resources})` : 'Add practice'}</button></td>
                 <td><Score value={g.average}/></td><td className="num">{g.belowPass} of {g.learners}{g.belowShare !== null && <span className="sub">{g.belowShare}%</span>}</td>
                 <td>{g.below.length ? <><span className="chip-list">{g.below.map(b => <button key={b.learnerId} type="button" className="link-button" onClick={() => setLearnerId(b.learnerId)}>{b.fullName} ({b.average}%)</button>)}</span>
-                  <button type="button" className="secondary small" onClick={() => planFor({ subjectId: g.subjectId, indicatorId: g.indicatorId, indicatorLabel: g.code ?? g.description, learnerIds: g.below.map(b => b.learnerId), concern: `Below 50% on ${g.code ? `${g.code} ` : ''}${g.description} (class average ${g.average}%) across ${g.assessments} assessment${g.assessments === 1 ? '' : 's'} this term.` })}>Plan support for {g.below.length}</button></> : <span className="muted">None</span>}</td></tr>)}</tbody></table></div>}
+                  {(() => {
+                    // Learners already in an open plan for this topic in this class are not offered again.
+                    const open = plans?.items.filter(p => !p.closed && p.class_id === classId && p.indicator_id === g.indicatorId) ?? [];
+                    const covered = new Set(open.flatMap(p => p.learners.map(l => l.id))), rest = g.below.filter(b => !covered.has(b.learnerId));
+                    return <span className="row-actions">{open.length > 0 && <button type="button" className="link-button small-link" onClick={() => setPlanId(open[0]!.id)}>Plan open for {g.below.length - rest.length}</button>}
+                      {rest.length > 0 && <button type="button" className="secondary small" onClick={() => planFor({ subjectId: g.subjectId, indicatorId: g.indicatorId, indicatorLabel: g.code ?? g.description, learnerIds: rest.map(b => b.learnerId),
+                        concern: `Below 50% on ${g.code ? `${g.code} ` : ''}${g.description} (class average ${g.average}%) across ${g.assessments} assessment${g.assessments === 1 ? '' : 's'} this term.` })}>Plan support for {rest.length}{open.length ? ' more' : ''}</button>}</span>;
+                  })()}</> : <span className="muted">None</span>}</td></tr>)}</tbody></table></div>}
           {gaps && gaps.untaggedAssessments > 0 && <p className="muted card-body">{gaps.untaggedAssessments} assessment(s) this term have no indicators tagged, so they are not counted here.</p>}
         </> : <>
           <div className="toolbar"><Tabs label="Group by" value={period} onChange={setPeriod} options={[{ id: 'week', label: 'Weekly' }, { id: 'month', label: 'Monthly' }]}/>
@@ -208,6 +217,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
       onSaved={id => { setDraft(null); setMessage('Support plan started.'); void loadPlans(); setPlanId(id); }}/>}
     {planId && <SupportPlanDrawer schoolId={schoolId} csrfToken={csrfToken} planId={planId} onClose={() => setPlanId('')} onChanged={() => void loadPlans()}
       onFollowUp={({ classId: planClass, ...d }) => { setPlanId(''); if (planClass !== classId) setClassId(planClass); planFor(d); }}/>}
+    {practiceFor && <PracticeDialog schoolId={schoolId} csrfToken={csrfToken} indicatorId={practiceFor} onClose={() => setPracticeFor('')} onChanged={() => void load()}/>}
     {learnerId && <LearnerProgressDrawer schoolId={schoolId} learnerId={learnerId} onClose={() => setLearnerId('')}/>}
   </section>;
 }

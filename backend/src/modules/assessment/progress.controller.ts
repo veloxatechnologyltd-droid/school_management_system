@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@
 import { Request } from 'express';
 import { Access } from '../../core/access';
 import { ProgressService } from './progress.service';
-import { AddIndicatorsDto, AssessmentListQueryDto, CaSuggestionQueryDto, ClassAssessmentDto, ClassProgressQueryDto, GapsQueryDto, IndicatorQueryDto, LearnerProgressQueryDto, RecordMarksDto, RetireIndicatorDto } from './assessment.dto';
+import { AddIndicatorsDto, AssessmentListQueryDto, CaSuggestionQueryDto, ClassAssessmentDto, ClassProgressQueryDto, GapsQueryDto, IndicatorQueryDto, LearnerProgressQueryDto, RecordMarksDto, ResourceDto, RetireIndicatorDto } from './assessment.dto';
 
 const head = ['headteacher'], staff = ['headteacher','teacher'];
 @Controller('api/v1/schools/:schoolId')
@@ -51,5 +51,17 @@ export class ProgressController {
   @Get('assessment/classes/:classId/gaps')
   gaps(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: GapsQueryDto) {
     return this.access.school(req,schoolId,staff,(client,actor) => this.progress.gaps(client,actor,classId,query.termId,query.subjectId));
+  }
+  @Get('assessment/indicators/:indicatorId/resources')
+  resources(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('indicatorId',new ParseUUIDPipe()) indicatorId: string) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.progress.resources(client,actor,indicatorId));
+  }
+  @Post('assessment/indicators/:indicatorId/resources')
+  addResource(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('indicatorId',new ParseUUIDPipe()) indicatorId: string,@Body() body: ResourceDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.progress.addResource(client,actor,indicatorId,body),true);
+  }
+  @Post('assessment/indicator-resources/:resourceId/retire')
+  retireResource(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('resourceId',new ParseUUIDPipe()) resourceId: string,@Body() body: RetireIndicatorDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.progress.retireResource(client,actor,resourceId,body),true);
   }
 }

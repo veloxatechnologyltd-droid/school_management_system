@@ -207,3 +207,6 @@ button.small{height:30px;padding:0 12px;font-size:13px;margin-top:6px}
 .review-form{border-top:1px solid var(--line);margin-top:16px;padding-top:4px}
 .follow-up{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:8px 0}.follow-up button.small{margin-top:0}
 .flag-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}.flag-list li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.flag-subject{font-weight:600;min-width:120px}.flag-list button.small{margin-top:0;height:26px}
+.practice-list{list-style:none;margin:8px 0;padding:0;display:grid;gap:8px}.practice-list li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.practice-list li>span:not(.pill){flex:1 1 200px;min-width:0}.practice-list button.small{margin-top:0}
+.small-link{display:block;font-size:13px;font-weight:600;margin-top:6px;color:var(--accent-text)}.row-actions{display:flex;flex-wrap:wrap;gap:6px}.row-actions button.small{margin-top:0}
+.practice-list .sub{display:block;font-size:12px;color:var(--ink-3);font-weight:500;margin-top:2px}

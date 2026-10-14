@@ -1,6 +1,7 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, Pill } from '../lib/ui';
+import { PracticeDialog } from './Practice';
 
 type Subject = { id: string; name: string };
 type Indicator = { id: string; grade: string | null; code: string | null; strand: string | null; sub_strand: string | null; description: string; origin: 'official' | 'local'; source_note: string; retired_at: string | null; retirement_reason: string | null };
@@ -22,7 +23,7 @@ export function Curriculum({ schoolId, csrfToken }: { schoolId: string; csrfToke
   const [subjects, setSubjects] = useState<Subject[]>([]); const [subjectId, setSubjectId] = useState('');
   const [items, setItems] = useState<Indicator[]>([]); const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ origin: 'official', sourceNote: '', grade: '', lines: '' });
-  const [gradeFilter, setGradeFilter] = useState('');
+  const [gradeFilter, setGradeFilter] = useState(''); const [practiceFor, setPracticeFor] = useState('');
   const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const send = (path: string, body: object) => request(`/schools/${schoolId}${path}`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), ...body }) });
 
@@ -65,8 +66,9 @@ export function Curriculum({ schoolId, csrfToken }: { schoolId: string; csrfToke
           {shown.map(i => <tr key={i.id} className={i.retired_at ? 'muted' : undefined}><td>{i.grade ?? 'Any'}</td><td>{i.code ?? '–'}</td>
             <td>{i.description}{(i.strand || i.sub_strand) && <span className="sub">{[i.strand, i.sub_strand].filter(Boolean).join(' · ')}</span>}{i.retired_at && <span className="sub">Retired: {i.retirement_reason}</span>}</td>
             <td><Pill tone={i.origin === 'official' ? 'info' : 'neutral'}>{i.origin === 'official' ? 'Official' : 'School'}</Pill><span className="sub">{i.source_note}</span></td>
-            <td>{!i.retired_at && <button type="button" className="secondary" disabled={busy} onClick={() => retire(i)}>Retire</button>}</td></tr>)}</tbody></table></div>}
+            <td>{!i.retired_at && <div className="row-actions"><button type="button" className="secondary small" onClick={() => setPracticeFor(i.id)}>Practice</button><button type="button" className="secondary small" disabled={busy} onClick={() => retire(i)}>Retire</button></div>}</td></tr>)}</tbody></table></div>}
     </Card>
+    {practiceFor && <PracticeDialog schoolId={schoolId} csrfToken={csrfToken} indicatorId={practiceFor} onClose={() => setPracticeFor('')}/>}
     {adding && <Dialog title={`Add indicators · ${subjects.find(s => s.id === subjectId)?.name ?? ''}`} wide onClose={() => setAdding(false)}>
       <form onSubmit={add}>
         <label>Where these come from<select value={form.origin} onChange={e => setForm({ ...form, origin: e.target.value })}><option value="official">Official curriculum (codes as published)</option><option value="local">The school's own (scheme of work, local additions)</option></select></label>
