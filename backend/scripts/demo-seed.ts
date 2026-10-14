@@ -450,6 +450,18 @@ async function main() {
       }
     }
 
+    step('End-of-term remarks stage for JHS 2, and AI drafting switched on');
+    // JHS 2 has its exams entered but reports not yet published, the point where the class teacher writes remarks; a few are written already.
+    // AI drafting is on for the school; without a Claude key on the server, teachers get the template drafts.
+    await head.call('PUT', '/ai/settings', { enabled: true, monthlyRunCap: 200, acknowledgement: 'Sunrise board and PTA approved AI drafting under the school data-protection notice (demo school)' });
+    const jhs2 = graded.find(c => c.name === 'JHS 2');
+    if (jhs2) {
+      await scoreTerm(current, ['exam'], [jhs2]);
+      const teacher = await new Person(staff[3 + jhs2.i]!.email).login();
+      await teacher.post(`/assessment/classes/${jhs2.id}/remarks`, { termId: current.id, author: 'class_teacher', items: learners.filter(l => l.classIndex === jhs2.i).slice(0, 4)
+        .map((l, k) => ({ learnerId: l.id, conduct: ['Very good', 'Good', 'Respectful', 'Good'][k], interest: ['Football', 'Reading', 'Music', 'Drawing'][k], remark: ['A focused learner who helps others.', 'Works steadily; keep reading every day.', 'Polite and hardworking.', 'Shows good effort in class.'][k] })) });
+    }
+
     console.log(`\n${SCHOOL_NAME} is ready: ${learners.length} learners in ${classes.length} classes, ${current.name} of ${Y}/${Y + 1}.`);
     console.log(`Sign in with any of these (password ${PASSWORD}):`);
     for (const [who, email] of [['Headteacher', `headteacher@${DOMAIN}`], ['Class teacher (JHS 3)', `teacher@${DOMAIN}`], ['Accountant', `accounts@${DOMAIN}`], ['Front desk', `frontdesk@${DOMAIN}`], ['Parent (two children)', `parent@${DOMAIN}`]]) console.log(`  ${who.padEnd(24)} ${email}`);

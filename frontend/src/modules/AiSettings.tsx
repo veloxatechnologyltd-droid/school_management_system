@@ -22,7 +22,7 @@ export function AiSettings({ schoolId, csrfToken }: { schoolId: string; csrfToke
   if (!settings) return error ? <p role="alert">{error}</p> : null;
   return <section aria-label="AI assistance settings">
     <h2>AI drafting assistance</h2>
-    <p className="muted">When switched on, teachers can ask for a suggested draft of a Nursery/KG progress note. The suggestion uses only that child's recorded observations with no names, is checked before it is shown, and is never saved or shared without a teacher's edit and your approval. It is off unless you enable it.</p>
+    <p className="muted">When switched on, teachers can ask Claude (Anthropic's AI) to draft three things: Nursery/KG progress notes from a child's observations, the class teacher's remark on Primary/JHS report cards from the computed results, and short practice worksheets for a curriculum indicator. No names, admission numbers or marks are sent; every draft is checked before it is shown, and nothing is saved or shared until a teacher edits it and the usual approvals happen. It is off unless you enable it.</p>
     {!settings.platformEnabled && <p className="muted">The platform administrator has not switched AI on yet, so teachers currently receive a simple template draft only.</p>}
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <form onSubmit={save}>

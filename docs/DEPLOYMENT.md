@@ -27,7 +27,7 @@ The API refuses to start in production if the database ledger is behind `backend
 | `MFA_ENCRYPTION_KEY` | Long random secret used to encrypt authenticator secrets (required in production; back it up — losing it forces MFA re-enrolment). `MFA_REQUIRED` defaults to on in production |
 | `MFA_REQUIRED=false` | Pilot decision (Evans, 2026-09-29): schools sign in with the temporary password they must change at first login; authenticator MFA and SMS OTP are configured later with each school. Note this also makes the platform administrator password-only, so use a long unique password for that account |
 | `SMS_SEND_ENABLED` | Leave **unset** for the pilot start: notices are approved and shown in the guardian app, and SMS deliveries are recorded as "SMS switched off". To enable later set `SMS_SEND_ENABLED=true`, `SMS_PROVIDERS=arkesel,moolre`, `SMS_SENDER_ID`, `ARKESEL_API_KEY`/`MOOLRE_API_KEY`, and test each adapter with a sandbox number first (they have not been run against a live provider) |
-| `AI_ENABLED` | Leave **unset** for the pilot start (AI off) |
+| `AI_ENABLED` | Leave **unset** for the pilot start (AI off). To enable (Evans chose Claude, 2026-10-14): `AI_ENABLED=true`, `ANTHROPIC_API_KEY`, optionally `AI_MODEL` (default `claude-haiku-5-5`); run `npm run ai:eval -w backend` with the key first, and each school still switches AI on in Settings with its acknowledgement |
 
 Never put the `postgres` administrator URL on the API host. It is only used from Evans's machine for `db:migrate:supabase` and `platform-admin`.
 

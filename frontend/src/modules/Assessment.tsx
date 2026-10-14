@@ -33,6 +33,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const [grid, setGrid] = useState<GridRow[]>([]); const [edits, setEdits] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Result[]>([]);
   const [remarks, setRemarks] = useState<Remark[]>([]); const [remarkEdits, setRemarkEdits] = useState<Record<string, string>>({});
+  const [remarkRun, setRemarkRun] = useState<{ runId: string; drafts: Record<string, string> } | null>(null); const [remarkNote, setRemarkNote] = useState('');
   const [printing, setPrinting] = useState<{ id: string; snapshot: Snapshot }[] | null>(null);
   const [printLevel, setPrintLevel] = useState('');
   const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
@@ -67,7 +68,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const remarksRequest = useRef(0);
   const loadRemarks = useCallback(async () => {
     const current = ++remarksRequest.current;
-    setRemarks([]); setRemarkEdits({});
+    setRemarks([]); setRemarkEdits({}); setRemarkRun(null); setRemarkNote('');
     if (!classId || !termId || view === 'setup') return;
     try { const items = (await request<{ items: Remark[] }>(`/schools/${schoolId}/assessment/classes/${classId}/remarks?termId=${termId}`)).items; if (current === remarksRequest.current) setRemarks(items); }
     catch (e) { if (current === remarksRequest.current) setError((e as Error).message); }
@@ -114,7 +115,19 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     if (!teacherItems.length && !headItems.length) throw new Error('Nothing has changed.');
     if (teacherItems.length) await send(`/assessment/classes/${classId}/remarks`, 'POST', { termId, author: 'class_teacher', items: teacherItems });
     if (headItems.length) await send(`/assessment/classes/${classId}/remarks`, 'POST', { termId, author: 'headteacher', items: headItems });
+    // How the drafted remarks were used (kept as is or edited) is logged for the AI review; the remark text itself is not.
+    if (remarkRun) { const kept = Object.entries(remarkRun.drafts).filter(([id]) => teacherItems.some(i => i.learnerId === id));
+      if (kept.length) void request(`/schools/${schoolId}/ai/runs/${remarkRun.runId}/feedback`, { method: 'POST', headers, body: JSON.stringify({ outcome: kept.every(([id, text]) => teacherItems.find(i => i.learnerId === id)?.remark === text) ? 'accepted' : 'edited' }) }).catch(() => undefined);
+      setRemarkRun(null); }
     await loadRemarks(); setMessage('Report card remarks saved.');
+  });
+  // Drafts the class teacher's remark for learners who have none yet, from the computed results; nothing is saved until the teacher saves.
+  const suggestRemarks = () => void act(async () => {
+    const r = await request<{ runId: string; source: string; note: string | null; items: { learnerId: string; remark: string }[] }>(`/schools/${schoolId}/ai/report-remarks-draft`, { method: 'POST', headers, body: JSON.stringify({ classId, termId }) });
+    const empty = r.items.filter(i => !(remarkEdits[`${i.learnerId}:teacherRemark`] ?? '').trim());
+    setRemarkEdits(prior => ({ ...prior, ...Object.fromEntries(empty.map(i => [`${i.learnerId}:teacherRemark`, i.remark])) }));
+    setRemarkRun({ runId: r.runId, drafts: Object.fromEntries(empty.map(i => [i.learnerId, i.remark])) });
+    setRemarkNote(`Drafted ${empty.length} remark(s) ${r.source === 'ai' ? 'with Claude' : 'from the results (AI drafting is off, so these are simple template remarks)'}. Read and edit each one, then save.${r.note?.startsWith('partial') ? ' Some use the simple template because the AI draft did not pass the checks.' : ''}`);
   });
   const openReportCards = () => void act(async () => {
     const r = await request<{ items: { id: string; snapshot: Snapshot }[] }>(`/schools/${schoolId}/assessment/classes/${classId}/reports?termId=${termId}`);
@@ -164,12 +177,14 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     {results.length > 0 && <><h3>Results preview</h3><ul className="history">{results.map(r => <li key={r.learnerId}><strong>{r.fullName}{r.position ? ` · position ${r.position}` : ''}</strong><span>{r.complete ? `Average ${r.average}` : 'Missing scores'} · {r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</span></li>)}</ul>
       <button disabled={busy} onClick={publish}>Publish terminal reports</button></>}
     {remarks.length > 0 && <Card title="Report card remarks" hint={head ? 'Class teachers fill conduct, attitude, interest and their remark; you add the headteacher\'s remark. Locked once the report is published.' : 'Conduct, attitude, interest and your remark for each learner. Locked once the report is published.'} flush>
-      <div className="table-wrap"><table><thead><tr><th>Learner</th>{remarkFields.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead><tbody>
-        {remarks.map(row => <tr key={row.learnerId}><td>{row.fullName}{row.locked && <> <Pill>published</Pill></>}</td>{remarkFields.map(([field, label]) => {
+      {remarkNote && <p role="status" className="card-body">{remarkNote}</p>}
+      <div className="table-wrap"><table className="remarks-table"><thead><tr><th>Learner</th>{remarkFields.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead><tbody>
+        {remarks.map(row => <tr key={row.learnerId}><td>{row.fullName}{row.locked && <> <Pill>published</Pill></>}{remarkRun?.drafts[row.learnerId] !== undefined && <> <Pill tone="info">draft, not saved</Pill></>}</td>{remarkFields.map(([field, label]) => {
           const key = `${row.learnerId}:${field}`, readOnly = row.locked || (field === 'headRemark' && !head);
-          return <td key={field}>{readOnly ? (row[field] ?? '–') : <input aria-label={`${row.fullName} ${label}`} maxLength={field.endsWith('emark') ? 300 : 120} value={remarkEdits[key] ?? row[field] ?? ''} onChange={e => setRemarkEdits({ ...remarkEdits, [key]: e.target.value })}/>}</td>;
+          const long = field.endsWith('emark'), props = { 'aria-label': `${row.fullName} ${label}`, maxLength: long ? 300 : 120, value: remarkEdits[key] ?? row[field] ?? '', onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setRemarkEdits({ ...remarkEdits, [key]: e.target.value }) };
+          return <td key={field} className={long ? 'remark-cell' : undefined}>{readOnly ? (row[field] ?? '–') : long ? <textarea rows={4} {...props}/> : <input {...props}/>}</td>;
         })}</tr>)}</tbody></table></div>
-      <div className="actions card-actions"><button disabled={busy} onClick={saveRemarks}>Save remarks</button><button className="secondary" disabled={busy} onClick={openReportCards}>Report cards</button></div>
+      <div className="actions card-actions"><button disabled={busy} onClick={saveRemarks}>Save remarks</button>{remarks.some(r => !r.locked && !r.teacherRemark) && <button className="secondary" disabled={busy} onClick={suggestRemarks}><Icon name="auto_awesome"/>Suggest remarks</button>}<button className="secondary" disabled={busy} onClick={openReportCards}>Report cards</button></div>
     </Card>}
     {printing && <Dialog title="Report cards" wide onClose={() => setPrinting(null)}>
       <div className="actions"><button type="button" onClick={() => window.print()}>Print all ({printing.length})</button></div>

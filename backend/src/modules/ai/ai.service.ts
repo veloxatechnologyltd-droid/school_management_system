@@ -42,13 +42,26 @@ export class AiService {
     const inputs = await this.reports.draftInputs(client,actor,body);
     const facts = factsFrom(inputs.observations);
     if (!facts.some(fact => fact.status === 'observed')) throw new ConflictException('There are no observed entries in this period to draft from');
-    const settings = await this.settings(client,actor.schoolId);
-    let note: string | null = null;
-    if (!settings.platformEnabled) note = 'ai_disabled_platform';
-    else if (!settings.enabled) note = 'ai_disabled_school';
-    else if (!settings.providerConfigured) note = 'no_provider';
-    else if (settings.runsThisMonth >= settings.monthlyRunCap) note = 'monthly_cap_reached';
+    const note = await this.gate(client,actor.schoolId);
     return {facts,level:inputs.level,classId:inputs.classId,useAi:note === null,note};
+  }
+  // Why the model may not be used right now (null = it may): platform kill switch, school switch, provider key, monthly cap.
+  async gate(client: PoolClient, schoolId: string): Promise<string | null> {
+    const settings = await this.settings(client,schoolId);
+    if (!settings.platformEnabled) return 'ai_disabled_platform';
+    if (!settings.enabled) return 'ai_disabled_school';
+    if (!settings.providerConfigured) return 'no_provider';
+    if (settings.runsThisMonth >= settings.monthlyRunCap) return 'monthly_cap_reached';
+    return null;
+  }
+  // The provider for a run that passed the gate (scripted in tests).
+  providerFor() { return this.provider(); }
+  // Append-only run log: IDs, digest, tokens and outcome; never the prompt or the generated text.
+  async logRun(client: PoolClient, actor: Actor, run: {feature:string;templateVersion:string;provider:string;model:string | null;source:'ai' | 'template';status:'ok' | 'fallback';sourceRefs:object;digest:string;inputTokens:number | null;outputTokens:number | null;latencyMs:number;note:string | null}) {
+    const id = randomUUID();
+    await client.query('INSERT INTO ai_runs(id,school_id,actor_membership_id,feature,template_version,provider,model,source,status,source_refs,output_digest,input_tokens,output_tokens,latency_ms,note) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)',
+      [id,actor.schoolId,actor.membershipId,run.feature,run.templateVersion,run.provider,run.model,run.source,run.status,JSON.stringify(run.sourceRefs),run.digest,run.inputTokens,run.outputTokens,run.latencyMs,run.note]);
+    return id;
   }
 
   // Phase 2 (no database transaction is held while waiting for the provider).

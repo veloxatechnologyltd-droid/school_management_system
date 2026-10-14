@@ -101,6 +101,6 @@ test('OpenAI adapter sends a JSON-mode chat request and parses content and usage
     assert.deepEqual(out,{text:'{"ok":true}',inputTokens:11,outputTokens:7});
     globalThis.fetch=(async()=>new Response('{}',{status:429})) as any;await assert.rejects(provider.complete({system:'s',user:'u',maxTokens:10}),/429/);
   }finally{globalThis.fetch=realFetch;}
-  assert.equal(configuredProvider({}),null);assert.equal(configuredProvider({OPENAI_API_KEY:'k'}).name,'openai');assert.equal(configuredProvider({OPENAI_API_KEY:'k',AI_MODEL:'gpt-x'}).model,'gpt-x');
+  assert.equal(configuredProvider({}),null);assert.equal(configuredProvider({AI_PROVIDER:'openai',OPENAI_API_KEY:'k'}).name,'openai');assert.equal(configuredProvider({AI_PROVIDER:'openai',OPENAI_API_KEY:'k',AI_MODEL:'gpt-x'}).model,'gpt-x');
   assert.equal(configuredProvider({AI_PROVIDER:'anthropic',ANTHROPIC_API_KEY:'k'}).name,'anthropic');assert.equal(configuredProvider({AI_PROVIDER:'anthropic',OPENAI_API_KEY:'k'}),null);
 });

@@ -4,7 +4,7 @@ export const draftTemplateVersion = 'early-years-draft-v1';
 export interface ObservationFact { observationId: string; date: string; area: string; indicator: string; status: 'observed' | 'not_observed'; descriptor: string | null; evidence: string | null }
 export interface Draft { strengths: string; nextSteps: string; citations: string[] }
 
-const banned = /\b(autis\w*|adhd|dyslex\w*|disorder\w*|diagnos\w*|syndrome|disabilit\w*|delayed|retard\w*|behind (his|her|their) peers|rank\w*|position \d+|score of|\d+\s?%|better than|worse than|compared (to|with) (other|his|her))\b/i;
+export const banned = /\b(autis\w*|adhd|dyslex\w*|disorder\w*|diagnos\w*|syndrome|disabilit\w*|delayed|retard\w*|behind (his|her|their) peers|rank\w*|position \d+|score of|\d+\s?%|better than|worse than|compared (to|with) (other|his|her))\b/i;
 const clip = (text: string | null, max: number) => text === null ? null : text.replace(/[\r\n]+/g, ' ').slice(0, max);
 
 export function factsFrom(observations: any[]): ObservationFact[] {

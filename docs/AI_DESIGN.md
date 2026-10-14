@@ -1,6 +1,6 @@
 # AI layer — implementation design
 
-Status: first feature implemented locally (see "What exists"). Everything else is planned. Follows [ARCHITECTURE.md §5](ARCHITECTURE.md); this file adds the concrete design. No real child data has been sent to any model provider.
+Status: provider is Claude (Evans, 2026-10-14). Three features implemented locally (see "What exists"); the rest are planned. Follows [ARCHITECTURE.md §5](ARCHITECTURE.md); this file adds the concrete design. No real child data has been sent to any model provider.
 
 ## 1. Principles (unchanged from the architecture)
 
@@ -15,11 +15,12 @@ Status: first feature implemented locally (see "What exists"). Everything else i
 | # | Feature | Who | Grounding | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Nursery/KG report remarks from observations | Teacher → head approves | The child's observations for the period, with citations | **Implemented** |
-| 2 | Terminal report comments (Primary/JHS) from computed results + attendance | Class teacher → head | `AssessmentService.results` snapshot | Next |
+| 2 | Terminal report comments (Primary/JHS) from computed results + attendance | Class teacher → head | `AssessmentService.results` snapshot | **Implemented** |
 | 3 | Column mapping and date clean-up for CSV onboarding | Head/front desk | Uploaded headers/sample rows (no learner names sent) | Planned |
 | 4 | Guardian-friendly explanation of an approved report or fee statement, English/Twi | Head sends after review | Published snapshot only | Planned (needs notices) |
 | 5 | Head's "attention today" summary | Head | `attendance/follow-up` + `repeated-absence` output | Planned; the deterministic list already exists, AI only phrases it |
 | 6 | Lesson-plan drafts aligned to the school's supplied curriculum | Teacher | School-supplied curriculum text only (rights confirmed first) | Planned |
+| 7 | Practice worksheet for one curriculum indicator (4–6 questions, teacher answers, a home tip) | Teacher | The indicator as the school recorded it; no learner data | **Implemented** |
 
 Out of scope: direct child chat, automated grading of pupil work, any decision about a child.
 
@@ -40,7 +41,7 @@ teacher/head request ──▶ AiController ──▶ authorize (same rules as t
                                                                    (submit → head approve → publish)
 ```
 
-- **Provider seam** (`ai.provider.ts`): `complete({system,user,maxTokens})`. Adapters: `OpenAiProvider` (Chat Completions, JSON mode, default `gpt-4o-mini` for cost; the pilot provider), `AnthropicProvider` (Messages API), and the deterministic local template (no network). `AI_PROVIDER` picks one; `AI_MODEL` overrides the model. A future provider is one class. No automatic fallback to an *unapproved* provider; the only fallback is the local template.
+- **Provider seam** (`ai.provider.ts`): `complete({system,user,maxTokens})`. Adapters: `AnthropicProvider` (Claude Messages API, default `claude-haiku-5-5` for cost; the chosen provider and the default), `OpenAiProvider` (kept, used only if `AI_PROVIDER=openai` is set deliberately), and the deterministic local template (no network). `AI_PROVIDER` picks one; `AI_MODEL` overrides the model. A future provider is one class. No automatic fallback to an *unapproved* provider; the only fallback is the local template.
 - **Permissions**: the AI endpoints reuse the report/assessment authorization (assigned teacher for the class and period, or headteacher). Facts are built inside the same transaction and RLS context as any other read, so cross-school access is impossible by construction.
 - **Minimisation**: the prompt contains no names, admission numbers, guardian data or school name. The child is "the child". Only the period's observations (learning area, indicator, status, descriptor, evidence) are sent. Evidence is free text written by teachers; it is passed inside a delimited data block, length-capped, and labelled as untrusted.
 - **Output contract**: JSON `{strengths, nextSteps, citations[]}`; `citations` must be a non-empty subset of the observation IDs supplied. Anything else, or text matching the banned list (diagnostic/medical labels, scores, rankings, comparisons with other children), is rejected and replaced by the template draft with `status='fallback'`.
@@ -73,4 +74,13 @@ Zero successful unauthorised retrievals or actions is required. After any model,
 
 ## 6. What exists (2026-09-29)
 
-Migration 025; `backend/src/modules/ai/*`; endpoints `GET/PUT /schools/:id/ai/settings`, `POST /schools/:id/ai/early-years/report-draft`, `POST /schools/:id/ai/runs/:runId/feedback`; UI "Suggest a draft" on the Nursery/KG report form; `npm run ai:eval`. The OpenAI and Anthropic adapters are unit-tested against a stubbed HTTP endpoint only; neither has been run against the live API. Before real data: confirm OpenAI's current data-usage/retention terms for the API (no training on inputs, retention window, region) in writing, and run `npm run ai:eval -w backend` with a key.
+Migration 025; `backend/src/modules/ai/*`; endpoints `GET/PUT /schools/:id/ai/settings`, `POST /schools/:id/ai/early-years/report-draft`, `POST /schools/:id/ai/runs/:runId/feedback`; UI "Suggest a draft" on the Nursery/KG report form; `npm run ai:eval`. The OpenAI and Anthropic adapters are unit-tested against a stubbed HTTP endpoint only; neither has been run against the live API. Claude is now the provider (§7).
+
+## 7. Report remarks and worksheets (2026-10-14)
+
+Provider: Claude, chosen by Evans. Endpoints `POST /schools/:id/ai/report-remarks-draft` (`classId`, `termId`, optional `learnerIds`) and `POST /schools/:id/ai/indicators/:indicatorId/worksheet-draft`. Both reuse the gate (kill switch, school switch, key, monthly cap), the three-phase flow (no transaction held during the call), the run log (`assessment.report-remarks`, `practice.worksheet`; IDs, digest, tokens, no text) and feedback.
+
+- **Remarks**: authorization is `AssessmentService.results` (assigned class teacher or head). By default only unpublished learners without a class teacher's remark and with at least one subject total. Learners go as `L1…`, subjects as `S1…` with the grade-band word only (no marks, positions or names); attendance as regular/fair/irregular; the teacher's conduct/interest text as untrusted data. Batches of 10 learners per call. Each remark is checked per learner: 20–300 characters, no digits, no he/she/his/her, no diagnosis/ranking/comparison words, every cited subject belongs to the learner, each "strength" is at or above the pass line and above every "focus" subject, and no other school subject is named. A failed learner gets the deterministic template remark (best subjects ≥70, weakest below 50, attendance word). Drafts fill the remark boxes marked "draft, not saved"; saving is the ordinary remarks command.
+- **Worksheets**: only the indicator (subject, class/grade, code, strand, sub-strand, wording) is sent. 3–8 questions, answers of equal number, numbered questions ≤500 characters so the reviewed sheet saves as an ordinary practice material; labelling language refused. Fallback is an outline for the teacher to complete. The home tip can be added as a family activity; "Print sheet" prints the questions without answers.
+
+Not yet run against the live Claude API (no key on the development machine). Before real data: confirm Anthropic's commercial API terms in writing (no training on API inputs by default, retention window), set `ANTHROPIC_API_KEY`, and run `npm run ai:eval -w backend`.
