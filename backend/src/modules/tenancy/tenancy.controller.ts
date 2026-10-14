@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch
 import { IsInt, IsOptional, IsString, MaxLength, Min, MinLength, Matches } from 'class-validator';
 import { Request } from 'express';
 import { randomUUID } from 'node:crypto';
-import { Access } from '../../core/access';
+import { Access, isReadOnlySchool } from '../../core/access';
 import { PageDto } from '../learners/learners.dto';
 class SchoolDto {
   @IsString() @MinLength(3) @MaxLength(120) @Matches(/\S.{1,}\S/) name!: string;
@@ -19,7 +19,7 @@ export class TenancyController {
   school(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string) {
     return this.access.school(req,schoolId,null,async (client,actor) => {
       const result = await client.query('SELECT id,name,address,phone,motto,version FROM schools WHERE id=$1',[schoolId]);
-      return {...result.rows[0],role:actor.role};
+      return {...result.rows[0],role:actor.role,...(isReadOnlySchool(schoolId) ? {readOnly:true} : {})};
     });
   }
   @Patch()

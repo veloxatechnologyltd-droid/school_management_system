@@ -4,7 +4,7 @@ import { Request, Response } from 'express';
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { Database } from '../../core/database';
-import { Access, digest, sessionToken } from '../../core/access';
+import { Access, READ_ONLY_MESSAGE, digest, isReadOnlySchool, sessionToken } from '../../core/access';
 import { decryptSecret, encryptSecret, hashRecovery, newRecoveryCodes, newSecret, verifyTotp } from '../../core/totp';
 import { normalizeGhanaPhone } from '../notices/sms.provider';
 const scryptAsync = promisify(scrypt) as (password: string, salt: string, length: number) => Promise<Buffer>;
@@ -97,11 +97,18 @@ export class IdentityController {
         mfaRequired:identity.mfa_required as boolean,mfaEnrolled:Boolean(mfa?.confirmed_at),mfaVerified:Boolean(identity.mfa_verified_at)};
     });
   }
+  // People who belong to a read-only demo school cannot change their own password (visitors share these logins).
+  private async refuseIfDemoMember(client: import('pg').PoolClient, userId: string) {
+    if (!process.env.READ_ONLY_SCHOOL_IDS) return;
+    const rows = (await client.query('SELECT school_id FROM memberships WHERE user_id=$1 AND revoked_at IS NULL',[userId])).rows as {school_id:string}[];
+    if (rows.some(row => isReadOnlySchool(row.school_id))) throw new ForbiddenException({message:READ_ONLY_MESSAGE,code:'READ_ONLY_DEMO'});
+  }
   @Post('change-password')
   async changePassword(@Req() req: Request,@Body() body: ChangePasswordDto) {
     if (body.newPassword === body.currentPassword) throw new BadRequestException('Choose a password different from the current one');
     await this.db.transaction(async client => {
       const identity = await this.access.identity(client,req,true,true,true);
+      await this.refuseIfDemoMember(client,identity.user_id);
       const current = (await client.query('SELECT password_hash FROM users WHERE id=$1',[identity.user_id])).rows[0].password_hash as string;
       const [salt,hash] = current.split(':');
       if (!timingSafeEqual(await scryptAsync(body.currentPassword,salt,64),Buffer.from(hash,'hex'))) throw new UnauthorizedException('Current password was not accepted');
@@ -114,6 +121,7 @@ export class IdentityController {
   async mfaSetup(@Req() req: Request) {
     return this.db.transaction(async client => {
       const identity = await this.access.identity(client,req,true,true,true);
+      await this.refuseIfDemoMember(client,identity.user_id);
       if (!identity.mfa_required) throw new BadRequestException('Your role does not use a second sign-in step');
       const existing = (await client.query('SELECT confirmed_at FROM user_mfa WHERE user_id=$1',[identity.user_id])).rows[0];
       if (existing?.confirmed_at) throw new ConflictException('A second sign-in step is already set up');
@@ -127,6 +135,7 @@ export class IdentityController {
   async mfaConfirm(@Req() req: Request,@Body() body: CodeDto) {
     return this.db.transaction(async client => {
       const identity = await this.access.identity(client,req,true,true,true);
+      await this.refuseIfDemoMember(client,identity.user_id);
       const row = (await client.query('SELECT secret_ciphertext,confirmed_at,last_used_step,locked_until FROM user_mfa WHERE user_id=$1 FOR UPDATE',[identity.user_id])).rows[0];
       if (!row || row.confirmed_at) throw new ConflictException('Start the setup first');
       const step = verifyTotp(decryptSecret(row.secret_ciphertext),body.code,Number(row.last_used_step));

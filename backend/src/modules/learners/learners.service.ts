@@ -11,7 +11,11 @@ export class LearnersService {
     const search=`%${(page.search??'').trim().replace(/[\\%_]/g,'\\$&')}%`;
     const filter="a.school_id=$1 AND (a.full_name ILIKE $2 ESCAPE '\\' OR a.admission_number ILIKE $2 ESCAPE '\\')";
     const total=Number((await client.query(`SELECT count(*) FROM ${table} a WHERE ${filter}`,[schoolId,search])).rows[0].count);
-    const select=table==='learners'?'a.id,a.full_name,a.admission_number,a.date_of_birth::text,a.sex,a.version':'a.id,a.full_name,a.date_of_birth::text,a.status,a.class_id,c.name AS class_name,a.start_date::text,a.admission_number,a.version,a.learner_id,a.decision_reason';
+    // The roll shows each learner's class today, or when they left.
+    const today="(now() AT TIME ZONE 'Africa/Accra')::date";
+    const select=table==='learners'?`a.id,a.full_name,a.admission_number,a.date_of_birth::text,a.sex,a.version,
+      (SELECT c.name FROM enrolments e JOIN class_sections c ON c.school_id=e.school_id AND c.id=e.class_id WHERE e.school_id=a.school_id AND e.learner_id=a.id AND e.superseded_at IS NULL AND e.start_date<=${today} AND (e.end_date IS NULL OR e.end_date>${today}) LIMIT 1) AS class_name,
+      (SELECT max(e.end_date)::text FROM enrolments e WHERE e.school_id=a.school_id AND e.learner_id=a.id AND e.superseded_at IS NULL AND e.end_date<=${today}) AS left_on`:'a.id,a.full_name,a.date_of_birth::text,a.status,a.class_id,c.name AS class_name,a.start_date::text,a.admission_number,a.version,a.learner_id,a.decision_reason';
     const join=table==='admissions'?'JOIN class_sections c ON c.school_id=a.school_id AND c.id=a.class_id':'';
     const order=table==='admissions'?'a.created_at DESC,a.id':'a.full_name,a.id';
     const items=(await client.query(`SELECT ${select} FROM ${table} a ${join} WHERE ${filter} ORDER BY ${order} LIMIT $3 OFFSET $4`,[schoolId,search,page.limit,page.offset])).rows;

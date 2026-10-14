@@ -122,7 +122,7 @@ export function Attendance({ schoolId, csrfToken, role, accessRefresh }: Props) 
       <Card flush>
         <div className="toolbar">
           <label>Date<input type="date" value={day} onChange={e => { setDay(e.target.value); setClassId(''); setSchoolDayVersion(undefined); setDayLoading(true); }} /></label>
-          <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+          <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(row => <option key={row.id} value={row.id}>{row.name}{row.year_name ? ` · ${row.year_name}` : ''}</option>)}</select></label>
           <form onSubmit={e => { e.preventDefault(); setClassSearch(classSearchInput.trim()); setClassId(''); }}><label className="search"><Icon name="search"/><input aria-label="Find a class" value={classSearchInput} onChange={e => setClassSearchInput(e.target.value)} placeholder="Find a class" /></label><button className="secondary" type="submit" disabled={busy}>Find class</button></form>
         </div>
         {!register ? <Empty title={!classId ? 'Choose a class' : error ? 'This register cannot open' : 'Loading register…'} hint={!classId ? 'Pick a class and date to open its register.' : error || undefined}/> : <>

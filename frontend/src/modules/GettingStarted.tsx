@@ -4,7 +4,7 @@ import { Icon, PageHeader, Stat } from '../lib/ui';
 
 type Page = { total: number };
 type Year = { id: string; name: string };
-type Progress = { years: Year[]; classes: number; teachers: number; assignments: number; learners: number };
+type Progress = { years: Year[]; classes: number; yearClasses: number; teachers: number; assignments: number; learners: number; enrolled: number };
 const levels = ['Nursery', 'KG', 'Primary', 'JHS'];
 
 // Headteacher overview: key counts, plus a setup guide until the school is set up. Daily follow-up appears once classes exist.
@@ -18,11 +18,14 @@ export function GettingStarted({ schoolId, schoolName, displayName, csrfToken, c
   const load = useCallback(async () => {
     try {
       const get = <T,>(path: string) => request<T>(`/schools/${schoolId}${path}`);
-      const [years, classes, accounts, assignments, learners] = await Promise.all([
-        get<{ items: Year[] }>('/academic-years?limit=100'), get<Page>('/classes?limit=1'),
+      const years = await get<{ items: Year[] }>('/academic-years?limit=100');
+      // The cards show today's school: classes of the latest academic year and learners enrolled today, not every record ever kept.
+      const [classes, yearClasses, accounts, assignments, learners, census] = await Promise.all([
+        get<Page>('/classes?limit=1'), get<Page>(`/classes?limit=1${years.items[0] ? `&academicYearId=${years.items[0].id}` : ''}`),
         get<{ items: { role: string; revoked_at: string | null }[] }>('/accounts'),
-        get<Page>('/teaching/assignments?limit=1'), get<Page>('/learners?limit=1')]);
-      setProgress({ years: years.items, classes: classes.total, teachers: accounts.items.filter(a => a.role === 'teacher' && !a.revoked_at).length, assignments: assignments.total, learners: learners.total });
+        get<Page>('/teaching/assignments?limit=1'), get<Page>('/learners?limit=1'),
+        get<{ items: { female: number; male: number; unrecorded: number }[] }>('/learners/census')]);
+      setProgress({ years: years.items, classes: classes.total, yearClasses: yearClasses.total, teachers: accounts.items.filter(a => a.role === 'teacher' && !a.revoked_at).length, assignments: assignments.total, learners: learners.total, enrolled: census.items.reduce((sum, c) => sum + c.female + c.male + c.unrecorded, 0) });
     } catch (e) { setError((e as Error).message); }
   }, [schoolId]);
   useEffect(() => { void load(); }, [load]);
@@ -51,8 +54,8 @@ export function GettingStarted({ schoolId, schoolName, displayName, csrfToken, c
   const header = <PageHeader eyebrow={dateLine} title={`${greeting}, ${displayName.split(' ')[0]}`} blurb={`${schoolName}${progress.years[0] ? ` · ${progress.years[0].name}` : ''}`}
     actions={next === -1 ? <><a className="button" href="#/attendance"><Icon name="event_available"/>Take attendance</a><a className="button secondary" href="#/fees"><Icon name="payments"/>Record payment</a><a className="button secondary" href="#/notices"><Icon name="send"/>Send notice</a></> : undefined}/>;
   const stats = <div className="stats">
-    <Stat label="Learners" value={progress.learners} caption="Enrolled in your school" icon="groups"/>
-    <Stat label="Classes" value={progress.classes} caption={progress.years[0] ? progress.years[0].name : 'No academic year yet'} icon="meeting_room"/>
+    <Stat label="Learners" value={progress.enrolled} caption="Enrolled today" icon="groups"/>
+    <Stat label="Classes" value={progress.yearClasses} caption={progress.years[0] ? progress.years[0].name : 'No academic year yet'} icon="meeting_room"/>
     <Stat label="Teachers" value={progress.teachers} caption="With a sign-in" icon="badge"/>
     <Stat label="Assignments" value={progress.assignments} caption="Teacher to class" icon="assignment_ind" tone={progress.assignments ? 'neutral' : 'caution'}/>
   </div>;

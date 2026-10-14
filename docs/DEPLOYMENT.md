@@ -30,6 +30,8 @@ The API refuses to start in production if the database ledger is behind `backend
 | `AI_ENABLED` | Leave **unset** for the pilot start (AI off). To enable (Evans chose Claude, 2026-10-14): `AI_ENABLED=true`, `ANTHROPIC_API_KEY`, optionally `AI_MODEL` (default `claude-haiku-5-5`); run `npm run ai:eval -w backend` with the key first, and each school still switches AI on in Settings with its acknowledgement |
 | `ASSISTANT_MODEL`, `ASSISTANT_EFFORT`, `ASSISTANT_PER_MINUTE` | The Ask assistant (headteachers, teachers) uses the same `AI_ENABLED`, `ANTHROPIC_API_KEY`, school switch and monthly cap. Optional: model (default `claude-opus-5-5`, about $0.02–0.09 per question; `claude-sonnet-5-5` is cheaper), effort (`medium`), questions per person per minute (`8`). Without a key the page says no AI provider is configured |
 
+| `READ_ONLY_SCHOOL_IDS` | Comma-separated school ids that are read-only demo schools. Everyone signed in to such a school can read every page and use Ask (and the AI drafts), but every other change is refused with "read-only demo school", and its members cannot change their password. The app shows a banner. Unset (the default) changes nothing. To refresh the demo with `demo-hosted.ts`, remove the id, redeploy, run the loader, then add it back |
+
 Never put the `postgres` administrator URL on the API host. It is only used from Evans's machine for `db:migrate:supabase` and `platform-admin`.
 
 ## 3. First-time setup (each step needs approval)
@@ -61,6 +63,10 @@ Notes:
 - Use Render's paid (Starter) web service for the pilot: the free plan sleeps after 15 idle minutes and the first request then takes about a minute. The worker is only needed for audit exports and, later, SMS; you can leave it out at first.
 - The login rate limiter is in memory per API instance (fine with one instance): use long unique passwords, especially for the platform admin account.
 - The API also serves the web app itself at the Render URL; Vercel is the address you give schools.
+
+## 3c. Shareable demo school (2026-10-14)
+
+"Sunrise International School (Demo)" is a full synthetic Ghanaian school year in the production database, built through the live API by `backend/scripts/demo-hosted.ts` (state and passwords in `.local/demo-hosted/`, never committed). Run it from `backend/` with `DEMO_API=https://<api host>/api/v1 DEMO_CONFIRM_HOSTED=write-to-production npx tsx scripts/demo-hosted.ts <phase>`; phases `setup roll t1 t2 t3 promote current finish verify ask`, or `year` for the whole build. It resumes after any failure, and `current` run on a later day adds the new school days. The three shared logins (headteacher, Basic 6 teacher, parent) are written to `.local/demo-hosted/logins.txt`. After loading, put the school's id in `READ_ONLY_SCHOOL_IDS` so visitors cannot change it.
 
 ## 4. Data protection gate (before any real learner record)
 

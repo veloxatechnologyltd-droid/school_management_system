@@ -67,6 +67,10 @@ test('payments issue sequential receipts, cannot overpay, and reversals need a r
   assert.equal(after.items.find((row:any)=>row.learner_id===kids[0]).balance_pesewas,20000);
   await assert.rejects(owner.query('DELETE FROM payments WHERE id=$1',[first.body.id]),/append-only/);await assert.rejects(owner.query('UPDATE invoices SET total_pesewas=1'),/append-only/);
   const summary=(await call(`/finance/summary?termId=${term}`,'GET',undefined,acct)).body;assert.deepEqual(summary,{invoices:2,billedPesewas:95100,adjustmentsPesewas:0,collectedPesewas:27550,outstandingPesewas:67550});
+  const byClass=(await call(`/finance/summary-by-class?termId=${term}`,'GET',undefined,acct)).body.items;
+  assert.equal(byClass.reduce((n:number,row:any)=>n+row.billedPesewas,0),95100,'the classes add up to the school figure');assert.equal(byClass.reduce((n:number,row:any)=>n+row.collectedPesewas,0),27550);
+  assert.ok(byClass.every((row:any)=>row.className&&row.outstandingPesewas===row.billedPesewas-row.collectedPesewas));
+  assert.equal((await call(`/finance/summary-by-class?termId=${term}`,'GET',undefined,guardian)).status,403,'families cannot read school-wide fee figures');
   const actions=(await call('/audit?limit=100')).body.items.map((row:any)=>row.action);for(const a of ['finance.payment.recorded','finance.payment.reversed','finance.invoices.generated'])assert.ok(actions.includes(a),a);
 });
 

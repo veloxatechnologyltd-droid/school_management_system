@@ -8,6 +8,7 @@ type FeeItem = { id: string; name: string; level: string | null; class_name: str
 type Adjustment = { id: string; kind: 'discount' | 'charge'; label: string; amountPesewas: number; reason: string };
 type Invoice = { id: string; full_name: string; admission_number: string; class_name: string; total_pesewas: number; due_pesewas: number; paid_pesewas: number; balance_pesewas: number; arrears_pesewas: number; adjustments: Adjustment[] };
 type Summary = { invoices: number; billedPesewas: number; collectedPesewas: number; outstandingPesewas: number };
+type ClassSummary = Summary & { classId: string; className: string };
 type Receipt = { receipt_number: number; amount_pesewas: number; method: string; reference: string | null; received_on: string; full_name: string; admission_number: string; term_name: string; school_name: string; school_address: string | null; school_phone: string | null; reversal_reason: string | null };
 
 export const cedis = (pesewas: number) => `GH₵ ${(pesewas / 100).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -21,7 +22,7 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
   const headers = { 'x-csrf-token': csrfToken };
   const [terms, setTerms] = useState<Term[]>([]); const [classes, setClasses] = useState<ClassOption[]>([]);
   const [termId, setTermId] = useState(''); const [classId, setClassId] = useState('');
-  const [items, setItems] = useState<FeeItem[]>([]); const [invoices, setInvoices] = useState<Invoice[]>([]); const [summary, setSummary] = useState<Summary | null>(null);
+  const [items, setItems] = useState<FeeItem[]>([]); const [invoices, setInvoices] = useState<Invoice[]>([]); const [summary, setSummary] = useState<Summary | null>(null); const [byClass, setByClass] = useState<ClassSummary[]>([]);
   const [newItem, setNewItem] = useState({ name: '', amount: '', level: '' });
   const [pay, setPay] = useState<{ invoiceId: string; amount: string; method: string; reference: string; receivedOn: string } | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -37,14 +38,15 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
       .then(([t, c]) => { setTerms(t.items); setClasses(c.items); const term = currentTerm(t.items); if (term) setTermId(prior => prior || term.id); }).catch(e => setError((e as Error).message));
   }, [schoolId]);
   const load = useCallback(async () => {
-    if (!termId) { setItems([]); setInvoices([]); setSummary(null); return; }
+    if (!termId) { setItems([]); setInvoices([]); setSummary(null); setByClass([]); return; }
     try {
-      const [i, inv, s] = await Promise.all([
+      const [i, inv, s, bc] = await Promise.all([
         request<{ items: FeeItem[] }>(`/schools/${schoolId}/finance/fee-items?termId=${termId}`),
         request<{ items: Invoice[] }>(`/schools/${schoolId}/finance/invoices?termId=${termId}&limit=100${classId ? `&classId=${classId}` : ''}${owingOnly ? '&outstandingOnly=true' : ''}`),
         request<Summary>(`/schools/${schoolId}/finance/summary?termId=${termId}`),
+        request<{ items: ClassSummary[] }>(`/schools/${schoolId}/finance/summary-by-class?termId=${termId}`),
       ]);
-      setItems(i.items); setInvoices(inv.items); setSummary(s);
+      setItems(i.items); setInvoices(inv.items); setSummary(s); setByClass(bc.items);
     } catch (e) { setError((e as Error).message); }
   }, [schoolId, termId, classId, owingOnly]);
   useEffect(() => { void load(); }, [load]);
@@ -97,6 +99,15 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
         <Stat label="Collected" value={cedis(summary.collectedPesewas)} caption={`${paidShare}% of what was billed`} tone="positive" icon="payments"/>
         <Stat label="Outstanding" value={cedis(summary.outstandingPesewas)} caption="Still owed this term" tone={summary.outstandingPesewas ? 'critical' : 'neutral'} icon="pending_actions"/>
       </div>}
+      {byClass.length > 1 && <Card flush>
+        <div className="toolbar"><strong>Collection by class</strong><span className="count">Lowest collection first · choose a class to see its bills</span></div>
+        <div className="table-wrap"><table><thead><tr><th>Class</th><th className="num">Billed</th><th className="num">Collected</th><th className="num">Share collected</th><th className="num">Outstanding</th></tr></thead><tbody>
+          {[...byClass].sort((a, b) => (a.billedPesewas ? a.collectedPesewas / a.billedPesewas : 1) - (b.billedPesewas ? b.collectedPesewas / b.billedPesewas : 1)).map(c => <tr key={c.classId}>
+            <td><button type="button" className="secondary" onClick={() => setClassId(c.classId)}>{c.className}</button><span className="sub">{c.invoices} learners</span></td>
+            <td className="num">{cedis(c.billedPesewas)}</td><td className="num">{cedis(c.collectedPesewas)}</td>
+            <td className="num">{c.billedPesewas ? Math.round(c.collectedPesewas / c.billedPesewas * 100) : 0}%</td><td className="num">{cedis(c.outstandingPesewas)}</td></tr>)}
+        </tbody></table></div>
+      </Card>}
       <div>
         <Card flush>
           <div className="toolbar">

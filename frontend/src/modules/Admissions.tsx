@@ -8,7 +8,7 @@ type Role = 'headteacher' | 'frontdesk' | string;
 type AcademicYear = { id: string; name: string; start_date: string; end_date: string };
 type SchoolClass = { id: string; name: string; level: 'Nursery' | 'KG' | 'Primary' | 'JHS'; capacity: number; academic_year_id: string; year_name: string; start_date: string; end_date: string };
 type Admission = { id: string; full_name: string; date_of_birth?: string | null; status: string; class_id: string; class_name: string; start_date: string; admission_number: string; version: number; learner_id?: string | null; decision_reason?: string | null };
-type Learner = { id: string; full_name: string; admission_number: string; date_of_birth?: string | null; sex?: 'female' | 'male' | null; version: number };
+type Learner = { id: string; full_name: string; admission_number: string; date_of_birth?: string | null; sex?: 'female' | 'male' | null; version: number; class_name?: string | null; left_on?: string | null };
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
 type Enrolment = { id: string; class_id: string; class_name: string; start_date: string; end_date?: string | null; end_reason?: string | null; superseded_at?:string | null; supersession_reason?:string | null };
 type LearnerDetail = Learner & { enrolments: Enrolment[] };
@@ -228,8 +228,8 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
           </form>
           <span className="count">{learnersTotal} learners</span>
         </div>
-        {learners.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Admission no.</th><th className="hide-sm">Sex</th><th className="hide-sm">Date of birth</th><th className="hide-sm"></th></tr></thead><tbody>{learners.map(row => <tr key={row.id}>
-          <td><button type="button" className="link-button" onClick={() => setSelectedLearner(row.id)}>{row.full_name}</button></td><td>{row.admission_number}</td><td className="hide-sm">{row.sex === 'female' ? 'F' : row.sex === 'male' ? 'M' : '—'}</td><td className="hide-sm">{row.date_of_birth ?? '—'}</td>
+        {learners.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Admission no.</th><th>Class</th><th className="hide-sm">Sex</th><th className="hide-sm">Date of birth</th><th className="hide-sm"></th></tr></thead><tbody>{learners.map(row => <tr key={row.id}>
+          <td><button type="button" className="link-button" onClick={() => setSelectedLearner(row.id)}>{row.full_name}</button></td><td>{row.admission_number}</td><td>{row.class_name ?? (row.left_on ? `Left ${row.left_on}` : 'Not enrolled yet')}</td><td className="hide-sm">{row.sex === 'female' ? 'F' : row.sex === 'male' ? 'M' : '—'}</td><td className="hide-sm">{row.date_of_birth ?? '—'}</td>
           <td className="num hide-sm"><button type="button" className="secondary" aria-label={`Open ${row.full_name}`} onClick={() => setSelectedLearner(row.id)}>Open</button></td></tr>)}</tbody></table></div>
           : <Empty title={learnersSearch ? 'No learners match this search' : 'No learners yet'} hint={learnersSearch ? undefined : 'Record an application or import your class lists from Excel.'}/>}
         {pager(learnersOffset, learners.length, learnersTotal, 'learners', setLearnersOffset)}

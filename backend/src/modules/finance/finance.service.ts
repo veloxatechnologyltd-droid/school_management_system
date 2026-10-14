@@ -141,6 +141,12 @@ export class FinanceService {
     const row = (await client.query(`SELECT count(*)::int AS invoices,coalesce(sum(${dueSql}),0)::float8 AS billed,coalesce(sum(${adjustedSql}),0)::float8 AS adjusted,coalesce(sum(${paidSql}),0)::float8 AS collected FROM invoices i WHERE i.school_id=$1 AND i.term_id=$2`,[schoolId,termId])).rows[0];
     return {invoices:row.invoices,billedPesewas:row.billed,adjustmentsPesewas:row.adjusted,collectedPesewas:row.collected,outstandingPesewas:row.billed - row.collected};
   }
+  // The same figures per class, so a class that is slow to pay shows up without opening each class.
+  async summaryByClass(client: PoolClient, schoolId: string, termId: string) {
+    await this.term(client,schoolId,termId);
+    const rows = (await client.query(`SELECT c.id,c.name,count(*)::int AS invoices,coalesce(sum(${dueSql}),0)::float8 AS billed,coalesce(sum(${paidSql}),0)::float8 AS collected FROM invoices i JOIN class_sections c ON c.school_id=i.school_id AND c.id=i.class_id WHERE i.school_id=$1 AND i.term_id=$2 GROUP BY c.id,c.name ORDER BY c.name,c.id`,[schoolId,termId])).rows;
+    return {items:rows.map(row => ({classId:row.id as string,className:row.name as string,invoices:row.invoices as number,billedPesewas:row.billed as number,collectedPesewas:row.collected as number,outstandingPesewas:(row.billed as number) - (row.collected as number)}))};
+  }
   async statement(client: PoolClient, actor: Actor, learnerId: string) {
     const link = (await client.query('SELECT id FROM guardian_links WHERE school_id=$1 AND learner_id=$2 AND guardian_membership_id=$3 AND billing=true AND verified_at IS NOT NULL AND revoked_at IS NULL FOR SHARE',[actor.schoolId,learnerId,actor.membershipId])).rows[0];
     if (!link) throw new NotFoundException('Child unavailable');

@@ -71,7 +71,7 @@ function EarlyYearsWork({schoolId,csrfToken,role}:ModuleProps) {
 }
 // Section addresses from the earlier tab layout keep working.
 const legacyIds:Record<string,string>={learning:'assessment',school:'settings',teaching:'settings',accounts:'settings'};
-type School = {id:string;name:string;role:string;version:number;address?:string|null;phone?:string|null;motto?:string|null};
+type School = {id:string;name:string;role:string;version:number;address?:string|null;phone?:string|null;motto?:string|null;readOnly?:boolean};
 const detailsOf=(s:School)=>({address:s.address??'',phone:s.phone??'',motto:s.motto??''});
 type Session = {displayName:string;csrfToken:string;schools:School[];platformAdmin:boolean;mustChangePassword:boolean;mfaRequired:boolean;mfaEnrolled:boolean;mfaVerified:boolean};
 type AuditPage = {items:Audit[];total:number};
@@ -209,6 +209,7 @@ function App() {
     {menuOpen&&<div className="scrim" onClick={()=>setMenuOpen(false)}/>}
     <div className="content">
       <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
+      {school?.readOnly&&<p role="status" style={{margin:0,padding:'8px 16px',background:'var(--info-soft)',color:'var(--info)',fontSize:13,fontWeight:600}}>Demo school with sample data · read-only. Explore every page and try Ask; changes and password changes are switched off.</p>}
       <main>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{school&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{current&&views[current.id]()}</Suspense></>}{!school&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
     </div>
   </div>;

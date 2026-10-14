@@ -52,6 +52,10 @@ export class FinanceController {
   receipt(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('paymentId',new ParseUUIDPipe()) paymentId: string) {
     return this.access.school(req,schoolId,money,client => this.finance.receipt(client,schoolId,paymentId));
   }
+  @Get('finance/summary-by-class')
+  summaryByClass(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Query() query: SummaryQueryDto) {
+    return this.access.school(req,schoolId,money,client => this.finance.summaryByClass(client,schoolId,query.termId));
+  }
   @Get('finance/summary')
   summary(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Query() query: SummaryQueryDto) {
     return this.access.school(req,schoolId,money,client => this.finance.summary(client,schoolId,query.termId));

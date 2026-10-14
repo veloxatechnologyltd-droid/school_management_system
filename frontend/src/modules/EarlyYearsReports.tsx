@@ -38,12 +38,17 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
   const [filter, setFilter] = useState<'all' | 'review' | 'draft' | 'published'>('all');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [reportTotal, setReportTotal] = useState(0); const [statusTotals, setStatusTotals] = useState<Record<string, number>>({});
   const head = role === 'headteacher';
   const guardian = role === 'guardian';
 
   async function loadReports() {
     const result = await request<Page<Report>>(`/schools/${schoolId}/early-years/reports?limit=100`);
-    setReports(result.items);
+    setReports(result.items); setReportTotal(result.total);
+    // The cards count every report, not just the newest hundred listed below.
+    const statuses = ['draft', 'returned', 'submitted', 'approved', 'published'];
+    const totals = await Promise.all(statuses.map(status => request<Page<Report>>(`/schools/${schoolId}/early-years/reports?limit=1&status=${status}`).then(page => [status, page.total] as const)));
+    setStatusTotals(Object.fromEntries(totals));
     setDrafts(current => {
       const next = { ...current };
       for (const row of result.items) if (!next[row.id]) next[row.id] = { strengths: row.strengths, nextSteps: row.next_steps, teacherNote: row.teacher_note ?? '' };
@@ -148,7 +153,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
   </section>;
 
   const statusTone: Record<string, Tone> = { draft: 'caution', submitted: 'info', approved: 'positive', published: 'positive', returned: 'critical' };
-  const count = (...statuses: string[]) => reports.filter(row => statuses.includes(row.status)).length;
+  const count = (...statuses: string[]) => statuses.reduce((sum, status) => sum + (statusTotals[status] ?? 0), 0);
   const shown = reports.filter(row => filter === 'all' || (filter === 'review' ? ['submitted', 'approved'].includes(row.status) : filter === 'draft' ? ['draft', 'returned'].includes(row.status) : row.status === 'published'));
   return <section aria-labelledby="early-years-reports-title" className="page">
     <div className="stats">
@@ -160,7 +165,8 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
     <div className="card">
       <div className="card-head"><div><h3 id="early-years-reports-title">Nursery and KG progress reports</h3><p className="card-hint">Built from recorded observations and finalized attendance. A headteacher approves each report before families see it.</p></div>
         <button type="button" onClick={() => { setError(''); setNotice(''); setWriting(true); }}><Icon name="add"/>New report</button></div>
-      <div className="toolbar"><Tabs label="Report status" value={filter} onChange={setFilter} options={[{ id: 'all', label: `All (${reports.length})` }, { id: 'review', label: 'To review' }, { id: 'draft', label: 'Drafts' }, { id: 'published', label: 'Published' }]}/></div>
+      <div className="toolbar"><Tabs label="Report status" value={filter} onChange={setFilter} options={[{ id: 'all', label: `All (${reportTotal || reports.length})` }, { id: 'review', label: 'To review' }, { id: 'draft', label: 'Drafts' }, { id: 'published', label: 'Published' }]}/></div>
+      {reportTotal > reports.length && <p className="muted">Showing the newest {reports.length} of {reportTotal} reports.</p>}
       {shown.length ? <ul className="history report-list">{shown.map(row => {
         const draft = drafts[row.id] ?? { strengths: row.strengths, nextSteps: row.next_steps, teacherNote: row.teacher_note ?? '' };
         const base = `/schools/${schoolId}/early-years/report-revisions/${row.id}`;
