@@ -236,3 +236,6 @@ th .sub{display:block;font-size:11px;font-weight:600;color:var(--ink-3);text-tra
 .assistant-form{display:flex;gap:10px;align-items:flex-end}.assistant-form textarea{flex:1;resize:vertical;min-height:52px;font:inherit;font-size:15px}
 .assistant-note{font-size:12px;color:var(--ink-3);margin:0}
 @media (max-width:640px){.assistant{padding:14px}.assistant-log{max-height:none}.bubble{max-width:100%}.assistant-form{flex-direction:column;align-items:stretch}.assistant-form button{width:100%}}
+/* Toolbar fields never push the page wider than the screen (long class names in a select, the date form on phones) */
+.toolbar>label{max-width:100%;min-width:0}.toolbar>label>select{max-width:100%;min-width:0;text-overflow:ellipsis}
+@media (max-width:640px){.toolbar form{flex-wrap:wrap}.toolbar>label{flex-wrap:wrap}}
