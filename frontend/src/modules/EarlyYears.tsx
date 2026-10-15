@@ -56,6 +56,7 @@ export function EarlyYears({ schoolId, csrfToken, role, view }: Props) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const operations = useRef(new Map<string, string>());
+  const levelChosen = useRef(false);
   const epoch = useRef(0);
   const classRequestEpoch = useRef(0);
   const historyEpoch = useRef(0);
@@ -89,6 +90,9 @@ export function EarlyYears({ schoolId, csrfToken, role, view }: Props) {
       request<{ items: Policy[] }>(`/schools/${schoolId}/early-years/policies?level=${level}`),
     ]).then(([classes, policyList]) => {
       if (epoch.current !== current || classRequestEpoch.current !== classesCurrent) return;
+      // On first load, a teacher with no Nursery class opens on KG.
+      if (view !== 'setup' && !levelChosen.current && level === 'Nursery' && !classes.total && !classSearch) { levelChosen.current = true; setLevel('KG'); return; }
+      levelChosen.current = true;
       setClassPage(classes); setPolicies(policyList.items); setClassId(view === 'setup' ? '' : classes.items[0]?.id ?? '');
     }).catch(e => { if (epoch.current === current && classRequestEpoch.current === classesCurrent) setError((e as Error).message); });
     return () => { if (epoch.current === current) epoch.current++; if (classRequestEpoch.current === classesCurrent) classRequestEpoch.current++; };

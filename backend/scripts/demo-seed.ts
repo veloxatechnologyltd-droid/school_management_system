@@ -55,7 +55,7 @@ const staff = [
   { key: 'head', name: 'Samuel Owusu-Ansah', role: 'headteacher', email: `headteacher@${DOMAIN}` },
   { key: 'accountant', name: 'Joseph Kwarteng', role: 'accountant', email: `accounts@${DOMAIN}` },
   { key: 'frontdesk', name: 'Michael Tetteh', role: 'frontdesk', email: `frontdesk@${DOMAIN}` },
-  ...teacherNames.map((name, i) => ({ key: `teacher${i}`, name, role: 'teacher', email: i === 12 ? `teacher@${DOMAIN}` : `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@${DOMAIN}` })),
+  ...teacherNames.map((name, i) => ({ key: `teacher${i}`, name, role: 'teacher', email: i === 12 ? `teacher@${DOMAIN}` : i === 2 ? `earlyyears@${DOMAIN}` : `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@${DOMAIN}` })),
 ];
 const subjects = ['English Language', 'Mathematics', 'Science', 'Social Studies', 'Religious and Moral Education', 'Ghanaian Language (Twi)', 'Creative Arts', 'Computing'];
 const fees = [
@@ -464,7 +464,7 @@ async function main() {
 
     console.log(`\n${SCHOOL_NAME} is ready: ${learners.length} learners in ${classes.length} classes, ${current.name} of ${Y}/${Y + 1}.`);
     console.log(`Sign in with any of these (password ${PASSWORD}):`);
-    for (const [who, email] of [['Headteacher', `headteacher@${DOMAIN}`], ['Class teacher (JHS 3)', `teacher@${DOMAIN}`], ['Accountant', `accounts@${DOMAIN}`], ['Front desk', `frontdesk@${DOMAIN}`], ['Parent (two children)', `parent@${DOMAIN}`]]) console.log(`  ${who.padEnd(24)} ${email}`);
+    for (const [who, email] of [['Headteacher', `headteacher@${DOMAIN}`], ['Class teacher (JHS 3)', `teacher@${DOMAIN}`], ['Class teacher (KG 1)', `earlyyears@${DOMAIN}`], ['Accountant', `accounts@${DOMAIN}`], ['Front desk', `frontdesk@${DOMAIN}`], ['Parent (two children)', `parent@${DOMAIN}`]]) console.log(`  ${who.padEnd(24)} ${email}`);
   } finally { await owner.end(); }
 }
 main().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
