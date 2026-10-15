@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { randomBytes, randomUUID, scryptSync } from 'node:crypto';
 import { localConfig } from '../src/core/database';
-import { demoQuestionSets } from './demo-practice';
+import { demoQuestionSets, playDemoWeek } from './demo-practice';
 
 // Loads a realistic Ghanaian basic school into the local demo database (LOCAL_DB_NAME=school_demo) for client
 // demonstrations. Accounts and the school row are inserted directly; everything else goes through the running API
@@ -439,6 +439,13 @@ async function main() {
           learnerIds: [l.id], concern: `${subjects[s]}: ${first}'s lowest subject this term (${now(subjectIds[s]!)}% in class work).`, action: 'Short practice in class twice a week.',
           familyNote: note.replace('{name}', first), startDate: addDays(TODAY, -7), reviewDate: addDays(TODAY, 14) });
       }
+    }
+
+    step('Home practice switched on, and some practice done on the parent persona\'s phone');
+    await head.call('PUT', '/practice/settings', { enabled: true });
+    {
+      const parent = await new Person(`parent@${DOMAIN}`).login();
+      for (const l of learners.filter(l => l.guardian?.email === `parent@${DOMAIN}`)) await playDemoWeek(parent, l.id);
     }
 
     step('BECE mock exams for JHS 2 and JHS 3');

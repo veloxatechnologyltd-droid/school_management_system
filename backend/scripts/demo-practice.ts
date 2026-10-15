@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 // Home-practice question sets for the Sunrise demo school: hand-written (so the loader needs no model), three levels of five
 // questions for the demo's weakest topics. Both demo loaders post these through the API as a teacher's approval.
 type Row = [level: number, prompt: string, correct: string | number, wrong: string[] | null, why: string];
@@ -116,3 +118,31 @@ export const demoQuestionSets: Record<string, DemoQuestion[]> = {
     [3, 'Which body in a district is led by the District Chief Executive?', 'The District Assembly', ['Parliament', 'The Supreme Court', 'The Police Service'], 'The DCE leads the District Assembly.'],
   ]),
 };
+
+// ---------------------------------------------------------------- practice done at home, as the parent persona
+export interface DemoApi { get(path: string): Promise<any>; post(path: string, body?: Record<string, unknown>, key?: string): Promise<any> }
+const known = new Map(Object.values(demoQuestionSets).flat().map(q => [`${q.prompt}|${(q.options ?? []).join('|')}`, q]));
+// One session on a topic, with `right` of the five answers right. The parent's phone gets the same calls the app makes.
+export async function playDemoSession(api: DemoApi, childId: string, indicatorId: string, right: number, key: string = randomUUID()) {
+  const base = `/guardian/children/${childId}/practice/sessions`;
+  let view = await api.post(base, { indicatorId }, `${key}:start`);
+  for (let i = 0; view.next; i++) {
+    const q = known.get(`${view.next.prompt}|${(view.next.options ?? []).join('|')}`);
+    if (!q) throw new Error(`Question not in the demo sets: ${view.next.prompt}`);
+    const good = i < right;
+    const answer = view.next.kind === 'choice' ? { choice: good ? q.correctOption : ((q.correctOption ?? 0) + 1) % q.options!.length } : { value: String(good ? q.answer : (q.answer ?? 0) + 1) };
+    const r = await api.post(`${base}/${view.sessionId}/answer`, { questionId: view.next.questionId, ...answer }, `${key}:answer${i}`);
+    if (r.summary) return r.summary as { correct: number; total: number; outcome: string; levelAfter: number };
+    view = await api.get(`${base}/${view.sessionId}`);
+  }
+  return null;
+}
+// What a family might have done by now: the first topic twice (a clean 5 of 5, then 3 of 5), the second topic once (4 of 5).
+export async function playDemoWeek(api: DemoApi, childId: string, keyPrefix: string = randomUUID()) {
+  const topics = ((await api.get(`/guardian/children/${childId}/practice`)).topics ?? []) as { indicatorId: string; open: unknown }[];
+  const fresh = topics.filter(t => !t.open);
+  const out: string[] = [];
+  const plan: [number, number][] = [[0, 5], [0, 3], [1, 4]];
+  for (const [n, [which, right]] of plan.entries()) { const t = fresh[which]; if (t) out.push(JSON.stringify(await playDemoSession(api, childId, t.indicatorId, right, `${keyPrefix}:${n}`))); }
+  return out;
+}

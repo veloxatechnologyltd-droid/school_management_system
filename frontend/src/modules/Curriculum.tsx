@@ -52,6 +52,7 @@ export function Curriculum({ schoolId, csrfToken }: { schoolId: string; csrfToke
 
   return <section aria-label="Curriculum indicators">
     <FamilySharing schoolId={schoolId} csrfToken={csrfToken}/>
+    <HomePracticeSwitch schoolId={schoolId} csrfToken={csrfToken}/>
     <h2>Curriculum indicators</h2>
     <p className="muted">Enter the indicators your school teaches for each subject, from your curriculum documents or scheme of work. Teachers tag them on class assessments, and Progress then shows which ones a class has not yet mastered. Mark codes as official only when copied from the official curriculum.</p>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
@@ -95,5 +96,20 @@ function FamilySharing({ schoolId, csrfToken }: { schoolId: string; csrfToken: s
     {setting && <div className="choice-row" role="radiogroup" aria-label="Progress shared with families">
       <label className="check"><input type="radio" name="family-sharing" checked={!setting.shareWithFamilies} disabled={busy} onChange={() => save(false)}/><span>Report cards only</span></label>
       <label className="check"><input type="radio" name="family-sharing" checked={setting.shareWithFamilies} disabled={busy} onChange={() => save(true)}/><span>Report cards, monthly progress and home-help notes</span></label></div>}
+  </Card>;
+}
+
+// Whether the school offers home practice: children answering teacher-approved questions on a verified guardian's phone. Off until chosen.
+function HomePracticeSwitch({ schoolId, csrfToken }: { schoolId: string; csrfToken: string }) {
+  const [setting, setSetting] = useState<{ enabled: boolean; version: number | null } | null>(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  useEffect(() => { request<{ enabled: boolean; version: number | null }>(`/schools/${schoolId}/practice/settings`).then(setSetting).catch(e => setError((e as Error).message)); }, [schoolId]);
+  const save = (enabled: boolean) => { if (!setting) return; setBusy(true); setError('');
+    request<{ enabled: boolean; version: number }>(`/schools/${schoolId}/practice/settings`, { method: 'PUT', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), enabled, ...(setting.version ? { version: setting.version } : {}) }) })
+      .then(setSetting).catch(e => setError((e as Error).message)).finally(() => setBusy(false)); };
+  return <Card title="Home practice" hint="Children practise at home on a verified guardian's phone: five questions at a time on the topics they find hardest, using only questions a teacher has approved. Teachers see what was practised beside class work; it never changes continuous assessment or report cards. There are no learner logins and no marks, ranks or comparisons shown to families.">
+    {error && <p role="alert">{error}</p>}
+    {setting && <div className="choice-row" role="radiogroup" aria-label="Home practice">
+      <label className="check"><input type="radio" name="home-practice" checked={!setting.enabled} disabled={busy} onChange={() => save(false)}/><span>Off</span></label>
+      <label className="check"><input type="radio" name="home-practice" checked={setting.enabled} disabled={busy} onChange={() => save(true)}/><span>On: offer home practice to families</span></label></div>}
   </Card>;
 }

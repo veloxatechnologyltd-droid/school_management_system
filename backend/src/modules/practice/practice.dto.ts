@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { OperationDto } from '../learners/learners.dto';
 import { LEVEL_COUNT, MAX_PER_LEVEL, MIN_PER_LEVEL } from './questions';
 
@@ -18,3 +18,13 @@ export class ApproveQuestionsDto extends OperationDto {
   @IsArray() @ArrayMinSize(LEVEL_COUNT * MIN_PER_LEVEL) @ArrayMaxSize(LEVEL_COUNT * MAX_PER_LEVEL) @ValidateNested({each:true}) @Type(() => QuestionDto) questions!: QuestionDto[];
 }
 export class RetireSetDto extends OperationDto { @IsString() @MinLength(3) @MaxLength(300) @Matches(/\S.*\S/) reason!: string; }
+
+export class HomePracticeSettingsDto extends OperationDto { @IsBoolean() enabled!: boolean; @IsOptional() @IsInt() @Min(1) version?: number; }
+export class StartSessionDto extends OperationDto { @IsUUID() indicatorId!: string; }
+// One answer: the option tapped (its position in the list) or the number typed.
+export class AnswerDto extends OperationDto {
+  @IsUUID() questionId!: string;
+  @IsOptional() @IsInt() @Min(0) @Max(3) choice?: number;
+  @IsOptional() @IsString() @MaxLength(40) value?: string;
+}
+export class ClassPracticeQueryDto { @IsUUID() termId!: string; }

@@ -327,3 +327,12 @@ a.learner-link{color:var(--accent-text);font-weight:600;text-decoration:none}a.l
 .q-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}.q-level .q-list>li{padding-right:0}.q-level .q-list{margin:0}.q-level .q-list>li:first-child{border-top:0}
 .q-options-edit{grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))}.q-level,.q-options-edit{min-width:0}.q-options-edit legend{grid-column:1/-1}
 .q-level>button.small{justify-self:start}
+
+/* Home practice on the family's phone */
+.practice-topics{list-style:none;margin:0;padding:0;display:grid}.practice-topics>li{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 0;border-top:1px solid var(--line)}.practice-topics>li:first-child{border-top:0}.practice-topics>li>div{min-width:0;flex:1 1 220px}.practice-topics .sub{display:block}
+.practice-meta{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-3);font-weight:500;margin-top:4px;flex-wrap:wrap}.level-dots{display:inline-flex;gap:4px}.level-dots span{width:10px;height:10px;border-radius:50%;background:var(--line-strong)}.level-dots span.on{background:var(--accent)}
+.practice-session{display:grid;gap:12px}.practice-progress{margin:0;font-weight:600;color:var(--ink-2)}.practice-bar{height:8px;border-radius:99px;background:var(--sunken);overflow:hidden}.practice-bar span{display:block;height:100%;background:var(--accent);transition:width .25s}
+.practice-prompt{font-size:20px;line-height:1.4;font-weight:600;margin:8px 0 16px}
+.practice-options{display:grid;gap:10px;margin-bottom:16px}.practice-options button{min-height:56px;height:auto;font-size:17px;text-align:left;justify-content:flex-start;background:var(--surface);color:var(--ink);border:2px solid var(--line-strong);border-radius:14px;padding:12px 16px;white-space:normal}.practice-options button.chosen{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-text)}
+.practice-feedback{border-radius:14px;padding:14px 16px}.practice-feedback.right{background:var(--positive-soft);border:1px solid var(--positive-line);color:var(--positive)}.practice-feedback.wrong{background:var(--caution-soft);border:1px solid var(--caution-line);color:var(--caution)}.practice-feedback strong{display:flex;align-items:center;gap:8px;font-size:18px}.practice-feedback p{margin:6px 0 0;color:var(--ink)}
+.practice-summary{border-top:1px solid var(--line);padding-top:12px}.practice-summary h4{font-size:20px;margin:0 0 6px}

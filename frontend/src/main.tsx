@@ -26,6 +26,7 @@ const Assessment=lazyModule(()=>import('./modules/Assessment'),'Assessment');
 const Progress=lazyModule(()=>import('./modules/Progress'),'Progress');
 const Curriculum=lazyModule(()=>import('./modules/Curriculum'),'Curriculum');
 const FamilyProgress=lazyModule(()=>import('./modules/FamilyProgress'),'FamilyProgress');
+const HomePractice=lazyModule(()=>import('./modules/HomePractice'),'HomePractice');
 const SupportDue=lazy(()=>import('./modules/Support').then(m=>({default:m.SupportDue})));
 const GuardianTerminalReports=lazyModule(()=>import('./modules/Assessment'),'GuardianTerminalReports');
 const Finance=lazyModule(()=>import('./modules/Finance'),'Finance');
@@ -62,7 +63,7 @@ type ModuleProps={schoolId:string;csrfToken:string;role:string};
 // Guardian portal: the child chosen at the top drives the report cards below it.
 function MyChildren({schoolId,csrfToken,role}:ModuleProps) {
   const [childId,setChildId]=useState('');
-  return <><Guardians schoolId={schoolId} csrfToken={csrfToken} role={role} onChildChange={setChildId}/>{childId&&<><FamilyProgress key={`family:${childId}`} schoolId={schoolId} childId={childId}/><FamilyNotes key={`notes:${childId}`} schoolId={schoolId} csrfToken={csrfToken} childId={childId}/><EarlyYearsReports schoolId={schoolId} csrfToken={csrfToken} role={role} childId={childId}/><GuardianTerminalReports schoolId={schoolId} childId={childId}/></>}</>;
+  return <><Guardians schoolId={schoolId} csrfToken={csrfToken} role={role} onChildChange={setChildId}/>{childId&&<><FamilyProgress key={`family:${childId}`} schoolId={schoolId} childId={childId}/><HomePractice key={`practice:${childId}`} schoolId={schoolId} csrfToken={csrfToken} childId={childId}/><FamilyNotes key={`notes:${childId}`} schoolId={schoolId} csrfToken={csrfToken} childId={childId}/><EarlyYearsReports schoolId={schoolId} csrfToken={csrfToken} role={role} childId={childId}/><GuardianTerminalReports schoolId={schoolId} childId={childId}/></>}</>;
 }
 // Early years: observations and progress reports on tabs; headteachers open on the reports they review.
 function EarlyYearsWork({schoolId,csrfToken,role}:ModuleProps) {

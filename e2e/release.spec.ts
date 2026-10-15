@@ -486,3 +486,61 @@ test('the Ask conversation survives leaving the page and a reload, keeps its fol
   await expect(page.getByText(/^Answer \d/)).toHaveCount(0);await expect(page.getByRole('button',{name:'How is Basic 6 performing this term?',exact:true})).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('a guardian practises approved questions with their child on a phone, the child moves up a level, and switching home practice off hides it',async({page,browser})=>{
+  const {Pool}=require('pg');const path=require('node:path');
+  const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test');
+  const suffix=randomUUID().slice(0,8),name=`Practice Learner ${suffix}`,topic=`Fractions ${suffix}`;
+  const session=await (await page.request.get('/api/v1/auth/session')).json();
+  // The server uses the real date, while the browser clock is fixed for the other tests, so dates here come from the real clock.
+  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}),shift=(d:number)=>new Date(Date.parse(`${today}T00:00:00Z`)+d*86400000).toISOString().slice(0,10);
+  async function send(method:'POST'|'PUT',route:string,body:Record<string,unknown>,status=201){const response=await page.request.fetch(`/api/v1/schools/${school}${route}`,{method,headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
+  const year=await send('POST','/academic-years',{name:`Practice year ${suffix}`,startDate:shift(-60),endDate:shift(120)}),section=await send('POST','/classes',{name:`Practice class ${suffix}`,level:'Primary',capacity:5,academicYearId:year.id});
+  const subject=await send('POST','/assessment/subjects',{name:`Maths ${suffix}`}),term=await send('POST','/assessment/terms',{academicYearId:year.id,name:`Term ${suffix}`,startDate:shift(-55),endDate:shift(30)});
+  await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',sourceNote:'Synthetic scheme of work',items:[{description:topic}]});
+  const indicator=(await (await page.request.get(`/api/v1/schools/${school}/assessment/indicators?subjectId=${subject.id}`)).json()).items[0].id;
+  const learner=randomUUID();
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,$4)",[learner,school,`PR-${suffix}`,name]);
+  await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,$5)",[randomUUID(),school,learner,section.id,shift(-50)]);
+  await owner.query("INSERT INTO guardian_links(id,school_id,learner_id,guardian_membership_id,guardian_display_name,academic,billing,pickup,contact,verified_at,verified_by,verification_reason) VALUES($1,$2,$3,'30000000-0000-4000-8000-000000000004','Abena Sample',true,false,false,true,now(),'30000000-0000-4000-8000-000000000001','Synthetic access')",[randomUUID(),school,learner]);
+  await owner.end();
+  const quiz=await send('POST',`/assessment/classes/${section.id}/assessments`,{termId:term.id,subjectId:subject.id,kind:'quiz',title:`Quiz ${suffix}`,heldOn:shift(-5),maxMark:10,indicatorIds:[indicator]});
+  await send('POST',`/assessment/classes/${section.id}/assessments/${quiz.id}/marks`,{marks:[{learnerId:learner,mark:2}]});
+  // Three levels of six questions: the first option is right in a multiple-choice question; a number question's answer is in its wording.
+  const choice=(level:number,n:number)=>({level,kind:'choice',prompt:`Level ${level} choice ${n}: what is ${n} + ${level}?`,options:[String(n+level),String(n+level+1),String(n+level+2)],correctOption:0,explanation:`${n} plus ${level} is ${n+level}.`});
+  const number=(level:number,n:number)=>({level,kind:'number',prompt:`Level ${level} number ${n}: a pencil costs GH₵${n}. What do ${level+1} pencils cost in cedis?`,answer:n*(level+1),explanation:`${level+1} times ${n}.`});
+  await send('POST',`/assessment/indicators/${indicator}/questions`,{questions:[1,2,3].flatMap(level=>[...[1,2,3,4].map(n=>choice(level,n)),...[5,6].map(n=>number(level,n))])});
+  const setting=await (await page.request.get(`/api/v1/schools/${school}/practice/settings`)).json();
+  expect(setting.enabled).toBe(false);
+  await send('PUT','/practice/settings',{enabled:true,...(setting.version?{version:setting.version}:{})},200);
+
+  const family=await browser.newPage();await family.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));const familyErrors:string[]=[];family.on('pageerror',error=>familyErrors.push(error.message));
+  await signIn(family,'guardian@example.test','My children');await family.setViewportSize({width:375,height:812});
+  const picker=family.getByRole('combobox',{name:'Linked child',exact:true});await picker.selectOption(learner);
+  const card=family.getByRole('region',{name:'Practice at home',exact:true});
+  await expect(card.getByText(topic)).toBeVisible();await expect(card.getByText('Level 1 of 3')).toBeVisible();
+  expect(await family.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await expect(card.getByText(/\d+%/)).toHaveCount(0);
+  await card.getByRole('button',{name:'Start',exact:true}).click();
+  const dialog=family.getByRole('dialog');await expect(dialog.getByText('Question 1 of 5')).toBeVisible();
+  for(let i=0;i<5;i++){
+    const prompt=await dialog.locator('.practice-prompt').innerText();
+    if(await dialog.getByRole('group',{name:'Choose an answer'}).count())await dialog.getByRole('group',{name:'Choose an answer'}).getByRole('button').first().click();
+    else await dialog.getByLabel('Type your answer (a number)').fill(String(Number(/GH₵(\d+)/.exec(prompt)![1])*Number(/do (\d+) pencils/.exec(prompt)![1])));
+    await dialog.getByRole('button',{name:'Check answer',exact:true}).click();await expect(dialog.getByText('Correct!')).toBeVisible();
+    if(i<4)await dialog.getByRole('button',{name:'Next question',exact:true}).click();
+  }
+  await expect(dialog.getByText('5 of 5 correct')).toBeVisible();await expect(dialog.getByText(/moves up to Level 2/)).toBeVisible();
+  expect(await family.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await dialog.getByRole('button',{name:'Finish',exact:true}).click();
+  await expect(card.getByText('Level 2 of 3')).toBeVisible();await expect(card.getByText(/last practised today/)).toBeVisible();
+
+  // Switching the school's setting off takes practice away from families.
+  const on=await (await page.request.get(`/api/v1/schools/${school}/practice/settings`)).json();
+  await send('PUT','/practice/settings',{enabled:false,version:on.version},200);
+  await family.reload();await pickSchool(family);await picker.selectOption(learner);
+  await expect(family.getByText('Notes with the school').first()).toBeVisible();
+  await expect(family.getByRole('region',{name:'Practice at home',exact:true})).toHaveCount(0);
+  await family.close();expect(errors).toEqual([]);expect(familyErrors).toEqual([]);
+});

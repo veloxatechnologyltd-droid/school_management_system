@@ -8,7 +8,7 @@ import { Database } from './database';
 // change records or passwords. To refresh the demo with the loader script, take the school off the list for the duration of the load.
 const readOnlySchoolIds = () => (process.env.READ_ONLY_SCHOOL_IDS ?? '').split(',').map(id => id.trim().toLowerCase()).filter(Boolean);
 export const isReadOnlySchool = (schoolId: string) => readOnlySchoolIds().includes(schoolId.toLowerCase());
-const readOnlyAllowed = /^\/api\/v1\/schools\/[0-9a-f-]{36}\/(assistant\/chat|ai\/(early-years\/report-draft|report-remarks-draft|indicators\/[0-9a-f-]{36}\/(worksheet|questions)-draft|runs\/[0-9a-f-]{36}\/feedback))$/i;
+const readOnlyAllowed = /^\/api\/v1\/schools\/[0-9a-f-]{36}\/(assistant\/chat|guardian\/children\/[0-9a-f-]{36}\/practice\/sessions(\/[0-9a-f-]{36}\/answer)?|ai\/(early-years\/report-draft|report-remarks-draft|indicators\/[0-9a-f-]{36}\/(worksheet|questions)-draft|runs\/[0-9a-f-]{36}\/feedback))$/i;
 export const READ_ONLY_MESSAGE = 'This is a read-only demo school. You can look around and use Ask, but changes are switched off.';
 export const digest = (token: string) => createHash('sha256').update(token).digest('hex');
 export function sessionToken(req: Request) {

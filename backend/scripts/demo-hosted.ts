@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, renameSync } from 'node:fs';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { demoQuestionSets } from './demo-practice';
+import { demoQuestionSets, playDemoWeek } from './demo-practice';
 
 // Shareable demo school on the live system: "Sunrise International School (Demo)" holds a full Ghanaian school year
 // (2025/26 complete, 2026/27 Term 1 up to today) so prospects can sign in and see a working school, including Ask.
@@ -1030,6 +1030,14 @@ async function practiceNow() {
     const key = `questions:${topic}`; if (done(key)) continue;
     const s = TOPICS.findIndex(list => list.some(([d]) => d === topic));
     await head.post(`/assessment/indicators/${state.indicatorIds[s]![TOPICS[s]!.findIndex(([d]) => d === topic)]}/questions`, { questions }, key);
+    mark(key);
+  }
+  step('Home practice switched on, and some practice done on the demo parent\'s phone');
+  await head.put('/practice/settings', { enabled: true }, 'practice-settings');
+  const parent = await as('family0');
+  for (const child of (await parent.get('/guardian/children')) as { id: string }[]) {
+    const key = `practice:t4:${child.id}`; if (done(key)) continue;
+    await playDemoWeek(parent, child.id, key);
     mark(key);
   }
 }
