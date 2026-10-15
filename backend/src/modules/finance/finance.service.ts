@@ -147,6 +147,12 @@ export class FinanceService {
     const rows = (await client.query(`SELECT c.id,c.name,count(*)::int AS invoices,coalesce(sum(${dueSql}),0)::float8 AS billed,coalesce(sum(${paidSql}),0)::float8 AS collected FROM invoices i JOIN class_sections c ON c.school_id=i.school_id AND c.id=i.class_id WHERE i.school_id=$1 AND i.term_id=$2 GROUP BY c.id,c.name ORDER BY c.name,c.id`,[schoolId,termId])).rows;
     return {items:rows.map(row => ({classId:row.id as string,className:row.name as string,invoices:row.invoices as number,billedPesewas:row.billed as number,collectedPesewas:row.collected as number,outstandingPesewas:(row.billed as number) - (row.collected as number)}))};
   }
+  // One learner's bills, newest term first, for the headteacher's learner page.
+  async learnerFees(client: PoolClient, schoolId: string, learnerId: string) {
+    const rows = (await client.query(`SELECT i.id,t.name AS term_name,${dueSql}::float8 AS total_pesewas,${paidSql}::float8 AS paid_pesewas FROM invoices i JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id
+      WHERE i.school_id=$1 AND i.learner_id=$2 ORDER BY t.start_date DESC,i.id`,[schoolId,learnerId])).rows;
+    return rows.map(row => ({...row,balance_pesewas:row.total_pesewas - row.paid_pesewas}));
+  }
   async statement(client: PoolClient, actor: Actor, learnerId: string) {
     const link = (await client.query('SELECT id FROM guardian_links WHERE school_id=$1 AND learner_id=$2 AND guardian_membership_id=$3 AND billing=true AND verified_at IS NOT NULL AND revoked_at IS NULL FOR SHARE',[actor.schoolId,learnerId,actor.membershipId])).rows[0];
     if (!link) throw new NotFoundException('Child unavailable');

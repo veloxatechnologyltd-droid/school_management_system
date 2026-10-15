@@ -150,7 +150,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
             : <div className="table-wrap"><table><thead><tr><th>Date</th><th>Assessment</th><th>Subject</th><th className="num">Marked</th><th>Class average</th><th/></tr></thead><tbody>
               {assessments.map(a => <tr key={a.id}><td>{shortDate(a.held_on)}</td><td>{a.title}<span className="sub">{kindLabel(a.kind)} · out of {a.max_mark}{a.indicators?.length ? ` · ${a.indicators.map(i => i.code ?? i.description).join(', ')}` : ''}</span></td><td>{a.subject_name}</td><td className="num">{a.marked}</td><td><Score value={a.average}/></td>
                 <td><button type="button" className="secondary" disabled={busy} onClick={() => void act(() => openMarks(a))}>Enter marks</button></td></tr>)}</tbody></table></div>}
-        </> : tab === 'ca' ? <CaSheet schoolId={schoolId} classId={classId} termId={termId} subjects={subjects} subjectId={subjectId} onSubject={setSubjectId} onLearner={setLearnerId}/>
+        </> : tab === 'ca' ? <CaSheet schoolId={schoolId} classId={classId} termId={termId} subjects={subjects} subjectId={subjectId} onSubject={setSubjectId}/>
         : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects}
           onPlan={(id, subject, concern) => planFor({ subjectId: subject, learnerIds: [id], concern })}/>
         : tab === 'support' ? <>
@@ -242,7 +242,7 @@ function LearnerProgressDrawer({ schoolId, learnerId, onClose }: { schoolId: str
   const label = (b: { key: string; label: string }) => period === 'week' ? `Week of ${shortDate(b.label)}` : period === 'month' ? monthName(b.label) : b.label;
   const withResults = period === 'term' || period === 'year';
   return <Dialog title={data ? data.learner.fullName : 'Learner progress'} drawer onClose={onClose}>
-    {data && <p className="muted">{data.learner.admissionNumber}</p>}
+    {data && <p className="muted">{data.learner.admissionNumber} · <a className="learner-link" href={`#/learner/${learnerId}`}>Open the full learner page</a></p>}
     <Tabs label="Group by" value={period} onChange={setPeriod} options={[{ id: 'week', label: 'Weekly' }, { id: 'month', label: 'Monthly' }, { id: 'term', label: 'Termly' }, { id: 'year', label: 'Yearly' }]}/>
     {error && <p role="alert">{error}</p>}
     {data && (!data.buckets.length ? <Empty title="Nothing recorded yet" hint="Marks and term results appear here as they are entered."/>

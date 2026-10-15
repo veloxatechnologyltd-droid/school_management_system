@@ -282,6 +282,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
     {selectedLearner && <Dialog title={detail?.full_name ?? 'Learner'} drawer onClose={() => setSelectedLearner('')}>
       {messages}
       {!detail ? <p role="status">Loading learner history…</p> : <div>
+        {role === 'headteacher' && <p><a className="learner-link" href={`#/learner/${detail.id}`}>Open the full learner page</a></p>}
         <p className="muted">Admission number {detail.admission_number}{detail.date_of_birth ? ` · Date of birth ${detail.date_of_birth}` : ''}</p>
         <label className="inline-field">Sex<select aria-label="Sex" value={detail.sex ?? ''} disabled={busy} onChange={e => e.target.value && void send('sex', { version: detail.version, sex: e.target.value }, `/schools/${schoolId}/learners/${detail.id}/sex`, 'Sex recorded.')}><option value="" disabled>Not recorded</option><option value="female">Female</option><option value="male">Male</option></select></label>
         {corrections.length > 0 && <><h4>Corrections</h4><ul className="history">{corrections.map(c => <li key={c.id}><strong>{fieldLabel[c.field]}: {c.old_value ?? 'not recorded'} → {c.new_value}</strong><span>{c.reason} · {c.recorded_at.slice(0, 10)}</span></li>)}</ul></>}

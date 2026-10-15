@@ -33,6 +33,8 @@ const GuardianStatement=lazyModule(()=>import('./modules/Finance'),'GuardianStat
 const Promotion=lazyModule(()=>import('./modules/Promotion'),'Promotion');
 const AiSettings=lazyModule(()=>import('./modules/AiSettings'),'AiSettings');
 const Assistant=lazyModule(()=>import('./modules/Assistant'),'Assistant');
+const LearnerPage=lazyModule(()=>import('./modules/LearnerPage'),'LearnerPage');
+const FamilyNotes=lazyModule(()=>import('./modules/LearnerNotes'),'FamilyNotes');
 const Accounts=lazyModule(()=>import('./modules/Accounts'),'Accounts');
 const GettingStarted=lazyModule(()=>import('./modules/GettingStarted'),'GettingStarted');
 type NavItem={id:string;label:string;icon:string};
@@ -60,7 +62,7 @@ type ModuleProps={schoolId:string;csrfToken:string;role:string};
 // Guardian portal: the child chosen at the top drives the report cards below it.
 function MyChildren({schoolId,csrfToken,role}:ModuleProps) {
   const [childId,setChildId]=useState('');
-  return <><Guardians schoolId={schoolId} csrfToken={csrfToken} role={role} onChildChange={setChildId}/>{childId&&<><FamilyProgress key={`family:${childId}`} schoolId={schoolId} childId={childId}/><EarlyYearsReports schoolId={schoolId} csrfToken={csrfToken} role={role} childId={childId}/><GuardianTerminalReports schoolId={schoolId} childId={childId}/></>}</>;
+  return <><Guardians schoolId={schoolId} csrfToken={csrfToken} role={role} onChildChange={setChildId}/>{childId&&<><FamilyProgress key={`family:${childId}`} schoolId={schoolId} childId={childId}/><FamilyNotes key={`notes:${childId}`} schoolId={schoolId} csrfToken={csrfToken} childId={childId}/><EarlyYearsReports schoolId={schoolId} csrfToken={csrfToken} role={role} childId={childId}/><GuardianTerminalReports schoolId={schoolId} childId={childId}/></>}</>;
 }
 // Early years: observations and progress reports on tabs; headteachers open on the reports they review.
 function EarlyYearsWork({schoolId,csrfToken,role}:ModuleProps) {
@@ -197,9 +199,12 @@ function App() {
     children:()=><MyChildren key={`children:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     settings:()=><div className="settings"><nav className="setting-steps" aria-label="Settings">{settingsSteps.map((step,index)=><a key={step.id} href={`#/settings/${step.id}`} aria-current={step.id===setting.id?'page':undefined}><b aria-hidden="true">{index+1}</b>{step.label}</a>)}</nav><div className="setting-body">{setting.render()}</div></div>,
   };
-  const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];
+  // A learner's own page (#/learner/<id>) for heads and teachers sits under Learners (head) or Progress (teacher) in the menu.
+  const learnerPage=tabId==='learner'&&!!subId&&(role==='headteacher'||role==='teacher');
+  if(learnerPage)views.learner=()=><LearnerPage key={`learner:${sid}:${subId}`} schoolId={sid} csrfToken={csrf} role={role} learnerId={subId!}/>;
+  const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=learnerPage?(role==='headteacher'?'learners':'progress'):legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];
   const roleName=role==='frontdesk'?'Front desk':role.charAt(0).toUpperCase()+role.slice(1);
-  const meta=current&&pageMeta[current.id];
+  const meta=!learnerPage&&current&&pageMeta[current.id];
   const navGroup=(g:NavGroup)=><div key={g.items[0].id} className="nav-section">{g.group&&<p className="nav-group">{g.group}</p>}{g.items.map(item=><a key={item.id} href={`#/${item.id}`} aria-current={item.id===current?.id?'page':undefined}><Icon name={item.icon}/><span className="label">{item.label}</span></a>)}</div>;
   const initials=(school?.name??'V').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]!.toUpperCase()).join('');
   return <div className="shell">
@@ -214,7 +219,7 @@ function App() {
     <div className="content">
       <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
       {school?.readOnly&&<p role="status" style={{margin:0,padding:'8px 16px',background:'var(--info-soft)',color:'var(--info)',fontSize:13,fontWeight:600}}>Demo school with sample data · read-only. Explore every page and try Ask; changes and password changes are switched off.</p>}
-      <main id="main" tabIndex={-1}>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{school&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{current&&views[current.id]()}</Suspense></>}{!school&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
+      <main id="main" tabIndex={-1}>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{school&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{learnerPage?views.learner!():current&&views[current.id]()}</Suspense></>}{!school&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
     </div>
   </div>;
 }

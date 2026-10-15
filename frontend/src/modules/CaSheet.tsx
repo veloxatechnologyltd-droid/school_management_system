@@ -24,8 +24,8 @@ const countText = (c: Counts) => caPartLabels.filter(([key]) => c[key]).map(([ke
 // The continuous assessment sheet for one subject, as a teacher keeps it on paper: each part of the CA with how many pieces
 // of work were set, each class test on its own, the CA the parts make, the exam and the total. Class work far from the
 // exam is marked for a closer look.
-export function CaSheet({ schoolId, classId, termId, subjects, subjectId, onSubject, onLearner }: {
-  schoolId: string; classId: string; termId: string; subjects: { id: string; name: string }[]; subjectId: string; onSubject: (id: string) => void; onLearner: (id: string) => void }) {
+export function CaSheet({ schoolId, classId, termId, subjects, subjectId, onSubject }: {
+  schoolId: string; classId: string; termId: string; subjects: { id: string; name: string }[]; subjectId: string; onSubject: (id: string) => void }) {
   const [sheet, setSheet] = useState<Sheet | null>(null); const [error, setError] = useState('');
   // With no subject chosen yet, open on the first subject that has class work this term.
   const [firstWithWork, setFirstWithWork] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export function CaSheet({ schoolId, classId, termId, subjects, subjectId, onSubj
           <th className="num">CA<span className="sub">out of 100</span></th><th className="num">CA<span className="sub">{caWeight}%</span></th>
           <th className="num">Exam<span className="sub">out of 100</span></th><th className="num">Exam<span className="sub">{examWeight}%</span></th><th className="num">Total</th><th>Class work and exam</th></tr></thead>
           <tbody>{rows.map(r => { const caUsed = r.recordedCa ?? r.ca;
-            return <tr key={r.learnerId}><td><button type="button" className="link-button" onClick={() => onLearner(r.learnerId)}>{r.fullName}</button>{r.locked && <span className="sub">Report published</span>}</td>
+            return <tr key={r.learnerId}><td><a className="learner-link" href={`#/learner/${r.learnerId}`}>{r.fullName}</a>{r.locked && <span className="sub">Report published</span>}</td>
               {shown.map(([key]) => <td key={key} className="num"><Pct value={r.parts[key].average} sub={sheet.set[key] ? `${r.parts[key].marked} of ${sheet.set[key]}` : undefined}/></td>)}
               {testColumns ? r.tests.map((t, i) => <td key={i} className="num"><Pct value={t} sub={t === null ? 'no mark' : undefined}/></td>)
                 : <td className="num"><Pct value={r.parts.tests.average} sub={`${r.parts.tests.marked} of ${sheet.tests.length}`}/></td>}

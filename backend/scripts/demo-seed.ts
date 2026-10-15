@@ -460,6 +460,17 @@ async function main() {
       if (scores.length) await head.post(`/assessment/classes/${c.id}/scores`, { termId: current.id, subjectId, scores });
     }
 
+    step('Notes on learners from teachers, the headteacher and the parent');
+    // Each of the parent persona's children has a staff-only note from the class teacher, a note the headteacher shares with
+    // the family, and the parent's reply, so the learner page and the parent portal both show a conversation.
+    const parent = await new Person(`parent@${DOMAIN}`).login();
+    for (const l of learners.filter(l => l.guardian?.email === `parent@${DOMAIN}` && graded.some(c => c.i === l.classIndex))) {
+      const teacher = await new Person(staff[3 + l.classIndex]!.email).login(), first = l.name.split(' ')[0]!;
+      await teacher.post(`/learners/${l.id}/notes`, { category: 'classwork', body: `${first} works well in pairs but rushes the written exercises. Reminded to check answers before handing in.` });
+      await head.post(`/learners/${l.id}/notes`, { category: 'home', sharedWithFamily: true, body: `${first} is settling well this term. Ten minutes of reading together each evening would help with the written work.` });
+      await parent.post(`/guardian/children/${l.id}/notes`, { category: 'home', body: `Thank you. We read together most evenings now. ${first} was unwell on Monday, which is why the homework was late.` });
+    }
+
     step('End-of-term remarks stage for JHS 2, and AI drafting switched on');
     // JHS 2 has its exams entered but reports not yet published, the point where the class teacher writes remarks; a few are written already.
     // AI drafting is on for the school; without a Claude key on the server, teachers get the template drafts.

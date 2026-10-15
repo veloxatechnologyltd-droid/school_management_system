@@ -155,6 +155,33 @@ export class ProgressService {
       set,tests:tests.map(t => ({id:t.id,title:t.title,held_on:t.held_on,max_mark:t.max_mark})),items};
   }
 
+  // One learner's term, subject by subject, as on the CA sheet: class work by part (marked of set), the CA it makes, the CA
+  // and exam recorded, the total, an exam far from class work, and whether recent marks need attention.
+  async learnerTerm(client: PoolClient, actor: Actor, learnerId: string, termId: string) {
+    const term = await this.assessment.term(client,actor.schoolId,termId);
+    const policy = await this.assessment.policy(client,actor.schoolId), parts = policy?.ca_parts ?? DEFAULT_CA_PARTS;
+    const marks = await this.marks(client,actor.schoolId,'a.term_id=$2 AND m.learner_id=$3',[termId,learnerId]);
+    const set = (await client.query(`SELECT a.subject_id,a.kind,count(*)::int AS n FROM class_assessments a WHERE a.school_id=$1 AND a.term_id=$2 AND a.kind<>'mock'
+      AND a.class_id IN (SELECT e.class_id FROM enrolments e WHERE e.school_id=$1 AND e.learner_id=$3 AND e.superseded_at IS NULL AND e.start_date<$5 AND (e.end_date IS NULL OR e.end_date>$4))
+      GROUP BY a.subject_id,a.kind`,[actor.schoolId,termId,learnerId,term.start_date,term.end_date])).rows as { subject_id: string; kind: string; n: number }[];
+    const scores = (await client.query(`SELECT DISTINCT ON (subject_id,kind) subject_id,kind,score::float AS score FROM assessment_score_entries WHERE school_id=$1 AND term_id=$2 AND learner_id=$3
+      ORDER BY subject_id,kind,created_at DESC,id DESC`,[actor.schoolId,termId,learnerId])).rows as { subject_id: string; kind: string; score: number }[];
+    const ids = [...new Set([...marks.map(m => m.subject_id),...set.map(r => r.subject_id),...scores.map(r => r.subject_id)])];
+    const subjects = (await client.query('SELECT id,name FROM subjects WHERE school_id=$1 AND id=ANY($2::uuid[]) ORDER BY name',[actor.schoolId,ids])).rows as { id: string; name: string }[];
+    return {term:{id:term.id,name:term.name,start_date:term.start_date,end_date:term.end_date},policy:policy ? {caWeight:policy.ca_weight,examWeight:policy.exam_weight,parts} : null,
+      subjects:subjects.map(s => {
+        const own = marks.filter(m => m.subject_id === s.id), averages = partAverages(own), ca = caFromParts(averages,parts);
+        const recordedCa = scores.find(r => r.subject_id === s.id && r.kind === 'ca')?.score ?? null, exam = scores.find(r => r.subject_id === s.id && r.kind === 'exam')?.score ?? null;
+        const caForTotal = recordedCa ?? ca;
+        return {subjectId:s.id,name:s.name,
+          parts:Object.fromEntries(CA_PARTS.map(part => [part,{average:averages[part],marked:own.filter(m => partOf(m.kind) === part).length,
+            set:set.filter(r => r.subject_id === s.id && partOf(r.kind) === part).reduce((n,r) => n + r.n,0)}])),
+          classWork:mean(own.map(m => m.percent)),marks:own.length,lastMarked:own.length ? own[own.length - 1]!.held_on : null,
+          ca,recordedCa,exam,total:policy && caForTotal !== null && exam !== null ? weightedTotal(caForTotal,exam,policy) : null,
+          gap:examGap(ca ?? recordedCa,exam,own.length),attention:attentionFor(own.map(m => m.percent))};
+      })};
+  }
+
   // How much class work has been set: per subject, the number of exercises, homework, class tests and projects this week,
   // this month and this term (counted up to today, or the term's last day once it has ended).
   async workload(client: PoolClient, actor: Actor, classId: string, termId: string) {
@@ -274,7 +301,7 @@ export class ProgressService {
   }
 
   // Heads see any learner; teachers see learners enrolled today in a class they are live-assigned to.
-  private async learnerFor(client: PoolClient, actor: Actor, learnerId: string) {
+  async learnerFor(client: PoolClient, actor: Actor, learnerId: string) {
     const learner = (await client.query('SELECT id,full_name,admission_number FROM learners WHERE school_id=$1 AND id=$2',[actor.schoolId,learnerId])).rows[0];
     if (!learner) throw new NotFoundException('Learner unavailable');
     if (actor.role === 'teacher') {

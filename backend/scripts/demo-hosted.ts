@@ -996,9 +996,29 @@ async function current() {
   await eyReports(t);
   await fees(t);
   await supportNow();
+  await notesNow();
   await notices(t, 'late');
   void head;
   step(`Current term brought up to ${TODAY}`);
+}
+
+// ---------------------------------------------------------------- notes on learners: staff (some shared with the family) and a parent's note
+async function notesNow() {
+  const byStory = (s: string) => model.learners.find(l => l.story === s)!;
+  const specs: { k: string; who: string; story: string; category: string; body: string; share?: boolean; family?: boolean }[] = [
+    { k: 'kwame-teacher', who: teacherKey(BASIC6), story: 'improver', category: 'classwork', body: 'Fractions are coming on since the small-group sessions. He now checks his working with the fraction strips before handing in.' },
+    { k: 'kwame-head', who: 'head', story: 'improver', category: 'home', share: true, body: 'Kwame has worked hard on fractions this term. Ten minutes of practice at home with the fraction strips on Tuesday and Thursday evenings will keep it going.' },
+    { k: 'kwame-family', who: 'family0', story: 'improver', category: 'home', family: true, body: 'Thank you. We practise at home on Tuesday evenings. He says the strips help. Please tell us if he needs anything else for Mathematics.' },
+    { k: 'kojo-teacher', who: teacherKey(7), story: 'absentee', category: 'attendance', share: true, body: 'Kojo has missed several days since mid-September and his Mathematics marks have dropped. Please call the school so we can agree catch-up work.' },
+    { k: 'esi-teacher', who: teacherKey(BASIC6), story: 'strong', category: 'classwork', body: 'Consistently strong. Give her extension problems in Mathematics and ask her to lead the reading group.' },
+  ];
+  for (const sp of specs) {
+    const key = `note:t4:${sp.k}`; if (done(key)) continue;
+    const l = byStory(sp.story), person = await as(sp.who);
+    if (sp.family) await person.post(`/guardian/children/${idOf(l)}/notes`, { category: sp.category, body: sp.body }, key);
+    else await person.post(`/learners/${idOf(l)}/notes`, { category: sp.category, body: sp.body, sharedWithFamily: sp.share === true }, key);
+    mark(key);
+  }
 }
 
 // ---------------------------------------------------------------- finish: shareable logins, AI for this school, family sharing
@@ -1105,7 +1125,7 @@ async function ask() {
 
 // ---------------------------------------------------------------- main
 const phases: Record<string, () => Promise<void>> = {
-  setup, roll, t1: () => pastTerm('t1'), t2: () => pastTerm('t2'), t3: () => pastTerm('t3'), promote, current, finish, verify, ask,
+  setup, roll, t1: () => pastTerm('t1'), t2: () => pastTerm('t2'), t3: () => pastTerm('t3'), promote, current, finish, verify, ask, notes: notesNow,
   year: async () => { for (const p of ['setup', 'roll', 't1', 't2', 't3', 'promote', 'current', 'finish']) { if (!done(`phase:${p}`)) { console.log(`\n=== ${p} ===`); await phases[p]!(); mark(`phase:${p}`); flush(); } } },
   status: async () => {
     const planned = { learners: model.learners.length, families: model.families.length, openDays: TERMS.reduce((n, t) => n + openDays(t).length, 0) };
