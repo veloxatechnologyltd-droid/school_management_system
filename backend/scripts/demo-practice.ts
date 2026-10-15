@@ -128,9 +128,9 @@ export async function playDemoSession(api: DemoApi, childId: string, indicatorId
   let view = await api.post(base, { indicatorId }, `${key}:start`);
   for (let i = 0; view.next; i++) {
     const q = known.get(`${view.next.prompt}|${(view.next.options ?? []).join('|')}`);
-    if (!q) throw new Error(`Question not in the demo sets: ${view.next.prompt}`);
-    const good = i < right;
-    const answer = view.next.kind === 'choice' ? { choice: good ? q.correctOption : ((q.correctOption ?? 0) + 1) % q.options!.length } : { value: String(good ? q.answer : (q.answer ?? 0) + 1) };
+    // A set a teacher approved outside the demo sets is not known here: answer it as a miss rather than stop the load.
+    const good = !!q && i < right;
+    const answer = view.next.kind === 'choice' ? { choice: !q ? 0 : good ? q.correctOption : ((q.correctOption ?? 0) + 1) % q.options!.length } : { value: !q ? '0' : String(good ? q.answer : (q.answer ?? 0) + 1) };
     const r = await api.post(`${base}/${view.sessionId}/answer`, { questionId: view.next.questionId, ...answer }, `${key}:answer${i}`);
     if (r.summary) return r.summary as { correct: number; total: number; outcome: string; levelAfter: number };
     view = await api.get(`${base}/${view.sessionId}`);
@@ -139,10 +139,14 @@ export async function playDemoSession(api: DemoApi, childId: string, indicatorId
 }
 // What a family might have done by now: the first topic twice (a clean 5 of 5, then 3 of 5), the second topic once (4 of 5).
 export async function playDemoWeek(api: DemoApi, childId: string, keyPrefix: string = randomUUID()) {
-  const topics = ((await api.get(`/guardian/children/${childId}/practice`)).topics ?? []) as { indicatorId: string; open: unknown }[];
-  const fresh = topics.filter(t => !t.open);
+  const topics = ((await api.get(`/guardian/children/${childId}/practice`)).topics ?? []) as { indicatorId: string; open: unknown; availableToday: boolean }[];
+  const fresh = topics.filter(t => !t.open && t.availableToday);
   const out: string[] = [];
   const plan: [number, number][] = [[0, 5], [0, 3], [1, 4]];
-  for (const [n, [which, right]] of plan.entries()) { const t = fresh[which]; if (t) out.push(JSON.stringify(await playDemoSession(api, childId, t.indicatorId, right, `${keyPrefix}:${n}`))); }
+  for (const [n, [which, right]] of plan.entries()) {
+    const t = fresh[which]; if (!t) continue;
+    // A topic can reach its daily limit part-way (an earlier run): skip it rather than fail the load.
+    try { out.push(JSON.stringify(await playDemoSession(api, childId, t.indicatorId, right, `${keyPrefix}:${n}`))); } catch (error) { if (!/\b409\b/.test(String((error as Error).message))) throw error; }
+  }
   return out;
 }

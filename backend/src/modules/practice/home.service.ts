@@ -3,7 +3,8 @@ import { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
-import { mondayOf } from '../assessment/progress.service';
+import { AssessmentService } from '../assessment/assessment.service';
+import { ProgressService, mondayOf } from '../assessment/progress.service';
 import { AnswerDto, HomePracticeSettingsDto, StartSessionDto } from './practice.dto';
 import { LEVEL_COUNT } from './questions';
 import { SESSIONS_PER_TOPIC_PER_DAY, SESSION_SIZE, TOPICS_OFFERED, afterSession, parseNumber, sameNumber } from './rules';
@@ -15,6 +16,8 @@ type Learned = { indicatorId: string; subject: string; topic: string; level: num
 // Families never see percentages, ranks or other children; staff read the same records as evidence beside class work.
 @Injectable()
 export class HomePracticeService {
+  constructor(private readonly progress: ProgressService, private readonly assessment: AssessmentService) {}
+
   async settings(client: PoolClient, schoolId: string) {
     const row = (await client.query('SELECT enabled,version,updated_at FROM home_practice_settings WHERE school_id=$1',[schoolId])).rows[0];
     return row ? {enabled:row.enabled as boolean,version:row.version as number,updatedAt:row.updated_at} : {enabled:false,version:null,updatedAt:null};
@@ -170,5 +173,45 @@ export class HomePracticeService {
       }
       return {correct,correctOption:item.kind === 'choice' ? item.correct_option as number : null,correctNumber:item.kind === 'number' ? item.answer as number : null,explanation:item.explanation as string | null,answered:tally.answered,total:tally.total,summary};
     });
+  }
+
+  // ---------------------------------------------------------------- what staff see: evidence beside class work, never part of CA or reports
+  // Per learner and topic: the level the child is at now (from their latest finished session), and sessions finished in the window.
+  private async evidence(client: PoolClient, schoolId: string, learnerIds: string[], today: string, from: string, to: string) {
+    return (await client.query(`WITH done AS (SELECT p.* FROM practice_sessions p WHERE p.school_id=$1 AND p.learner_id=ANY($2::uuid[]) AND p.completed_at IS NOT NULL),
+        latest AS (SELECT DISTINCT ON (learner_id,indicator_id) learner_id,indicator_id,outcome,level_after FROM done ORDER BY learner_id,indicator_id,completed_at DESC,id DESC),
+        agg AS (SELECT learner_id,indicator_id,count(*) FILTER (WHERE (completed_at AT TIME ZONE 'Africa/Accra')::date BETWEEN $4::date AND $5::date)::int AS sessions,
+          count(*) FILTER (WHERE (completed_at AT TIME ZONE 'Africa/Accra')::date>=$3::date)::int AS this_week,max(completed_at) AS last_at FROM done GROUP BY learner_id,indicator_id)
+      SELECT a.learner_id,a.indicator_id,s.name AS subject,i.description AS topic,l.outcome,l.level_after,a.sessions,a.this_week,a.last_at FROM agg a
+      JOIN latest l ON l.learner_id=a.learner_id AND l.indicator_id=a.indicator_id JOIN curriculum_indicators i ON i.school_id=$1 AND i.id=a.indicator_id JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
+      ORDER BY a.last_at DESC`,[schoolId,learnerIds,mondayOf(today),from,to])).rows.map(r => ({learnerId:r.learner_id as string,subject:r.subject as string,topic:r.topic as string,level:r.level_after as number,levels:LEVEL_COUNT,
+        done:r.outcome === 'done',sessions:r.sessions as number,sessionsThisWeek:r.this_week as number,lastPracticedOn:new Date(r.last_at).toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'})}));
+  }
+
+  // One learner's home practice, for the headteacher and the learner's live class teachers (the learner page).
+  async staffLearner(client: PoolClient, actor: Actor, learnerId: string) {
+    await this.progress.learnerFor(client,actor,learnerId);
+    const today = await accraToday(client);
+    const topics = (await this.evidence(client,actor.schoolId,[learnerId],today,'1900-01-01','9999-12-31')).map(({learnerId: _, ...t}) => t);
+    const recent = (await client.query(`SELECT (p.completed_at AT TIME ZONE 'Africa/Accra')::date::text AS on,s.name AS subject,i.description AS topic,p.level,p.correct,p.outcome,p.level_after FROM practice_sessions p
+      JOIN curriculum_indicators i ON i.school_id=p.school_id AND i.id=p.indicator_id JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
+      WHERE p.school_id=$1 AND p.learner_id=$2 AND p.completed_at IS NOT NULL ORDER BY p.completed_at DESC,p.id LIMIT 8`,[actor.schoolId,learnerId])).rows
+      .map(r => ({on:r.on as string,subject:r.subject as string,topic:r.topic as string,level:r.level as number,correct:r.correct as number,total:SESSION_SIZE,outcome:r.outcome as string,levelAfter:r.level_after as number}));
+    const unfinished = (await client.query('SELECT count(*)::int AS n FROM practice_sessions WHERE school_id=$1 AND learner_id=$2 AND completed_at IS NULL',[actor.schoolId,learnerId])).rows[0].n as number;
+    return {enabled:(await this.settings(client,actor.schoolId)).enabled,topics,recent,unfinished};
+  }
+
+  // A class's home practice for the term: who has practised, on what, at which level, and how recently.
+  async staffClass(client: PoolClient, actor: Actor, classId: string, termId: string) {
+    await this.assessment.classFor(client,actor,classId); // the headteacher, or a teacher assigned to the class today
+    const term = await this.assessment.term(client,actor.schoolId,termId);
+    const roster = (await this.assessment.learners(client,actor.schoolId,classId,term)).filter(l => !l.left);
+    const today = await accraToday(client);
+    const rows = roster.length ? (await this.evidence(client,actor.schoolId,roster.map(l => l.id),today,term.start_date,term.end_date)).filter(r => r.sessions > 0) : [];
+    const learners = roster.map(l => { const own = rows.filter(r => r.learnerId === l.id);
+      return {learnerId:l.id,fullName:l.full_name as string,sessionsThisWeek:own.reduce((n,r) => n + r.sessionsThisWeek,0),sessionsTerm:own.reduce((n,r) => n + r.sessions,0),
+        lastPracticedOn:own.map(r => r.lastPracticedOn).sort().reverse()[0] ?? null,topics:own.map(({learnerId: _, ...t}) => t)}; });
+    return {enabled:(await this.settings(client,actor.schoolId)).enabled,weekStart:mondayOf(today),
+      practisingThisWeek:learners.filter(l => l.sessionsThisWeek > 0).length,practisedThisTerm:learners.filter(l => l.sessionsTerm > 0).length,total:learners.length,learners};
   }
 }

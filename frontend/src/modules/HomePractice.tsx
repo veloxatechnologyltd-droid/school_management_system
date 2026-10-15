@@ -12,9 +12,9 @@ type View = { sessionId: string; subject: string; topic: string; level: number; 
 type Result = { correct: boolean; correctOption: number | null; correctNumber: number | null; explanation: string | null; answered: number; total: number; summary: Summary | null };
 
 const dayMs = 86400000;
-const ago = (iso: string) => { const n = Math.round((Date.parse(`${todayInAccra()}T00:00:00Z`) - Date.parse(`${iso}T00:00:00Z`)) / dayMs); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`; };
-const times = (n: number) => n === 1 ? '1 session' : `${n} sessions`;
-const Dots = ({ level, levels }: { level: number; levels: number }) => <span className="level-dots" role="img" aria-label={`Level ${level} of ${levels}`}>{Array.from({ length: levels }, (_, i) => <span key={i} className={i < level ? 'on' : ''}/>)}</span>;
+export const ago = (iso: string) => { const n = Math.round((Date.parse(`${todayInAccra()}T00:00:00Z`) - Date.parse(`${iso}T00:00:00Z`)) / dayMs); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`; };
+export const times = (n: number) => n === 1 ? '1 session' : `${n} sessions`;
+export const Dots = ({ level, levels }: { level: number; levels: number }) => <span className="level-dots" role="img" aria-label={`Level ${level} of ${levels}`}>{Array.from({ length: levels }, (_, i) => <span key={i} className={i < level ? 'on' : ''}/>)}</span>;
 
 // Practice at home: short sessions for a child on the topics class work shows are hardest, from questions a teacher approved.
 // Families see the topic, the level reached and sessions this week. Never marks, percentages, ranks or other children.

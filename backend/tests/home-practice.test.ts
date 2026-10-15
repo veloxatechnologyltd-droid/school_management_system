@@ -180,6 +180,42 @@ test('two weak sessions in a row at a level move the child down; finishing Level
   assert.equal((await start(kid.ama,topic.measures)).status,404);
 });
 
+test('staff see practice as evidence: the head and the class teacher for their own learners and class, never families or other teachers\' classes',async()=>{
+  const cls2=randomUUID(),outsider=randomUUID();
+  await owner.query("INSERT INTO class_sections(id,school_id,academic_year_id,name,level,capacity) VALUES($1,$2,$3,'Basic 6','Primary',30)",[cls2,school,year]);
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,'HP-OUT','Outside Learner')",[outsider,school]);
+  await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,$5)",[randomUUID(),school,outsider,cls2,shift(-50)]);
+  for(const actor of [teacher,head]){
+    const own=await call(`/learners/${kid.ama}/practice`,'GET',undefined,actor);assert.equal(own.status,200,JSON.stringify(own.body));
+    assert.equal(own.body.enabled,true);
+    const byTopic=Object.fromEntries(own.body.topics.map((t:any)=>[t.topic,t]));
+    assert.deepEqual([byTopic.Fractions.level,byTopic.Fractions.levels,byTopic.Fractions.sessions,byTopic.Fractions.done],[2,3,2,false]);
+    assert.equal(byTopic.Measures.done,true,'a finished topic is marked done');assert.equal(byTopic.Decimals.level,1);
+    assert.equal(byTopic.Fractions.lastPracticedOn,today,'how recently');
+    assert.deepEqual(own.body.recent[0].total,5);assert.ok(own.body.recent.every((r:any)=>typeof r.correct==='number'&&typeof r.on==='string'),'recent sessions with counts, for staff');
+    assert.deepEqual((await call(`/learners/${kid.yaw}/practice`,'GET',undefined,actor)).body.topics,[],'a learner who has not practised has none');
+  }
+  assert.equal((await call(`/learners/${outsider}/practice`,'GET',undefined,teacher)).status,404,'a teacher only sees learners in a class they teach');
+  assert.equal((await call(`/learners/${outsider}/practice`,'GET',undefined,head)).status,200);
+  assert.equal((await call(`/learners/${kid.ama}/practice`,'GET',undefined,guardian)).status,403,'families use their own route');
+
+  for(const actor of [teacher,head]){
+    const view=await call(`/assessment/classes/${cls}/home-practice?termId=${termId}`,'GET',undefined,actor);assert.equal(view.status,200,JSON.stringify(view.body));
+    assert.equal(view.body.enabled,true);assert.equal(view.body.total,4,'every learner in the class is listed, practised or not');
+    assert.deepEqual([view.body.practisingThisWeek,view.body.practisedThisTerm],[1,1]);
+    const ama=view.body.learners.find((l:any)=>l.fullName==='Ama Mensah');assert.deepEqual([ama.lastPracticedOn,ama.sessionsThisWeek>=4,ama.topics.length>=3],[today,true,true]);
+    assert.deepEqual(view.body.learners.find((l:any)=>l.fullName==='Kojo Quaye').topics,[]);
+  }
+  assert.ok([403,404].includes((await call(`/assessment/classes/${cls2}/home-practice?termId=${termId}`,'GET',undefined,teacher)).status),'a teacher cannot read a class they do not teach');
+  assert.equal((await call(`/assessment/classes/${cls2}/home-practice?termId=${termId}`,'GET',undefined,head)).status,200);
+  assert.equal((await call(`/assessment/classes/${cls}/home-practice?termId=${termId}`,'GET',undefined,guardian)).status,403);
+  // It is evidence only: nothing about practice appears in the CA sheet, results or the learner's term work.
+  const sheet=await call(`/assessment/classes/${cls}/ca-sheet?termId=${termId}&subjectId=${maths}`,'GET',undefined,teacher);assert.equal(sheet.status,200);
+  assert.doesNotMatch(JSON.stringify(sheet.body),/"[A-Za-z_]*(practice|session)[A-Za-z_]*":/i,'home practice never enters the CA sheet');
+  const profile=await call(`/learners/${kid.ama}/profile`,'GET',undefined,teacher);assert.equal(profile.status,200);
+  assert.doesNotMatch(JSON.stringify(profile.body.termWork),/"[A-Za-z_]*(practice|session)[A-Za-z_]*":/i,'or the term work');
+});
+
 test('a session in progress can be finished after the set is retired or the guardian is revoked only until the revocation; revoked guardians lose access at once',async()=>{
   const s=await start(kid.ama,topic.percent);assert.equal(s.status,201,JSON.stringify(s.body));
   // Retiring the set does not strand a child mid-session; it only stops new sessions from using it.

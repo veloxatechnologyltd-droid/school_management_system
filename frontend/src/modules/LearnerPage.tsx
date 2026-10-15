@@ -4,6 +4,7 @@ import { Card, Empty, Icon, PageHeader, Pill, Stat, Tone } from '../lib/ui';
 import { caPartLabels } from '../lib/caParts';
 import { Note, NotesCard } from './LearnerNotes';
 import { SupportPlanDialog } from './Support';
+import { LearnerHomePractice } from './HomePracticeStaff';
 
 type PartKey = typeof caPartLabels[number][0];
 type SubjectTerm = { subjectId: string; name: string; parts: Record<PartKey, { average: number | null; marked: number; set: number }>; classWork: number | null; marks: number; lastMarked: string | null;
@@ -104,6 +105,7 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
             : <ul className="plain-list">{data.plans.map(p => <li key={p.id}><strong>{p.subject}{p.topic ? `: ${p.topic}` : ''}</strong> <Pill tone={p.closed ? 'neutral' : p.due ? 'caution' : 'info'}>{p.closed ? 'Closed' : p.due ? 'Review due' : 'Open'}</Pill>
               <span className="sub">{p.action} · {p.owner} · since {shortDate(p.startDate)}{!p.closed && p.nextReview ? ` · review ${shortDate(p.nextReview)}` : ''}</span></li>)}</ul>}
         </Card>
+        <LearnerHomePractice key={`practice:${l.id}`} schoolId={schoolId} learnerId={l.id}/>
         {data.mock && <Card title="Latest mock exam">
           <p><strong className={`tone-${tone(data.mock.average)}`}>{data.mock.average ?? '–'}%</strong> {data.mock.round}{data.mock.change !== null && <span className="muted"> ({data.mock.change > 0 ? '+' : ''}{data.mock.change} on the round before)</span>}</p>
           {data.mock.needsSupport && <Pill tone="caution">Needs support in two or more subjects</Pill>}</Card>}

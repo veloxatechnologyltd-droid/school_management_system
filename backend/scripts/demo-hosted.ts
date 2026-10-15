@@ -1034,11 +1034,15 @@ async function practiceNow() {
   }
   step('Home practice switched on, and some practice done on the demo parent\'s phone');
   await head.put('/practice/settings', { enabled: true }, 'practice-settings');
-  const parent = await as('family0');
-  for (const child of (await parent.get('/guardian/children')) as { id: string }[]) {
-    const key = `practice:t4:${child.id}`; if (done(key)) continue;
-    await playDemoWeek(parent, child.id, key);
-    mark(key);
+  // The demo parent's children, and a dozen other families, so teachers' class views show a school where some families practise and most do not.
+  for (let n = 0; n < 12; n++) {
+    if (!state.accounts[`family${n}`]) continue;
+    const parent = await as(`family${n}`);
+    for (const child of (await parent.get('/guardian/children')) as { id: string }[]) {
+      const key = `practice:t4:${child.id}`; if (done(key)) continue;
+      await playDemoWeek(parent, child.id, key);
+      mark(key);
+    }
   }
 }
 

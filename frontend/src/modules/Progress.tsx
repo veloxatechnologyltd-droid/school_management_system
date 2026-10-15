@@ -4,6 +4,7 @@ import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, Tabs, currentTerm, t
 import { Plan, PlanDraft, SupportList, SupportPlanDialog, SupportPlanDrawer } from './Support';
 import { PracticeDialog } from './Practice';
 import { Mocks } from './Mocks';
+import { ClassHomePractice } from './HomePracticeStaff';
 import { CaSheet, WorkSet } from './CaSheet';
 
 type Page<T> = { items: T[] };
@@ -33,7 +34,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const head = role === 'headteacher';
   const [subjects, setSubjects] = useState<Subject[]>([]); const [terms, setTerms] = useState<Term[]>([]); const [classes, setClasses] = useState<ClassOption[]>([]);
   const [classId, setClassId] = useState(''); const [termId, setTermId] = useState(''); const [subjectId, setSubjectId] = useState('');
-  const [tab, setTab] = useState<'assessments' | 'trends' | 'ca' | 'gaps' | 'support' | 'mocks'>(initialTab === 'support' ? 'support' : initialTab === 'ca' ? 'ca' : 'trends');
+  const [tab, setTab] = useState<'assessments' | 'trends' | 'ca' | 'gaps' | 'support' | 'mocks' | 'practice'>(initialTab === 'support' ? 'support' : initialTab === 'ca' ? 'ca' : 'trends');
   // Support plans: every plan this person can see (for the due-review banner), and the ones shown on the Support tab.
   const [plans, setPlans] = useState<{ today: string; items: Plan[] } | null>(null); const [planScope, setPlanScope] = useState<'class' | 'school'>(head ? 'school' : 'class'); const [planStatus, setPlanStatus] = useState<'open' | 'closed'>('open');
   const [draft, setDraft] = useState<PlanDraft | null>(null); const [practiceFor, setPracticeFor] = useState(''); const [planId, setPlanId] = useState('');
@@ -141,7 +142,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
       <div className="toolbar">
         <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
         <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
-        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'trends', label: 'Trends' }, { id: 'ca', label: 'CA sheet' }, { id: 'gaps', label: 'Gaps' }, { id: 'support', label: `Support${plans ? ` (${plans.items.filter(p => !p.closed).length})` : ''}` }, { id: 'assessments', label: 'Assessments' }, ...(isJhs ? [{ id: 'mocks' as const, label: 'Mocks' }] : [])]}/>
+        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'trends', label: 'Trends' }, { id: 'ca', label: 'CA sheet' }, { id: 'gaps', label: 'Gaps' }, { id: 'support', label: `Support${plans ? ` (${plans.items.filter(p => !p.closed).length})` : ''}` }, { id: 'assessments', label: 'Assessments' }, { id: 'practice', label: 'Home practice' }, ...(isJhs ? [{ id: 'mocks' as const, label: 'Mocks' }] : [])]}/>
       </div>
       {!classId || !termId ? (loaded && <Empty title={classes.length ? 'Choose a class and term' : 'No classes yet'} hint={classes.length ? undefined : head ? 'Add classes in Settings first.' : 'You have no class assigned today.'}/>)
         : tab === 'assessments' ? <>
@@ -151,6 +152,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
               {assessments.map(a => <tr key={a.id}><td>{shortDate(a.held_on)}</td><td>{a.title}<span className="sub">{kindLabel(a.kind)} · out of {a.max_mark}{a.indicators?.length ? ` · ${a.indicators.map(i => i.code ?? i.description).join(', ')}` : ''}</span></td><td>{a.subject_name}</td><td className="num">{a.marked}</td><td><Score value={a.average}/></td>
                 <td><button type="button" className="secondary" disabled={busy} onClick={() => void act(() => openMarks(a))}>Enter marks</button></td></tr>)}</tbody></table></div>}
         </> : tab === 'ca' ? <CaSheet schoolId={schoolId} classId={classId} termId={termId} subjects={subjects} subjectId={subjectId} onSubject={setSubjectId}/>
+        : tab === 'practice' ? <ClassHomePractice key={`${classId}:${termId}`} schoolId={schoolId} classId={classId} termId={termId}/>
         : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects}
           onPlan={(id, subject, concern) => planFor({ subjectId: subject, learnerIds: [id], concern })}/>
         : tab === 'support' ? <>

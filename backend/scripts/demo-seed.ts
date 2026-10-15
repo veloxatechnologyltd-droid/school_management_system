@@ -446,6 +446,9 @@ async function main() {
     {
       const parent = await new Person(`parent@${DOMAIN}`).login();
       for (const l of learners.filter(l => l.guardian?.email === `parent@${DOMAIN}`)) await playDemoWeek(parent, l.id);
+      // A few other families in Basic 6, JHS 2 and JHS 3 have practised too, so teachers' class views are not empty (every other child, no random draws).
+      const others = learners.filter(l => [9, 11, 12].includes(l.classIndex) && l.guardian && l.guardian.email !== `parent@${DOMAIN}`).filter((_, n) => n % 2 === 0).slice(0, 12);
+      for (const l of others) await playDemoWeek(await new Person(l.guardian!.email).login(), l.id);
     }
 
     step('BECE mock exams for JHS 2 and JHS 3');
