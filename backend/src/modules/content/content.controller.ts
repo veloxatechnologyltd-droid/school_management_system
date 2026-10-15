@@ -3,7 +3,8 @@ import { Request } from 'express';
 import { PoolClient } from 'pg';
 import { Access } from '../../core/access';
 import { Database } from '../../core/database';
-import { BodyDto, CatalogueQueryDto, IndicatorDto, ItemsQueryDto, NewItemDto, NoteDto, ReasonDto, RejectDto } from './content.dto';
+import { BatchDto, BodyDto, CatalogueQueryDto, IndicatorDto, ItemsQueryDto, NewItemDto, NoteDto, ReasonDto, RejectDto } from './content.dto';
+import { ContentDraftingService } from './drafting.service';
 import { ContentService } from './content.service';
 
 // The database refuses what the rules forbid (a reviewer approving their own item, a frozen version being reworded);
@@ -22,7 +23,7 @@ function plain(error: unknown) {
 // Everything here is for the content team (platform-level roles, separate from school roles and from the platform administrator).
 @Controller('api/v1/content')
 export class ContentController {
-  constructor(private readonly db: Database, private readonly access: Access, private readonly content: ContentService) {}
+  constructor(private readonly db: Database, private readonly access: Access, private readonly content: ContentService, private readonly drafting: ContentDraftingService) {}
   private async staff<T>(req: Request, write: boolean, work: (client: PoolClient, userId: string) => Promise<T>) {
     try {
       return await this.db.transaction(async client => {
@@ -31,6 +32,12 @@ export class ContentController {
         return work(client, session.user_id as string);
       });
     } catch (error) { throw plain(error); }
+  }
+
+  // Closing a run the person began needs only their session, not a content role: they may have lost it while the model was working.
+  private async member<T>(req: Request, work: (client: PoolClient) => Promise<T>) {
+    try { return await this.db.transaction(async client => { await this.access.identity(client, req, true); return work(client); }); }
+    catch (error) { throw plain(error); }
   }
 
   @Get('me')
@@ -65,4 +72,21 @@ export class ContentController {
 
   @Get('queue')
   queue(@Req() req: Request) { return this.staff(req, false, (client, userId) => this.content.queue(client, userId)); }
+
+  // Claude drafts a batch of questions. The run is begun and the budget reserved, the model is called with no transaction held,
+  // then the run is finished, which creates the drafts. Every draft still needs a human reviewer.
+  @Get('drafting')
+  draftingOverview(@Req() req: Request) { return this.staff(req, false, client => this.drafting.overview(client)); }
+  @Post('drafting/batches')
+  async draftBatch(@Req() req: Request, @Body() body: BatchDto) {
+    const prepared = await this.staff(req, true, (client, userId) => this.drafting.prepare(client, userId, body));
+    const done = await this.drafting.complete(prepared);
+    try { return await this.staff(req, true, client => this.drafting.finish(client, prepared, done)); }
+    catch (error) {
+      await this.member(req, client => this.drafting.finish(client, prepared, this.drafting.abandon(done))).catch(() => undefined);
+      throw error;
+    }
+  }
+  @Post('drafting/runs/:id/submit')
+  submitRun(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string) { return this.staff(req, true, (client, userId) => this.drafting.submitRun(client, userId, id)); }
 }

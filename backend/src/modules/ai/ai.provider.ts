@@ -1,6 +1,6 @@
 export interface AiPrompt { system: string; user: string; maxTokens: number; timeoutMs?: number }
 export interface AiCompletion { text: string; inputTokens: number | null; outputTokens: number | null }
-const THINKING_ROOM = 4000;
+export const THINKING_ROOM = 4000;
 export interface AiProvider { readonly name: string; readonly model: string | null; complete(prompt: AiPrompt): Promise<AiCompletion> }
 
 // Anthropic Messages API (Claude), the school-approved provider. Only used when AI_ENABLED=true, the school has switched AI on,

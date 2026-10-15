@@ -3,7 +3,7 @@ import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Tabs, Tone, when } from '../lib/ui';
 
 // The shared content library: the curriculum catalogue and the questions and parent guides written once for every school.
-// Authors write, reviewers decide on other people's work, leads also keep the catalogue. Nothing here is shown to a family yet.
+// Authors write (or ask Claude to draft), reviewers decide on other people's work, leads also keep the catalogue. Nothing here is shown to a family yet.
 type Role = 'author' | 'reviewer' | 'lead';
 type Page<T> = { items: T[]; total: number };
 type Indicator = { id: string; subject: string; level: string; code: string | null; strand: string | null; subStrand: string | null; description: string; termGuidance: number[] | null; origin: 'official' | 'platform'; sourceNote: string; retiredAt: string | null; retirementReason: string | null; publishedQuestions: number; publishedGuides: number };
@@ -13,10 +13,14 @@ type Finding = { code: string; message: string; blocking: boolean };
 type Report = { blocking: number; warnings: number; machineChecked: boolean; findings: Finding[] };
 type Status = 'draft' | 'in_review' | 'published' | 'rejected' | 'retired';
 type Version = { id: string; itemId: string; version: number; status: Status; body: QBody | GBody; checks: Report | null; authorKind: string; authorId: string; authorName: string; submittedAt: string | null; reviewerName: string | null; reviewedAt: string | null; reviewNote: string | null; publishedAt: string | null; retiredAt: string | null; retiredByName: string | null; retirementReason: string | null };
-type Row = { id: string; kind: 'question' | 'guide'; level: number | null; indicatorId: string; subject: string; classLevel: string; code: string | null; indicator: string; versionId: string; version: number; status: Status; authorName: string; lead: string; publishedVersion: number | null; updatedAt: string };
+type Row = { id: string; kind: 'question' | 'guide'; level: number | null; indicatorId: string; subject: string; classLevel: string; code: string | null; indicator: string; versionId: string; version: number; status: Status; authorKind: string; authorName: string; lead: string; publishedVersion: number | null; updatedAt: string };
 type Detail = { id: string; kind: 'question' | 'guide'; level: number | null; indicatorId: string; subject: string; classLevel: string; code: string | null; indicator: string; indicatorRetired: boolean; stage: string; versions: Version[] };
 type Queued = Version & { kind: 'question' | 'guide'; level: number | null; subject: string; classLevel: string; code: string | null; indicator: string; stage: string };
 type Me = { userId: string; roles: Role[]; queue: number };
+type Run = { id: string; requestedBy: string; requestedByName: string; subject: string; classLevel: string; code: string | null; indicator: string; level: number; requested: number; drafted: number; dropped: number; draftsWaiting: number; status: 'started' | 'ok' | 'failed'; inputTokens: number | null; outputTokens: number | null; note: string | null; createdAt: string };
+type Drafting = { enabled: boolean; providerConfigured: boolean; monthlyTokenCap: number; usedTokens: number; remainingTokens: number; runs: Run[] };
+type Batch = { runId: string; status: 'ok' | 'failed'; requested: number; drafted: number; dropped: number; reasons: Record<string, number>; versionIds: string[]; note: string | null };
+type Sent = { submitted: number; blocked: { versionId: string; findings: { code: string; message: string }[] }[] };
 type Props = { csrfToken: string };
 
 const LEVELS = ['Basic 1', 'Basic 2', 'Basic 3', 'Basic 4', 'Basic 5', 'Basic 6', 'JHS 1', 'JHS 2', 'JHS 3'];
@@ -24,6 +28,16 @@ const STATUS: Record<Status, { label: string; tone: Tone }> = { draft: { label: 
 const STAGE: Record<string, string> = { lower_primary: 'Lower Primary', upper_primary: 'Upper Primary', jhs: 'JHS' };
 const levelName = (level: number | null) => level === 1 ? 'Level 1 · easiest' : level === 2 ? 'Level 2 · middle' : level === 3 ? 'Level 3 · hardest' : '';
 const topic = (r: { code: string | null; subject: string; classLevel: string; indicator: string }) => `${r.classLevel} ${r.subject}${r.code ? ` · ${r.code}` : ''}: ${r.indicator}`;
+
+const num = (n: number) => n.toLocaleString('en-GB');
+// Why a drafted question was left out, and why a whole batch failed, in words a content author can act on.
+const LEFT_OUT: Record<string, string> = { wrong_answer: 'a wrong answer to a sum', two_right_answers: 'two right answers', duplicate: 'wording already in the library', near_duplicate: 'wording too close to another question', labelling_language: 'wording that labels a child',
+  bad_answer: 'no single right answer', bad_characters: 'a character that cannot be stored', bad_options: 'unusable options', bad_prompt: 'the wrong length', bad_explanation: 'an unusable explanation', bad_kind: 'an unknown type', bad_question: 'an unreadable question' };
+const leftOut = (reasons: Record<string, number>) => Object.entries(reasons).map(([code, n]) => `${n} with ${LEFT_OUT[code] ?? 'a problem'}`).join(', ');
+const FAILED: Record<string, string> = { provider_error: 'Claude could not be reached, so nothing was drafted. Try again in a moment.', 'rejected:not_json': 'Claude\'s reply could not be read. Try again.', 'rejected:not_questions': 'Claude\'s reply could not be read. Try again.',
+  nothing_usable: 'None of Claude\'s questions passed the automatic checks. Try again, or write them yourself.', no_usage: 'Claude\'s reply did not say what it cost, so it was not kept. Try again.', save_failed: 'The drafts could not be saved. Try again.' };
+// Why drafting cannot start right now, or null when it can.
+const cannotDraft = (d: Drafting) => !d.enabled ? 'AI drafting is switched off for the platform.' : !d.providerConfigured ? 'No AI provider is set up.' : d.monthlyTokenCap === 0 ? 'No drafting budget is set. The platform administrator sets one in Platform administration.' : d.remainingTokens <= 0 ? 'This month\'s drafting budget is used up.' : null;
 
 // ---- Forms and what the server stores
 type QForm = { kind: 'choice' | 'number'; level: number; prompt: string; options: string[]; correct: number; answer: string; explanation: string };
@@ -162,9 +176,10 @@ function ItemDrawer({ itemId, act, onClose, onChanged, openEditor }: { itemId: s
         {v.reviewerName && <p className="muted">{v.status === 'rejected' ? 'Rejected' : 'Approved'} by {v.reviewerName}, {when(v.reviewedAt)}{v.reviewNote ? `: ${v.reviewNote}` : ''}</p>}
         {v.retiredAt && <p className="muted">Out of use since {when(v.retiredAt)} ({v.retiredByName}): {v.retirementReason}</p>}
         {v.status !== 'draft' && <Findings report={v.checks} kind={item.kind}/>}
+        {v.status === 'draft' && v.authorKind === 'ai' && v.authorId === act.userId && <p className="muted">A Claude draft is not reworded. To change it, withdraw it and write a new version: that wording is then yours and is reviewed as yours.</p>}
         <div className="actions">
           {v.status === 'draft' && v.authorId === act.userId && <>
-            <button type="button" className="small" onClick={() => openEditor({ kind: item.kind, indicatorId: item.indicatorId, heading: `Edit draft · version ${v.version}`, version: v, body: v.body, ...(item.level ? { level: item.level } : {}), itemId: item.id })}>Edit</button>
+            {v.authorKind !== 'ai' && <button type="button" className="small" onClick={() => openEditor({ kind: item.kind, indicatorId: item.indicatorId, heading: `Edit draft · version ${v.version}`, version: v, body: v.body, ...(item.level ? { level: item.level } : {}), itemId: item.id })}>Edit</button>}
             <button type="button" className="small" onClick={() => void submit(v)}>Submit for review</button>
             <button type="button" className="secondary small" onClick={() => setAsk({ title: 'Withdraw this draft', label: 'Why are you withdrawing it?', confirm: 'Withdraw', path: `/versions/${v.id}/retire` })}>Withdraw</button></>}
           {(v.status === 'published' || v.status === 'in_review') && canReview && <button type="button" className="secondary small" onClick={() => setAsk({ title: 'Take this version out of use', label: 'Why is it being taken out of use? Nothing new is served from it.', confirm: 'Take out of use', path: `/versions/${v.id}/retire` })}>Take out of use</button>}
@@ -201,11 +216,80 @@ function CatalogueForm({ send, onClose, onDone }: { send: Act['send']; onClose: 
   </form></Dialog>;
 }
 
+// Claude drafts a batch of questions for one catalogue entry. They arrive as the requester's own drafts; a reviewer still reads every one.
+function DraftDialog({ indicator, act, onClose, onDone }: { indicator: Indicator; act: Act; onClose: () => void; onDone: () => void }) {
+  const [info, setInfo] = useState<Drafting | null>(null); const [level, setLevel] = useState(1); const [count, setCount] = useState(20);
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [batch, setBatch] = useState<Batch | null>(null); const [sent, setSent] = useState<Sent | null>(null);
+  const loadInfo = useCallback(() => request<Drafting>('/content/drafting').then(setInfo).catch(e => setError((e as Error).message)), []);
+  useEffect(() => { void loadInfo(); }, [loadInfo]);
+  const blocked = info ? cannotDraft(info) : null;
+  async function draft(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(''); setBatch(null); setSent(null);
+    try { setBatch(await act.send<Batch>('/drafting/batches', { indicatorId: indicator.id, level, count })); onDone(); void loadInfo(); }
+    catch (e) { setError((e as Error).message); void loadInfo(); } finally { setBusy(false); }
+  }
+  async function sendAll() {
+    if (!batch) return; setBusy(true); setError('');
+    try { setSent(await act.send<Sent>(`/drafting/runs/${batch.runId}/submit`)); onDone(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  return <Dialog title={`Draft with Claude · ${indicator.level} ${indicator.subject}`} onClose={onClose} wide>
+    <p>{indicator.description}</p>
+    {error && <p role="alert">{error}</p>}
+    {info && info.monthlyTokenCap > 0 && <p className="muted">{`Drafting budget: ${num(info.remainingTokens)} of ${num(info.monthlyTokenCap)} tokens left this month. A batch is charged what it uses, roughly 6,000 tokens for 20 questions.`}</p>}
+    {blocked && <p role="status">{blocked}</p>}
+    <form onSubmit={draft}>
+      <div className="field-row">
+        <label>Difficulty<select value={level} onChange={e => setLevel(Number(e.target.value))} disabled={busy}><option value={1}>Level 1 · easiest</option><option value={2}>Level 2 · middle</option><option value={3}>Level 3 · hardest</option></select></label>
+        <label>How many questions<input type="number" inputMode="numeric" min={1} max={30} value={count} onChange={e => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))} disabled={busy}/></label>
+      </div>
+      <p className="muted">Claude sees only this indicator and the wording already in the library, never a child or a school. Each question is checked like one you wrote, and any that repeat wording, have a wrong sum or no single right answer are left out. What is kept becomes a draft in your name.</p>
+      <div className="actions"><button disabled={busy || blocked !== null || !info}>{busy ? 'Claude is writing…' : 'Draft questions'}</button><button type="button" className="secondary" onClick={onClose}>Close</button></div>
+    </form>
+    {busy && !batch && <p role="status">Claude is writing {count} questions. This can take up to a minute; keep this window open.</p>}
+    {batch && batch.status === 'failed' && <p role="alert">{FAILED[batch.note ?? ''] ?? 'Nothing could be drafted.'}{batch.dropped ? ` ${batch.dropped} questions were left out: ${leftOut(batch.reasons)}.` : ''}</p>}
+    {batch && batch.status === 'ok' && <Card title={`${batch.drafted} of ${batch.requested} questions drafted`} hint={batch.dropped ? `${batch.dropped} left out: ${leftOut(batch.reasons)}.` : 'None were left out.'}>
+      <p>They are drafts in your name at {levelName(level)}. Find them in the Library under "Written by me", or send them all to a reviewer now. A reviewer still reads every question before it can be published.</p>
+      {!sent && <div className="actions"><button type="button" disabled={busy} onClick={() => void sendAll()}>{busy ? 'Sending…' : `Send all ${batch.drafted} to review`}</button></div>}
+      {sent && <p role="status">Sent {sent.submitted} to review.{sent.blocked.length ? ` ${sent.blocked.length} held back by the checks, still drafts for you to fix: ${sent.blocked.map(b => b.findings.map(f => f.message).join('; ')).join(' · ')}` : ''}</p>}
+    </Card>}
+  </Dialog>;
+}
+
+// The platform's drafting budget for the month and every batch asked for, with what it cost. No question text is kept here.
+function DraftingTab({ refreshed, act, canWrite }: { refreshed: number; act: Act; canWrite: boolean }) {
+  const [info, setInfo] = useState<Drafting | null>(null); const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
+  useEffect(() => { request<Drafting>('/content/drafting').then(setInfo).catch(e => setError((e as Error).message)); }, [refreshed]);
+  async function send(run: Run) {
+    setBusy(run.id);
+    try { const r = await act.send<Sent>(`/drafting/runs/${run.id}/submit`); act.notify(r.submitted || r.blocked.length ? `Sent ${r.submitted} to review.${r.blocked.length ? ` ${r.blocked.length} held back by the checks: open them in the Library to fix.` : ''}` : 'Nothing is waiting to be sent.'); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(''); }
+  }
+  if (error) return <p role="alert">{error}</p>;
+  if (!info) return <p role="status">Loading…</p>;
+  const used = info.monthlyTokenCap ? Math.min(100, Math.round(info.usedTokens / info.monthlyTokenCap * 100)) : 0;
+  return <>
+    <Card title="This month's drafting budget" hint="Claude's drafting is paid for by the platform. The platform administrator sets the budget; a batch that would go past it is refused.">
+      {info.monthlyTokenCap ? <><progress className="meter" max={info.monthlyTokenCap} value={Math.min(info.usedTokens, info.monthlyTokenCap)} aria-label="Budget used"/><p>{num(info.usedTokens)} of {num(info.monthlyTokenCap)} tokens used ({used}%) · {num(info.remainingTokens)} left</p></> : <p>No budget is set yet.</p>}
+      {cannotDraft(info) && <p role="status">{cannotDraft(info)}</p>}
+    </Card>
+    <Card flush title="Batches" hint="Newest first. A failed batch with no token count is charged its reservation.">
+      {!info.runs.length ? <Empty title="No batches yet" hint={canWrite ? 'Open a catalogue entry and choose "Draft with Claude".' : 'Batches appear here when an author asks Claude to draft.'}/> :
+        <ul className="entries">{info.runs.map(r => <li key={r.id}>
+          <div className="entry-main"><strong>{r.classLevel} · {r.subject}{r.code ? ` · ${r.code}` : ''}</strong><span>{r.indicator}</span>
+            <span className="muted">{levelName(r.level)} · asked for by {r.requestedByName} · {when(r.createdAt)}{r.status === 'failed' && r.note ? ` · ${FAILED[r.note] ?? 'Nothing was drafted.'}` : ''}</span></div>
+          <div className="entry-side"><Pill tone={r.status === 'ok' ? 'positive' : r.status === 'failed' ? 'critical' : 'caution'}>{r.status === 'ok' ? `${r.drafted} of ${r.requested} kept` : r.status === 'failed' ? 'Failed' : 'Unfinished'}</Pill>
+            <span className="muted">{r.inputTokens !== null && r.outputTokens !== null ? `${num(r.inputTokens + r.outputTokens)} tokens` : 'cost unknown'}{r.status === 'ok' && r.dropped ? ` · ${r.dropped} left out` : ''}</span>
+            {r.draftsWaiting > 0 && r.requestedBy === act.userId && canWrite && <button type="button" className="secondary small" disabled={busy === r.id} onClick={() => void send(r)}>{r.draftsWaiting === 1 ? 'Send 1 draft to review' : `Send ${r.draftsWaiting} drafts to review`}</button>}</div></li>)}</ul>}
+    </Card>
+  </>;
+}
+
 export function ContentLibrary({ csrfToken }: Props) {
   const [me, setMe] = useState<Me | null>(null);
-  const [tab, setTab] = useState<'library' | 'review' | 'catalogue'>('library');
+  const [tab, setTab] = useState<'library' | 'review' | 'catalogue' | 'drafting'>('library');
   const [message, setMessage] = useState(''); const [error, setError] = useState('');
-  const [editor, setEditor] = useState<Target | null>(null); const [open, setOpen] = useState(''); const [adding, setAdding] = useState(false);
+  const [editor, setEditor] = useState<Target | null>(null); const [open, setOpen] = useState(''); const [adding, setAdding] = useState(false); const [drafting, setDrafting] = useState<Indicator | null>(null);
   const [version, setVersion] = useState(0);
   const send = useCallback(<T,>(path: string, body: object = {}) => request<T>(`/content${path}`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify(body) }), [csrfToken]);
   const put = useCallback((path: string, body: object) => request(`/content${path}`, { method: 'PUT', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify(body) }), [csrfToken]);
@@ -215,7 +299,7 @@ export function ContentLibrary({ csrfToken }: Props) {
   if (!me) return <section aria-label="Content library">{error ? <p role="alert">{error}</p> : <p role="status">Loading the content library…</p>}</section>;
   const act: Act = { send, notify, roles: me.roles, userId: me.userId };
   const canWrite = me.roles.includes('author') || me.roles.includes('lead'), canReview = me.roles.includes('reviewer') || me.roles.includes('lead'), lead = me.roles.includes('lead');
-  const tabs = [{ id: 'library' as const, label: 'Library' }, ...(canReview ? [{ id: 'review' as const, label: me.queue ? `Review (${me.queue})` : 'Review' }] : []), { id: 'catalogue' as const, label: 'Catalogue' }];
+  const tabs = [{ id: 'library' as const, label: 'Library' }, ...(canReview ? [{ id: 'review' as const, label: me.queue ? `Review (${me.queue})` : 'Review' }] : []), { id: 'catalogue' as const, label: 'Catalogue' }, { id: 'drafting' as const, label: 'Drafting' }];
   const done = (text: string) => { setEditor(null); setMessage(text); setError(''); refresh(); };
   return <section aria-label="Content library">
     <PageHeader eyebrow="Home Learning Pass" title="Content library" blurb="Questions and parent guides written once and reviewed centrally. A published item always has a named reviewer who did not write it."
@@ -225,9 +309,11 @@ export function ContentLibrary({ csrfToken }: Props) {
     <div className="actions"><Tabs label="Content library" value={tab} onChange={t => { setTab(t); setMessage(''); }} options={tabs}/></div>
     {tab === 'library' && <LibraryTab refreshed={version} canWrite={canWrite} onOpen={setOpen}/>}
     {tab === 'review' && canReview && <ReviewTab key={version} act={act} onOpen={setOpen}/>}
-    {tab === 'catalogue' && <CatalogueTab refreshed={version} lead={lead} canWrite={canWrite} act={act} onWrite={setEditor} onOpen={setOpen}/>}
+    {tab === 'catalogue' && <CatalogueTab refreshed={version} lead={lead} canWrite={canWrite} act={act} onWrite={setEditor} onOpen={setOpen} onDraft={setDrafting}/>}
+    {tab === 'drafting' && <DraftingTab refreshed={version} act={act} canWrite={canWrite}/>}
     {editor && <Editor target={editor} send={send} put={put} onClose={() => setEditor(null)} onDone={done}/>}
     {open && <ItemDrawer itemId={open} act={act} onClose={() => setOpen('')} onChanged={refresh} openEditor={t => { setOpen(''); setEditor(t); }}/>}
+    {drafting && <DraftDialog indicator={drafting} act={act} onClose={() => setDrafting(null)} onDone={refresh}/>}
     {adding && <CatalogueForm send={send} onClose={() => setAdding(false)} onDone={text => { setAdding(false); done(text); }}/>}
   </section>;
 }
@@ -250,7 +336,7 @@ function LibraryTab({ refreshed, canWrite, onOpen }: { refreshed: number; canWri
       <ul className="entries">{rows.map(r => <li key={r.id}>
         <div className="entry-main"><button type="button" className="link-button" onClick={() => onOpen(r.id)}>{r.lead}</button>
           <span className="muted">{r.kind === 'question' ? levelName(r.level) : 'Parent guide'} · {r.classLevel} {r.subject}{r.code ? ` · ${r.code}` : ''}</span></div>
-        <div className="entry-side"><Pill tone={STATUS[r.status].tone}>{STATUS[r.status].label}</Pill><span className="muted">v{r.version}{r.publishedVersion && r.publishedVersion !== r.version ? ` · v${r.publishedVersion} live` : ''} · {r.authorName} · {when(r.updatedAt)}</span></div></li>)}</ul>}
+        <div className="entry-side"><Pill tone={STATUS[r.status].tone}>{STATUS[r.status].label}</Pill>{r.authorKind === 'ai' && <Pill tone="info">Claude draft</Pill>}<span className="muted">v{r.version}{r.publishedVersion && r.publishedVersion !== r.version ? ` · v${r.publishedVersion} live` : ''} · {r.authorName} · {when(r.updatedAt)}</span></div></li>)}</ul>}
     {rows && rows.length < total && <p className="pad"><button type="button" className="secondary" onClick={() => request<Page<Row>>(query(rows.length)).then(p => setRows([...rows, ...p.items])).catch(e => setError((e as Error).message))}>Show more</button></p>}
   </Card>;
 }
@@ -261,7 +347,7 @@ function ReviewTab({ act, onOpen }: { act: Act; onOpen: (id: string) => void }) 
   if (error) return <p role="alert">{error}</p>;
   if (!queue) return <p role="status">Loading…</p>;
   if (!queue.length) return <Empty title="Nothing is waiting for review" hint="Work other people have submitted appears here. You cannot review your own writing."/>;
-  return <>{queue.map(v => <Card key={v.id} title={topic(v)} hint={`${v.kind === 'question' ? `Question · ${levelName(v.level)}` : 'Parent guide'} · ${STAGE[v.stage]} · written by ${v.authorName}, submitted ${when(v.submittedAt)}`}
+  return <>{queue.map(v => <Card key={v.id} title={topic(v)} hint={`${v.kind === 'question' ? `Question · ${levelName(v.level)}` : 'Parent guide'} · ${STAGE[v.stage]} · ${v.authorKind === 'ai' ? 'drafted with Claude for' : 'written by'} ${v.authorName}, submitted ${when(v.submittedAt)}`}
     action={<button type="button" className="link-button" onClick={() => onOpen(v.itemId)}>All versions</button>}>
     <Preview kind={v.kind} body={v.body}/>
     <Findings report={v.checks} kind={v.kind}/>
@@ -269,7 +355,7 @@ function ReviewTab({ act, onOpen }: { act: Act; onOpen: (id: string) => void }) 
   </Card>)}</>;
 }
 
-function CatalogueTab({ refreshed, lead, canWrite, act, onWrite, onOpen }: { refreshed: number; lead: boolean; canWrite: boolean; act: Act; onWrite: (t: Target) => void; onOpen: (id: string) => void }) {
+function CatalogueTab({ refreshed, lead, canWrite, act, onWrite, onOpen, onDraft }: { refreshed: number; lead: boolean; canWrite: boolean; act: Act; onWrite: (t: Target) => void; onOpen: (id: string) => void; onDraft: (i: Indicator) => void }) {
   const [rows, setRows] = useState<Indicator[] | null>(null); const [total, setTotal] = useState(0); const [error, setError] = useState('');
   const [level, setLevel] = useState(''); const [search, setSearch] = useState(''); const [retired, setRetired] = useState(false);
   const [chosen, setChosen] = useState<Indicator | null>(null); const [retiring, setRetiring] = useState<Indicator | null>(null);
@@ -296,7 +382,8 @@ function CatalogueTab({ refreshed, lead, canWrite, act, onWrite, onOpen }: { ref
       <p className="muted">{chosen.strand}{chosen.subStrand ? ` › ${chosen.subStrand}` : ''}{chosen.strand || chosen.subStrand ? ' · ' : ''}{chosen.origin === 'official' ? 'Published curriculum' : 'Written by the platform team'}: {chosen.sourceNote}</p>
       <div className="actions">
         {canWrite && !chosen.retiredAt && <><button type="button" onClick={() => { onWrite({ kind: 'question', indicatorId: chosen.id, heading: `New question · ${chosen.level} ${chosen.subject}` }); setChosen(null); }}><Icon name="add"/>New question</button>
-          <button type="button" className="secondary" onClick={() => { onWrite({ kind: 'guide', indicatorId: chosen.id, heading: `New parent guide · ${chosen.level} ${chosen.subject}` }); setChosen(null); }}>New parent guide</button></>}
+          <button type="button" className="secondary" onClick={() => { onWrite({ kind: 'guide', indicatorId: chosen.id, heading: `New parent guide · ${chosen.level} ${chosen.subject}` }); setChosen(null); }}>New parent guide</button>
+          <button type="button" className="secondary" onClick={() => { onDraft(chosen); setChosen(null); }}><Icon name="auto_awesome"/>Draft with Claude</button></>}
         {lead && !chosen.retiredAt && <button type="button" className="secondary" onClick={() => { setRetiring(chosen); setChosen(null); }}>Retire this entry</button>}
       </div>
       <IndicatorItems indicatorId={chosen.id} onOpen={id => { setChosen(null); onOpen(id); }}/>

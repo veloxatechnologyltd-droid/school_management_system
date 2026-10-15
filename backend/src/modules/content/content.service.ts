@@ -137,6 +137,7 @@ export class ContentService {
     const version = await this.load(client, versionId);
     if (version.status !== 'draft') throw new ConflictException('Only a draft can be reworded; write a new version instead');
     if (version.author_id !== userId) throw new ForbiddenException('Only the author can reword their draft');
+    if (version.author_kind === 'ai') throw new ConflictException('A Claude draft cannot be reworded. Withdraw it and write a new version, which is then your own wording and is reviewed as such');
     await client.query('UPDATE content_versions SET body=$2 WHERE id=$1', [versionId, JSON.stringify(this.body(version.kind, version.level, dto.body))]);
     return { saved: true };
   }

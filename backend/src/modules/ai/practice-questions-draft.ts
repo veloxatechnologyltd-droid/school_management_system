@@ -27,6 +27,18 @@ export function buildQuestionsPrompt(fact: IndicatorFact) {
 // Without a model there is nothing to draft: the teacher writes the questions.
 export const templateQuestions = (): BankQuestion[] => [];
 
+// One question as the model wrote it, in the shape checkQuestion reads. The model names the correct option by its wording, which must
+// match exactly one option; null when it does not.
+export function candidateOf(q: any, level: unknown): Record<string, unknown> | null {
+  if (q.type === 'choice') {
+    const options: unknown = q.options, same = (exact: boolean) => Array.isArray(options) && typeof q.answer === 'string'
+      ? options.flatMap((o, i) => typeof o === 'string' && (exact ? o.trim() === q.answer.trim() : o.trim().toLowerCase() === q.answer.trim().toLowerCase()) ? [i] : []) : [];
+    const matches = same(true).length ? same(true) : same(false);
+    return matches.length === 1 ? { level, kind: 'choice', prompt: q.q, options, correctOption: matches[0], explanation: q.why } : null;
+  }
+  return { level, kind: q.type, prompt: q.q, answer: typeof q.answer === 'string' && /^-?\d+(\.\d+)?$/.test(q.answer.trim()) ? Number(q.answer) : q.answer, explanation: q.why };
+}
+
 export type QuestionsValidation = { ok: true; questions: BankQuestion[] } | { ok: false; reason: string };
 export function validateQuestionsDraft(raw: string): QuestionsValidation {
   let value: any;
@@ -37,14 +49,9 @@ export function validateQuestionsDraft(raw: string): QuestionsValidation {
     if (!entry || typeof entry !== 'object' || !Array.isArray(entry.questions)) return { ok: false, reason: 'not_levels' };
     for (const q of entry.questions) {
       if (!q || typeof q !== 'object') return { ok: false, reason: 'bad_question' };
-      if (q.type === 'choice') {
-        // The model names the correct option by its wording; it must match exactly one option.
-        const options: unknown = q.options, same = (exact: boolean) => Array.isArray(options) && typeof q.answer === 'string'
-          ? options.flatMap((o, i) => typeof o === 'string' && (exact ? o.trim() === q.answer.trim() : o.trim().toLowerCase() === q.answer.trim().toLowerCase()) ? [i] : []) : [];
-        const matches = same(true).length ? same(true) : same(false);
-        if (matches.length !== 1) return { ok: false, reason: 'bad_answer' };
-        candidates.push({ level: entry.level, kind: 'choice', prompt: q.q, options, correctOption: matches[0], explanation: q.why });
-      } else candidates.push({ level: entry.level, kind: q.type, prompt: q.q, answer: typeof q.answer === 'string' && /^-?\d+(\.\d+)?$/.test(q.answer.trim()) ? Number(q.answer) : q.answer, explanation: q.why });
+      const candidate = candidateOf(q, entry.level);
+      if (!candidate) return { ok: false, reason: 'bad_answer' };
+      candidates.push(candidate);
     }
   }
   const checked = checkQuestions(candidates);

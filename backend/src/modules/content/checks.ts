@@ -19,10 +19,16 @@ export const stageOf = (level: string): Stage => /^Basic [1-3]$/.test(level) ? '
 const squash = (value: string) => value.replace(/\s+/g, ' ').trim();
 const within = (value: unknown, min: number, max: number) => typeof value === 'string' && squash(value).length >= min && squash(value).length <= max;
 
+// Control characters and lone surrogates have no place in wording and cannot be stored (PostgreSQL refuses \u0000 in jsonb).
+// New lines and tabs are ordinary spacing and are kept apart from this.
+const unprintable = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+const hasUnprintable = (value: unknown): boolean => typeof value === 'string' ? unprintable.test(value) : Array.isArray(value) ? value.some(hasUnprintable) : value !== null && typeof value === 'object' ? Object.values(value).some(hasUnprintable) : false;
+
 export type BodyCheck = { ok: true; body: ContentBody } | { ok: false; reason: string };
 // Cleans a body to the stored shape. A question's difficulty lives on the item, not in the body.
 export function checkBody(kind: ContentKind, level: number | null, raw: unknown): BodyCheck {
   if (!raw || typeof raw !== 'object') return { ok: false, reason: 'bad_body' };
+  if (hasUnprintable(raw)) return { ok: false, reason: 'bad_characters' };
   const b = raw as Record<string, unknown>;
   if (kind === 'question') {
     const one = checkQuestion({ ...b, level });
@@ -41,6 +47,7 @@ export function bodyProblem(reason: string) {
   if (level) return 'A question needs a difficulty from 1 to 3';
   return ({
     bad_body: 'The wording is missing',
+    bad_characters: 'The wording contains a character that cannot be stored',
     bad_level: 'A question needs a difficulty from 1 to 3',
     bad_prompt: 'A question needs 5 to 200 characters of wording',
     bad_explanation: 'An explanation needs 3 to 200 characters, or leave it out',

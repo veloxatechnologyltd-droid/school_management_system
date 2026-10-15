@@ -6,7 +6,8 @@ import { localConfig } from '../src/core/database';
 // a catalogue with a few indicators per stage, and questions and parent guides in every state (published, replaced, in review,
 // a draft, a draft the checks will refuse, a rejection). Accounts are inserted directly; everything else goes through the running
 // API as the lead, author and reviewer would, so the rules, versions and checks apply. All wording here is original.
-// Safe to run again: it stops if the demo content team already exists.
+// Safe to run again: the library is loaded once; the drafting step (a monthly budget, then one Claude batch if a provider is set up)
+// is added to an already-loaded demo without wiping it.
 
 const API = process.env.DEMO_API ?? 'http://127.0.0.1:3018/api/v1';
 const PASSWORD = 'Demo-school-2026!';
@@ -21,13 +22,15 @@ class Member {
   cookie = ''; csrf = '';
   constructor(readonly email: string) {}
   async login() {
-    const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: this.email, password: PASSWORD }) });
+    // The API allows 30 sign-ins a minute from one address; right after the school loads, wait out the window rather than fail.
+    let r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: this.email, password: PASSWORD }) });
+    for (let wait = 0; r.status === 429 && wait < 6; wait++) { await new Promise(done => setTimeout(done, 15_000)); r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: this.email, password: PASSWORD }) }); }
     if (!r.ok) throw new Error(`Sign-in failed for ${this.email}: ${r.status} ${await r.text()}`);
     this.cookie = r.headers.getSetCookie().map(c => c.split(';')[0]).join('; '); this.csrf = (await r.json()).csrfToken;
     return this;
   }
-  async call<T = any>(method: 'GET' | 'POST' | 'PUT', path: string, body?: Record<string, unknown>): Promise<T> {
-    const r = await fetch(`${API}/content${path}`, { method, headers: { 'content-type': 'application/json', cookie: this.cookie, 'x-csrf-token': this.csrf }, body: method === 'GET' ? undefined : JSON.stringify(body ?? {}) });
+  async call<T = any>(method: 'GET' | 'POST' | 'PUT', path: string, body?: Record<string, unknown>, area = '/content'): Promise<T> {
+    const r = await fetch(`${API}${area}${path}`, { method, headers: { 'content-type': 'application/json', cookie: this.cookie, 'x-csrf-token': this.csrf }, body: method === 'GET' ? undefined : JSON.stringify(body ?? {}) });
     const text = await r.text();
     if (!r.ok) throw new Error(`${method} ${path} → ${r.status} ${text.slice(0, 300)}`);
     return (text ? JSON.parse(text) : null) as T;
@@ -50,13 +53,35 @@ const catalogue = [
   { key: 'equations', level: 'JHS 3', subject: 'Mathematics', code: 'J3.2.1', strand: 'Algebra', description: 'Solves simple linear equations in one unknown', terms: [1] },
 ] as const;
 
+// Drafting with Claude: the platform administrator gives the demo a monthly budget; then, when AI is switched on and a provider is set up,
+// the author asks for one batch (Basic 4 times tables, level 2) and sends it to review so the reviewer has Claude drafts to read.
+async function drafting(author: Member) {
+  const admin = await new Member(`platform@${DOMAIN}`).login();
+  const budget = await admin.call<{ monthlyTokenCap: number; version: number }>('GET', '/content-drafting', undefined, '/platform');
+  if (budget.monthlyTokenCap === 0) {
+    await admin.call('PUT', '/content-drafting/budget', { monthlyTokenCap: 300000, version: budget.version }, '/platform');
+    console.log('· Drafting budget set to 300,000 tokens a month');
+  }
+  const status = await author.call<{ enabled: boolean; providerConfigured: boolean; runs: unknown[] }>('GET', '/drafting');
+  if (status.runs.length) return console.log('· Claude drafting has already been used on this demo');
+  if (!status.enabled || !status.providerConfigured) return console.log('· Claude drafting is off here: start the API with AI_ENABLED=true and a provider key to try it (the budget is ready)');
+  const entry = (await author.call<{ items: { id: string; code: string }[] }>('GET', '/catalogue?level=Basic%204&limit=20')).items.find(i => i.code === 'B4.1.1');
+  if (!entry) return console.log('· The Basic 4 times tables entry is not in this demo library; no batch drafted');
+  const batch = await author.call<{ runId: string; drafted: number; requested: number; dropped: number }>('POST', '/drafting/batches', { indicatorId: entry.id, level: 2, count: 10 });
+  console.log(`· Claude drafted ${batch.drafted} of ${batch.requested} questions (${batch.dropped} left out by the checks)`);
+  if (batch.drafted) { const sent = await author.call<{ submitted: number }>('POST', `/drafting/runs/${batch.runId}/submit`); console.log(`· ${sent.submitted} sent to the review queue`); }
+}
+
 type Finish = 'published' | 'review' | 'draft' | 'rejected';
 async function main() {
   if (process.env.LOCAL_DB_NAME !== 'school_demo') throw new Error('Run with LOCAL_DB_NAME=school_demo (npm run demo:content). The demo content only goes into the demo database.');
   const owner = new Pool(localConfig(true));
   try {
-    if ((await owner.query('SELECT 1 FROM users WHERE synthetic_login=$1', [team[0].email])).rowCount) { console.log('The demo content library is already loaded.'); return; }
     for (let i = 0; i < 120; i++) { try { if ((await fetch(`${API}/auth/session`)).status < 500) break; } catch { /* API still starting */ } await new Promise(r => setTimeout(r, 1000)); }
+    if ((await owner.query('SELECT 1 FROM users WHERE synthetic_login=$1', [team[0].email])).rowCount) {
+      console.log('The demo content library is already loaded.');
+      return await drafting(await new Member(team[1].email).login());
+    }
     const salt = randomBytes(16).toString('hex'), hash = `${salt}:${scryptSync(PASSWORD, salt, 64).toString('hex')}`;
     const admin = randomUUID();
     await owner.query('INSERT INTO users(id,display_name,synthetic_login,password_hash) VALUES($1,$2,$3,$4)', [admin, 'Platform Administrator', `platform@${DOMAIN}`, hash]);
@@ -125,6 +150,7 @@ async function main() {
     await make(author!, 'equations', 'question', 2, q('Solve for x: x + 9 = 20', 11, null, 'Take 9 from both sides: x = 20 - 9 = 11.'), 'published');
     await make(author!, 'equations', 'question', 3, q('What is 6 x 7?', '48', ['42', '36', '49'], '6 times 7 is 42.', 0), 'draft');
     console.log(`· ${count} items written; the last draft (6 x 7) has a wrong answer on purpose: the checks stop it going to review.`);
+    await drafting(author!);
     console.log(`\nContent library ready. Sign in with any of these (password ${PASSWORD}):`);
     for (const p of team) console.log(`  ${p.role.padEnd(9)} ${p.email}`);
     console.log(`  platform  platform@${DOMAIN} (grants content roles)`);

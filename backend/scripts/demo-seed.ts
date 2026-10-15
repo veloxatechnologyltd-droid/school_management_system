@@ -71,7 +71,9 @@ class Person {
   cookie = ''; csrf = '';
   constructor(readonly email: string) {}
   async login() {
-    const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: this.email, password: PASSWORD }) });
+    // The API allows 30 sign-ins a minute from one address and a fresh load needs more: wait out the window rather than fail.
+    let r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: this.email, password: PASSWORD }) });
+    for (let wait = 0; r.status === 429 && wait < 6; wait++) { await new Promise(done => setTimeout(done, 15_000)); r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: this.email, password: PASSWORD }) }); }
     if (!r.ok) throw new Error(`Sign-in failed for ${this.email}: ${r.status} ${await r.text()}`);
     this.cookie = r.headers.getSetCookie().map(c => c.split(';')[0]).join('; '); this.csrf = (await r.json()).csrfToken;
     return this;

@@ -7,6 +7,9 @@ type Credentials = { label: string; email: string; temporaryPassword: string };
 const roles = ['headteacher', 'teacher', 'frontdesk', 'accountant', 'guardian'];
 type Staff = { id: string; userId: string; name: string; login: string; role: string; grantedAt: string; revokedAt: string | null };
 const contentRoleName: Record<string, string> = { author: 'Author', reviewer: 'Reviewer', lead: 'Lead' };
+type DraftRun = { id: string; requestedByName: string; subject: string; classLevel: string; level: number; requested: number; drafted: number; status: 'started' | 'ok' | 'failed'; inputTokens: number | null; outputTokens: number | null; createdAt: string };
+type DraftBudget = { monthlyTokenCap: number; usedTokens: number; version: number; runs: DraftRun[] };
+const tokens = (n: number) => n.toLocaleString('en-GB');
 
 export function PlatformAdmin({ csrfToken, onEnter }: { csrfToken: string; onEnter: (schoolId: string) => Promise<void> }) {
   const [schools, setSchools] = useState<SchoolRow[]>([]);
@@ -21,6 +24,8 @@ export function PlatformAdmin({ csrfToken, onEnter }: { csrfToken: string; onEnt
   const [staff, setStaff] = useState<Staff[]>([]);
   const [newStaff, setNewStaff] = useState({ role: 'author', email: '', name: '' });
   const [newAccount, setNewAccount] = useState(false);
+  const [drafting, setDrafting] = useState<DraftBudget | null>(null);
+  const [cap, setCap] = useState('');
 
   const load = useCallback(async (offset = 0) => {
     try {
@@ -33,6 +38,10 @@ export function PlatformAdmin({ csrfToken, onEnter }: { csrfToken: string; onEnt
     try { setStaff((await request<{ items: Staff[] }>('/platform/content-staff')).items); } catch (e) { setError((e as Error).message); }
   }, []);
   useEffect(() => { void loadStaff(); }, [loadStaff]);
+  const loadDrafting = useCallback(async () => {
+    try { const d = await request<DraftBudget>('/platform/content-drafting'); setDrafting(d); setCap(String(d.monthlyTokenCap)); } catch (e) { setError((e as Error).message); }
+  }, []);
+  useEffect(() => { void loadDrafting(); }, [loadDrafting]);
 
   async function createSchool(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(''); setCredentials(null);
@@ -61,6 +70,11 @@ export function PlatformAdmin({ csrfToken, onEnter }: { csrfToken: string; onEnt
   async function revokeStaff(id: string) {
     setBusy(true); setError('');
     try { await request(`/platform/content-staff/${id}/revoke`, { method: 'POST', headers, body: '{}' }); await loadStaff(); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  async function saveBudget(event: FormEvent) {
+    event.preventDefault(); if (!drafting) return; setBusy(true); setError('');
+    try { await request('/platform/content-drafting/budget', { method: 'PUT', headers, body: JSON.stringify({ monthlyTokenCap: Number(cap), version: drafting.version }) }); await loadDrafting(); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   async function enter(schoolId: string) {
@@ -97,5 +111,15 @@ export function PlatformAdmin({ csrfToken, onEnter }: { csrfToken: string; onEnt
       <label className="check"><input type="checkbox" checked={newAccount} onChange={e => setNewAccount(e.target.checked)}/><span>This person has no account yet: create one</span></label>
       {newAccount && <label>Name<input value={newStaff.name} onChange={e => setNewStaff({ ...newStaff, name: e.target.value })} required minLength={2} maxLength={120}/></label>}
       <button disabled={busy}>{busy ? 'Adding…' : 'Add'}</button></form>
+    <h3>Drafting with Claude</h3>
+    <p className="muted">Content authors can ask Claude to draft questions for the shared library. The platform pays for it, so you set the budget: tokens (what Claude charges by, roughly three quarters of a word each) per month, input and output together. A batch of 20 questions uses roughly 6,000. At 0 nothing can be drafted. A batch that would go past the budget is refused before Claude is called.</p>
+    {drafting && <>
+      <form onSubmit={saveBudget}>
+        <label>Monthly budget in tokens<input type="number" inputMode="numeric" min={0} max={200000000} step={1000} value={cap} onChange={e => setCap(e.target.value)} required/></label>
+        <p>{tokens(drafting.usedTokens)} tokens used this month{drafting.monthlyTokenCap ? ` of ${tokens(drafting.monthlyTokenCap)}` : ''}.</p>
+        <button disabled={busy || cap === '' || !Number.isInteger(Number(cap)) || Number(cap) < 0 || Number(cap) === drafting.monthlyTokenCap}>{busy ? 'Saving…' : 'Save budget'}</button></form>
+      {drafting.runs.length ? <ul className="history">{drafting.runs.slice(0, 10).map(r => <li key={r.id}><strong>{r.classLevel} {r.subject} · Level {r.level}</strong>
+        <span>{r.status === 'ok' ? `${r.drafted} of ${r.requested} kept` : r.status === 'failed' ? 'Failed' : 'Unfinished'} · {r.inputTokens !== null && r.outputTokens !== null ? `${tokens(r.inputTokens + r.outputTokens)} tokens` : 'cost unknown'} · asked for by {r.requestedByName} · {new Date(r.createdAt).toLocaleString('en-GB', { timeZone: 'Africa/Accra', dateStyle: 'medium', timeStyle: 'short' })}</span></li>)}</ul> : <p>No batches yet.</p>}
+    </>}
   </section>;
 }

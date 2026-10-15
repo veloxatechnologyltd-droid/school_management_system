@@ -38,6 +38,17 @@ export class ItemsQueryDto extends PageDto {
   @IsOptional() @IsIn(['true']) mine?: string;
 }
 
+// Claude drafts `count` questions (20 unless told otherwise) for one catalogue entry at one difficulty.
+export class BatchDto {
+  @IsUUID() indicatorId!: string;
+  @IsInt() @Min(1) @Max(3) level!: number;
+  @IsOptional() @IsInt() @Min(1) @Max(30) count?: number;
+}
+export class BudgetDto {
+  @IsInt() @Min(0) @Max(200_000_000) monthlyTokenCap!: number;
+  @IsInt() @Min(1) @Max(2_000_000_000) version!: number;
+}
+
 export class StaffDto {
   @IsIn(['author','reviewer','lead']) role!: string;
   // An existing account is found by its email address; a name makes a new account with a temporary password.

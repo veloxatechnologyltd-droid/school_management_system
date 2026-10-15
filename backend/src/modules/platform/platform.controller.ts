@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, NotFoundException, ConflictException, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, NotFoundException, ConflictException, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { IsEmail, IsIn, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { Request } from 'express';
 import { randomBytes } from 'node:crypto';
@@ -7,7 +7,8 @@ import { Access } from '../../core/access';
 import { Database } from '../../core/database';
 import { PageDto } from '../learners/learners.dto';
 import { hashPassword } from '../identity/identity.controller';
-import { StaffDto } from '../content/content.dto';
+import { BudgetDto, StaffDto } from '../content/content.dto';
+import { ContentDraftingService } from '../content/drafting.service';
 
 class NewSchoolDto {
   @IsString() @MinLength(3) @MaxLength(120) @Matches(/\S.{1,}\S/) name!: string;
@@ -26,7 +27,7 @@ function temporaryPassword() {
 }
 @Controller('api/v1/platform')
 export class PlatformController {
-  constructor(private readonly db: Database, private readonly access: Access) {}
+  constructor(private readonly db: Database, private readonly access: Access, private readonly drafting: ContentDraftingService) {}
   private async admin<T>(req: Request, write: boolean, work: (client: PoolClient) => Promise<T>) {
     try {
       return await this.db.transaction(async client => {
@@ -105,5 +106,27 @@ export class PlatformController {
   @Post('content-staff/:id/revoke')
   revokeContentStaff(@Req() req: Request,@Param('id',new ParseUUIDPipe()) id: string) {
     return this.admin(req,true,async client => { await client.query('SELECT platform_revoke_content_role($1)',[id]); return {revoked:true}; });
+  }
+
+  // Claude drafting for the content library is paid for by the platform: the administrator sets the monthly budget (in tokens) and
+  // sees every run, who asked and what it cost. No prompt or question text is kept in the log.
+  @Get('content-drafting')
+  contentDrafting(@Req() req: Request) {
+    return this.admin(req,false,async client => {
+      const { remainingTokens: _remaining, ...budget } = await this.drafting.budget(client);
+      return {...budget,runs:await this.drafting.runs(client,50)};
+    });
+  }
+  @Put('content-drafting/budget')
+  setDraftingBudget(@Req() req: Request,@Body() body: BudgetDto) {
+    return this.admin(req,true,async client => {
+      try {
+        const version = (await client.query('SELECT platform_set_content_ai_budget($1,$2) AS version',[body.monthlyTokenCap,body.version])).rows[0].version as number;
+        return {monthlyTokenCap:body.monthlyTokenCap,version};
+      } catch (error) {
+        if ((error as {code?:string}).code === '40001') throw new ConflictException('The budget changed. Reload before saving');
+        throw error;
+      }
+    });
   }
 }
