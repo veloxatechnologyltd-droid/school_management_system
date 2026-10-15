@@ -30,15 +30,15 @@ Parents pay, so none of the infrastructure counts until a parent would pay for w
 
 | Criterion | Today | What closes it |
 | --- | --- | --- |
-| Enough | **Not met.** A child gets at most three weak topics, 2 sessions a topic a day, from one school-approved set of 5–8 questions per level, so a topic runs dry in days. | Questions drafted from the school's own term material on demand for each weak topic, enough per level that a child does not run out (phase 2), then the daily plan and no-repeat window (phase 4). |
+| Enough | **Not met.** A child gets at most three weak topics, 2 sessions a topic a day, from one school-approved set of 5–8 questions per level, so a topic runs dry in days. | Questions generated from every approved topic, enough per level that a child does not run out (phase 2), then the daily plan and no-repeat window (phase 4). |
 | Right level | **Partly.** Weak topics come from the school's tagged class work, with three levels and simple up/down rules. | Mastery per indicator and spaced review (phase 4). |
-| Parent can help | **Not met.** No parent guide exists for a parent to read. | Guides drafted from the school's material, approved by the teacher and shown in the portal (phase 6), with audio. |
+| Parent can help | **Not met.** No parent guide exists for a parent to read. | Guides generated from the approved topics and shown in the portal (phase 6), with audio. |
 | Visible results | **Not met.** Parents see topic, level and sessions only; no report. Whether parents may see numbers is an open decision for Evans. | End-of-term report (phase 6), after that decision. |
 | Worth more than the alternative | **Not tested.** No local prices checked, no parent asked. | Price research and the internal pilot (phases 1 and 13). |
 
-**Teacher time is the constraint now (working figures, to validate).** With school-grounded drafting the review work sits with the school's own teachers, one weak topic at a time, instead of a central team reviewing a whole stage. Claude drafts only from the material the school added, so a school that adds none gets nothing. In the pilot, measure how long a teacher takes to read and approve a 20-question draft, how often questions are edited or rejected, and how often the material did not cover the topic, before promising more.
+**The constraint is now the quality of content nobody reads item by item (working figures, to validate).** Teacher time is small: approving the term's topics once. The risk moves to wrong answers and drift in generated content, which the automatic checks catch for sums and structure but not for facts in English, Science or Social Studies. The safeguards in phase 2 (wrong-answer button, audit sample, label) exist for that. In the pilot, measure wrong-answer reports per 1,000 questions, the audit-sample error rate and how often a topic could not be taught, and set a go/no-go threshold before widening.
 
-**Agreed direction (Evans, 2026-10-15):** what a child learns comes from the school's own term material; no central catalogue and no central review team are needed (MEMORY.md).
+**Agreed direction (Evans, 2026-10-15):** what a child learns comes from the school's own approved topics; the teacher approves the topics once and Claude then makes the lessons, questions and each child's plan with no per-item approval; no central catalogue and no central review team (MEMORY.md).
 
 **Which subjects and classes (Evans, 2026-10-15):** whatever subjects the school adds material for, not a fixed pair. The earlier proposal to start with Upper Primary Maths and English is withdrawn. What does limit the order is the question types: text-only questions (multiple choice, number) work for any subject and class today; Lower Primary games that need pictures and audio, and JHS timed papers and passages, arrive with phase 3. Run the first version free with staff families at one school (phase 13, step 1) and ask parents the five questions above before any payment work (phases 7–9).
 
@@ -55,6 +55,7 @@ Parents pay, so none of the infrastructure counts until a parent would pay for w
 - [ ] School agreement: revenue share, cost-recovery threshold, payouts, no-pressure rule, school's duties (teacher sign-off where needed), ending the agreement.
 - [ ] Content rights policy: Claude drafts original questions from the school's own material; the platform adds no WAEC papers or publisher material; the school is responsible for having the right to use what it adds; ownership of commissioned pictures and audio.
 - [ ] Children and AI: Anthropic's terms for a service used by under-18s confirmed in writing; the Data Protection Act position on children's chat data and parental consent wording; retention of any stored conversation decided.
+- [ ] Parent terms and notices say that lessons and questions are made by AI from the school's topics and can contain mistakes, with an easy way to report one.
 - [ ] School material terms: material a school adds is private to that school, never shown to another school and never used to train models; Anthropic's API terms (no training on inputs, retention) confirmed in writing before real school material is sent.
 - [ ] Price, sibling discount, mid-term purchase rule (full price or pro-rata) and refund window agreed.
 - [ ] Support ownership: who answers parents, by which channel, in which hours.
@@ -65,30 +66,33 @@ Parents pay, so none of the infrastructure counts until a parent would pay for w
 
 ## Phase 2. School-grounded content (the product's foundation)
 
-**Direction (Evans, 2026-10-15): what a child learns comes from what their own school teaches this term.** The teacher puts in the term's material; Claude drafts teaching notes, questions and plans from that material, never from its general knowledge of a topic; the school's teacher reads and approves before any child sees it. There is no central catalogue and no central review team. A central library was built first (slices 2a and 2b, below); it is parked and not on this path.
+**Direction (Evans, 2026-10-15): what a child learns comes from what their own school teaches this term, with one teacher approval.** At the start of term the teacher adds the term's topics (the curriculum) and approves them. That is the only approval. From the approved topics Claude creates the lessons, the practice questions and each child's learning plan; no teacher reads or approves each item. Along the way a teacher can add a note for one particular student, and Claude uses it to help that student. There is no central catalogue and no central review team. A central library was built first (slices 2a and 2b, below); it is parked and not on this path.
 
-Why: a child taught something the school has not covered gains nothing in the end-of-term exam, parents stop paying, and a central list cannot know each school's pacing, books or scheme of work. Schools already enter their own indicators and tag class tests to them **(exists)**.
+Why: a child taught something the school has not covered gains nothing in the end-of-term exam, parents stop paying, and a central list cannot know each school's pacing, books or scheme of work. Schools already enter their own indicators and tag class tests to them **(exists)**. Claude never leaves the approved topics, so the approved list is the guard on scope. A child must be able to learn at night with no teacher awake, so nothing waits on a teacher after the topics are approved.
 
-### Term material
-- [ ] A teacher (or the headteacher) adds the term's material per class and subject: the syllabus or scheme of work, lesson notes, textbook extracts. Pasted text first; file upload and photos of pages later. A source note is required, as for indicators **(pattern exists)**.
-- [ ] Private to the school: never shown to another school, never used to train models; a school-scoped table with row-level security **(pattern exists)**. The school confirms it may use what it adds.
-- [ ] Append-only versions with who added it and when; a newer version replaces the older one without deleting it.
-- [ ] Material can be linked to the school's indicators (optional) so a topic's drafts use the right passages.
-- [ ] Size limits, and a clear message when material is too long for one drafting call (split by section; no silent cutting).
+### Approved topics (the one teacher approval)
+- [ ] A teacher or the headteacher adds the term's topics per class and subject and approves them. The school's curriculum indicators, pasted in Settings with a source note, are the topics **(exist)**; approving them for the term makes them the scope Claude may teach. Optional: the scheme of work, lesson notes or textbook extracts per topic for Claude to draw on (pasted first; files and photos later).
+- [ ] Claude teaches only inside the approved topics, at the class level: lessons, questions and plans never go past a topic's wording. A request outside them gets "that is not in this term's topics: ask your teacher".
+- [ ] Private to the school: never shown to another school, never used to train models; a school-scoped table with row-level security **(pattern exists)**. The school confirms it may use what it adds. Versions are append-only; size limits with a clear message, no silent cutting.
+- [ ] The teacher can retire a topic, or any generated item, at any time (approval by exception); it stops being served at once.
+- [ ] Home practice question sets currently need a teacher's approval per set **(exists)**. That step is retired for sets generated from approved topics; sets a teacher writes by hand stay as they are.
 
-### Grounded drafting
-- [ ] Claude drafts short lessons, worksheets, practice questions, parent guides and learning plans from the school's material only, through the existing AI layer **(exists: kill switch, school switch, monthly cap, run log without text)**. Each draft cites the passages it used and the teacher sees them at approval.
-- [ ] If the material does not cover a topic, the draft says so and nothing is invented; the teacher adds material or writes the questions.
-- [ ] No learner data goes to the model, only the material and the indicator **(rule exists)**.
-- [ ] Automatic checks before the teacher sees a question: number answers worked out by the computer, no repeats, labelling words, reading level for the stage, exactly one right answer **(the checks module exists, built for the central library; reuse it)**.
-- [ ] The teacher reads, edits and approves **in advance, in the daytime** (decided by Evans, 2026-10-15, option A); nothing reaches a child until then **(exists for question sets)**; the same for lessons, worksheets and guides. At night nobody has to be awake: the child picks from topics already approved. Publishing without approval, and writing practice live with nothing stored for review, were considered and rejected.
-- [ ] Because the child can choose any topic (phase 4), drafting runs for the term's topics when material is added: per class, subject and term, within the school's monthly cap, into a teacher approval queue per topic (a quick screen: read, edit, approve). Enough questions per indicator and level that a child does not run out (working figure: 20 per level, about two weeks without repeats). Plan learning on a weak topic drafts anything still missing. A child only ever sees topics that are approved.
-- [ ] A teacher can flag any question "not what we taught" or "the answer looks wrong": it stops being served at once and goes back to the teacher to fix as a new version.
+### A note for one student
+- [ ] A teacher can add a dated learning note for one student ("use money examples", "short sentences", "weak on carrying", "extra on tenses this month"); append-only and withdrawable. Claude uses it when making that student's plan, lessons and chat replies.
+- [ ] Only this learning-note field is used, with no name. Health, family and diagnosis notes stay out of AI **(rule exists; confirm with Evans)**. Whether the parent sees these notes is a decision for Evans.
+
+### Generated content, with safeguards instead of per-item approval
+- [ ] Claude generates short lessons, practice questions, parent guides and each child's plan from the approved topics through the existing AI layer **(exists: kill switch, school switch, monthly cap, run log without text)**, within the school's cap. No learner data goes to the model **(rule exists)**; only the topic, the class level, a coarse level for the child and the student's learning note.
+- [ ] Automatic checks on every question before a child can see it: number answers worked out by the computer, exactly one right answer, no repeats, labelling words, reading level for the stage, and wording that stays inside the topic **(the checks module exists, built for the central library; reuse it)**. These cannot verify facts in subjects like English or Science, which is why the next three items exist.
+- [ ] A "this looks wrong" button for the child and the parent on every lesson, reply and question: the item stops being served at once, the teacher is told, and the other items on that topic are checked again.
+- [ ] Generated lessons and questions say "Made by AI from your school's topics" so a paying parent is never misled.
+- [ ] A monthly audit: a person on the platform team checks a sample of generated items per school (working figure: 5%). Target: no confirmed wrong answer. A confirmed error means the item is fixed and its topic is checked again. The wrong-answer report rate and the audit-sample error rate are measured in the pilot before widening.
+- [ ] Enough questions per topic and level that a child does not run out (working figure: 20 per level, about two weeks without repeats), generated when the topic is approved.
+
+**Done when:** a teacher adds and approves a term's topics for one class and adds one note for one student. With no further teacher action each child gets a plan from their class marks and the notes, and can pick any approved topic at night and either practise it or study it with Claude (lesson, then questions). A topic outside the approved list is refused, and a flagged item disappears at once.
 
 ### Media
-- [ ] Pictures and audio arrive with the question types in phase 3 and need object storage (none exists today). Not needed for Upper Primary.
-
-**Done when:** a teacher adds a term's material for one class and approves the drafted topics; clicks Plan on a weak topic and gets a plan plus practice that cites that material; and the child, on the parent's phone, can either improve on that weak topic or pick any other approved topic to learn on their own. A topic the material does not cover is refused, not invented.
+- [ ] Pictures and audio arrive with the question types in phase 3 and need object storage (none exists today). Not needed for text-only questions.
 
 ### Built before this direction, now parked (not on the path)
 Slices 2a and 2b built a platform-owned library: content roles (author, reviewer, lead), a central curriculum catalogue, versioned platform questions and parent guides, a central review queue, and Claude batch drafting with a platform run log and token budget (migrations 046–048, on hosted, idle: the drafting budget is 0). Nothing from it reaches a school or a child. It stays in place for now; removing it needs Evans's go-ahead. Worth reusing: the automatic checks, the answer-and-options validator, the three-phase drafting pattern with its prompt-injection and unstorable-character fixes, and the budget idea (a platform-wide spend cap).
@@ -130,23 +134,11 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 
 ## Phase 4. Learning engine
 
-- [ ] **The child picks a topic, then chooses Practice or Study (Evans, 2026-10-15):** any approved topic of any subject the school has added material for (for example History, fractions, pollination), whether it is a weak topic from class work (*Improve from my class work*, as home practice does today **(exists)**) or something they want to learn on their own. Only approved topics are listed; the subjects are whatever the school uploaded. Learners have no logins, so the choice is made on the parent's phone inside the child's profile, at any hour.
-- [ ] **Practice** runs the approved questions with the levels and rules we have **(exists)**.
-- [ ] **Study** starts with the topic's approved lesson, in plain words at the child's class level and how the child is doing on that topic (a coarse level, never a name or marks sent to the model), then lets the child ask questions in a chat; see the next section.
+- [ ] **The child picks a topic, then chooses Practice or Study (Evans, 2026-10-15):** any topic the teacher approved for the term, in any subject the school uploaded (for example History, fractions, pollination), whether it is a weak topic from class work (*Improve from my class work*, as home practice does today **(exists)**) or something they want to learn on their own. Learners have no logins, so the choice is made on the parent's phone inside the child's profile, at any hour, with no teacher awake or involved.
+- [ ] **Practice** runs questions made from the approved topic, with the levels and rules we have **(exists)**.
+- [ ] **Study** teaches the topic in plain words at the child's class level and how the child is doing on it (a coarse level, never a name or marks sent to the model), then lets the child ask questions in a chat; see "Study with Claude" below.
+- [ ] **Each child's learning plan is made by the system, not by a teacher:** from the approved topics, the child's class marks (weak topics first) and any note a teacher added for that student. No teacher click is needed. The teacher's own support plans for classroom actions **(exist)** stay a separate teacher tool.
 - [ ] Self-chosen practice and study are evidence beside class marks, never part of CA or report scores **(rule exists for home practice)**; the parent and the teacher can see what the child chose and how it went.
-
-### Study with Claude (the child's chat tutor)
-Built last in this phase, behind its own headteacher switch (off by default, like home practice) and an evaluation. The lesson is approved in advance; the replies in the chat are live and **cannot be approved in advance**, so safeguards stand in for approval. This reverses the 2026-10-14 decision to reject a learner-facing chatbot, which was about learners using phones in school; this is at home on the parent's phone.
-- [ ] Replies are short and in easy words for the child's class (reading-level limits as for questions), with a local example where it helps, and they use only the school's approved material for that topic. They cite the passage used.
-- [ ] When the material does not cover the question, Claude says so and suggests asking the teacher. It does not answer from general knowledge, does not teach other topics, and does not hold personal conversations.
-- [ ] No name, admission number, school name or contact detail goes to the model; the child is not asked for any; anything the child types that looks like personal data is not stored.
-- [ ] A child who writes something worrying (hurt, fear, abuse) gets a kind fixed reply and the parent is told; Claude does not handle it alone.
-- [ ] "This answer looks wrong" button on any reply: logged, shown to the teacher, and the passage is checked.
-- [ ] Limits: replies per child per day, a short conversation length, a per-school cost cap, the existing AI kill switch and school switch **(exist)**.
-- [ ] The teacher sees counts, flagged answers and the questions the notes could not answer (a list of what to add to the material), not every child's conversation by default.
-- [ ] Parents can read what their child asked and was told, and how long it is kept (decision for Evans; the Ask assistant's chat is not kept on the server **(exists)**).
-- [ ] Evaluation before any child can use it, extending `npm run ai:eval`: off-topic requests, instructions hidden in a question, a wrong premise, a question beyond the notes, personal disclosures, rude or sexual content, a request to do the homework. All handled as specified.
-- [ ] Measure: marks on the next tagged class test for topics a child studied, and practice scores after studying (never claiming the app caused a change).
 - [ ] Mastery per child per indicator, from practice and the school's class marks **(class marks exist)**.
 - [ ] Levels per indicator (keep 3 **(exists)** or extend per stage; decide).
 - [ ] No-repeat window: a child doesn't see the same question for 14 days while others are available.
@@ -154,9 +146,22 @@ Built last in this phase, behind its own headteacher switch (off by default, lik
 - [ ] Daily plan: "Today: 2 sessions, about 10 minutes", from weakest indicators plus due reviews; adjustable by the parent (lighter or heavier).
 - [ ] Limits: sessions per topic per day **(exists: 2)** and a daily total, so screen time stays short.
 - [ ] The plan follows the school's term: indicators taught recently come first.
-- [ ] Teacher-set focus: a support plan's topic **(support plans exist)** goes to the top of that child's plan.
+- [ ] Teacher-set focus: a teacher's note or support plan **(support plans exist)** for a student puts that topic at the top of the child's plan.
 - [ ] Streaks forgive one missed day; no punishment for missed days.
 - [ ] All rules in one module with unit tests, like `practice/rules.ts` **(exists)**.
+
+### Study with Claude (the child's chat tutor)
+Built last in this phase, behind its own headteacher switch (off by default, like home practice) and an evaluation. The lesson and the chat replies are both made by Claude from the approved topics and are not reviewed item by item, so the safeguards in phase 2 stand in for approval, and the chat adds its own. This reverses the 2026-10-14 decision to reject a learner-facing chatbot, which was about learners using phones in school; this is at home on the parent's phone.
+- [ ] Replies are short and in easy words for the child's class (reading-level limits as for questions), with a local example where it helps, and they stay inside the approved topic and the notes the teacher added for it. They use the student's learning note, if any, to pitch the explanation.
+- [ ] When the question is outside the topic, Claude says so and suggests asking the teacher. It does not teach other subjects and does not hold personal conversations.
+- [ ] No name, admission number, school name or contact detail goes to the model; the child is not asked for any; anything the child types that looks like personal data is not stored.
+- [ ] A child who writes something worrying (hurt, fear, abuse) gets a kind fixed reply and the parent is told; Claude does not handle it alone.
+- [ ] "This answer looks wrong" button on any reply: the item stops being served, the teacher is told, and the topic is checked again.
+- [ ] Limits: replies per child per day, a short conversation length, a per-school cost cap, the existing AI kill switch and school switch **(exist)**.
+- [ ] The teacher sees counts, flagged answers and the questions the topic could not answer (a list of what to add), not every child's conversation by default.
+- [ ] Parents can read what their child asked and was told, and how long it is kept (decision for Evans; the Ask assistant's chat is not kept on the server **(exists)**).
+- [ ] Evaluation before any child can use it, extending `npm run ai:eval`: off-topic requests, instructions hidden in a question, a wrong premise, a question beyond the topic, personal disclosures, rude or sexual content, a request to do the homework. All handled as specified.
+- [ ] Measure: marks on the next tagged class test for topics a child studied, and practice scores after studying (never claiming the app caused a change).
 
 **Done when:** a simulated term for 50 demo children shows sensible plans, no repeats inside the window, and review sessions on time.
 
@@ -258,8 +263,8 @@ Built last in this phase, behind its own headteacher switch (off by default, lik
 
 - [ ] Teachers see paid and free practice the same way on the learner page and class view **(exist)**, without seeing who paid.
 - [ ] Teacher can set a child's focus topic from a support plan.
-- [ ] Teacher can flag any question "not what we taught" or wrong; it stops being served at once.
-- [ ] Questions, worksheets and guides drafted from the school's material use the approval flow **(exists for question sets)**.
+- [ ] Teacher can flag any generated item "not what we taught" or wrong; it stops being served at once.
+- [ ] The teacher approves the term's topics once, can retire a topic or any generated item at any time, and can add a note for one student; lessons, questions and plans are not approved item by item.
 - [ ] Headteacher settings: offer the pass, school printing option, who may add term material.
 
 ---
@@ -286,7 +291,7 @@ Built last in this phase, behind its own headteacher switch (off by default, lik
 - [ ] Browser tests per stage: buy (simulated), play each question type, daily plan, guides, report, printable pack; at 390 px and 1440 px.
 - [ ] Real-device test on a low-end Android phone over 3G.
 - [ ] Load test: 2,000 children practising in the same evening hour across schools.
-- [ ] Pilot measures on drafted questions (teacher approval rate, edit and reject rate, questions flagged "not what we taught") and a sign-off per stage on the parent test.
+- [ ] Pilot measures on generated content (wrong-answer reports per 1,000 questions, error rate in the audit sample, items teachers retire, topics the notes could not teach) and a sign-off per stage on the parent test.
 - [ ] Sunrise demo school loaded with every feature and walked through as parent, teacher, headteacher and platform admin before each push. *(Repeats every slice. Slice 2a: demo content library loaded locally with `npm run demo:content` and walked through as lead, author, reviewer and platform admin; not run on hosted. No parent, teacher or headteacher screen exists for it yet. Slice 2b repeats it: the demo loader adds a drafting budget and one Claude batch, and the Drafting tab, draft dialog, review queue and platform budget were walked through as author, reviewer, lead and platform administrator at 1440 and 390 px against a local stand-in for Claude.)*
 - [ ] Local tests, demo, hosted deployment and school acceptance are reported separately; none stands for another. *(Repeats every slice. Slice 2a: local tests and local demo, then hosted migrations 046 and 047 applied and the slice pushed on 2026-10-15 at Evans's request; the live `/readyz` check after Render's deploy, the demo content on hosted, and school acceptance are not done. Slice 2b: local tests and local demo, then hosted migration 048 applied to Supabase on 2026-10-15 at Evans's request (previewed first: exactly 048 pending; applied; second preview all applied; `school_app` connects with TLS) and the slice pushed; the live `/readyz` check, a batch through the deployed API and the demo content on hosted are not done. One small batch (8 questions) was run against the real Claude API through the real prompt and validator, with no database; the full path against the live API and hosted has not been run.)*
 
@@ -309,8 +314,8 @@ Approval needed from Evans before: hosted migrations, running the hosted demo lo
 ## Progress and where to resume
 
 - **Direction decided 2026-10-15 (MEMORY.md):** school-grounded content, no central catalogue. Slices 2a and 2b (migrations 046–048) are on hosted and parked.
-- **Next, slice 2c (new):** term material (pasted, per class, subject and term, versioned, private to the school) and grounded drafting with citations, drafted for the term's topics when material is added, with a teacher approval queue per topic. Then the child's topic picker with Practice (as today) and Study; Study first as an approved lesson without the chat. The chat tutor comes last, behind its switch and the safety evaluation (my recommendation: after the approved lesson and practice have been used in the pilot). The per-school AI switch, cap and run log already exist.
-- **Then:** Plan learning in one click (the plan, the practice for the weak topic, what the child will get at home, a printable test for children without a phone).
+- **Next, slice 2c (new):** approved topics (the school's indicators already exist; add the term approval and the scope guard), then automatic generation of the lesson, practice questions and each child's plan from the approved topics, with the automatic checks, the "looks wrong" button, the AI label and the retire-at-once control; then notes for one student. The per-school AI switch, cap and run log already exist.
+- **Then:** the child's topic picker with Practice and Study (the lesson first). The chat tutor comes last, behind its switch and the safety evaluation (my recommendation: after the lesson and practice have been used in the pilot).
 - **Then:** measurement: marks before and after on the next tagged class test, the teacher's "not what we taught" flag, and an end-of-term view of practised topics beside results (wording never claims the app caused a change).
-- **Open for Evans:** whether parents may see numbers (needed before the parent report); whether parents can read the child's study chat and how long it is kept; Anthropic's terms for a service used by children (phase 1); whether the chat is built before the first pilot or after the approved lesson and practice (recommended: after); whether the parked central library should be removed (needs his go-ahead). **Decided:** teachers approve each topic in advance, in the daytime, and children see only approved topics (Evans, 2026-10-15, option A).
+- **Open for Evans:** whether parents see the notes a teacher adds for their child, and whether health notes stay out of AI (recommended: yes); whether parents can read the child's study chat and how long it is kept; Anthropic's terms for a service used by children (phase 1); whether the chat is built before the first pilot or after (recommended: after); the audit sample size and who does it; whether parents may see numbers (before the parent report); whether the parked central library should be removed (needs his go-ahead). **Decided:** the teacher approves the term's topics once and nothing else (Evans, 2026-10-15).
 - **Small open item:** the labelling-word check blocks words like "disorder" or "syndrome" even in JHS science; probably a warning for JHS. It matters again because the checks module is reused for school drafts.
