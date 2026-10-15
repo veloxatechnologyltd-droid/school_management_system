@@ -338,3 +338,7 @@ a.learner-link{color:var(--accent-text);font-weight:600;text-decoration:none}a.l
 .practice-summary{border-top:1px solid var(--line);padding-top:12px}.practice-summary h4{font-size:20px;margin:0 0 6px}
 .pad{padding:0 22px;margin:12px 0}
 .topic-level{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px}.topic-level .practice-meta{margin-top:0}
+/* Content library (Home Learning Pass) */
+.q-preview{display:grid;gap:6px;margin-bottom:8px}.findings{display:grid;gap:6px;margin:10px 0}.findings p{margin:0}.guide p{margin:8px 0}.guide ul{margin:4px 0 8px;padding-left:22px}
+.entries{list-style:none;margin:0;padding:0}.entries>li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px;padding:14px 16px;border-top:1px solid var(--line)}.entries>li:first-child{border-top:0}.entry-main{flex:1 1 340px;min-width:0;display:grid;gap:3px}.entry-side{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:14px}.entry-side .muted{font-size:13px}
+.entries .link-button{display:inline-flex;align-items:center;min-height:40px;font-weight:600;text-align:left}@media (pointer:coarse){.entries .link-button{min-height:44px}}

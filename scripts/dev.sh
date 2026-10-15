@@ -26,6 +26,9 @@ esac
 trap 'kill 0' EXIT INT TERM
 npm run dev:api &
 npm run dev:web &
-if [ "$mode" = demo ]; then npm run demo:seed -w backend || echo "Loading the demo school failed; see the message above." >&2; fi
+if [ "$mode" = demo ]; then
+  npm run demo:seed -w backend || echo "Loading the demo school failed; see the message above." >&2
+  npm run demo:content -w backend || echo "Loading the demo content library failed; see the message above." >&2
+fi
 printf '\n%s mode: open http://127.0.0.1:5178 (Ctrl+C stops both servers)\n\n' "$mode"
 wait

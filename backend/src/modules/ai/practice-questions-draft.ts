@@ -8,7 +8,7 @@ export const questionsTemplateVersion = 'practice-questions-v1';
 export const QUESTIONS_PER_LEVEL = 6;
 
 // Questions are about a topic, not a child, so only labelling language is refused (as for worksheets).
-const labels = /\b(autis\w*|adhd|dyslex\w*|disorder\w*|diagnos\w*|syndrome|retard\w*|slow learner\w*)\b/i;
+export const labels = /\b(autis\w*|adhd|dyslex\w*|disorder\w*|diagnos\w*|syndrome|retard\w*|slow learner\w*)\b/i;
 const clip = (text: string | null, max: number) => text === null ? null : text.replace(/[\r\n]+/g, ' ').slice(0, max);
 
 export function buildQuestionsPrompt(fact: IndicatorFact) {

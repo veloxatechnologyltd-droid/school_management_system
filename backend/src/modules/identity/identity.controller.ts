@@ -93,7 +93,8 @@ export class IdentityController {
         schools.push({...school.rows[0],role:membership.role});
       }
       const mfa = (await client.query('SELECT confirmed_at FROM user_mfa WHERE user_id=$1',[identity.user_id])).rows[0];
-      return {displayName:identity.display_name,csrfToken:identity.csrf_token,schools:identity.mfa_required && !identity.mfa_verified_at ? [] : schools,platformAdmin:admin,mustChangePassword:identity.must_change_password as boolean,
+      const contentRoles = identity.mfa_required && !identity.mfa_verified_at ? [] : (await client.query('SELECT content_roles() AS roles')).rows[0].roles as string[];
+      return {displayName:identity.display_name,csrfToken:identity.csrf_token,schools:identity.mfa_required && !identity.mfa_verified_at ? [] : schools,platformAdmin:admin,contentRoles,mustChangePassword:identity.must_change_password as boolean,
         mfaRequired:identity.mfa_required as boolean,mfaEnrolled:Boolean(mfa?.confirmed_at),mfaVerified:Boolean(identity.mfa_verified_at)};
     });
   }

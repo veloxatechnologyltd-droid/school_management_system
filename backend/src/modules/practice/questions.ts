@@ -10,30 +10,40 @@ const text = (value: unknown, min: number, max: number) => typeof value === 'str
 // "All of the above" and "none of the above" make a choice ambiguous when options are shuffled.
 const catchAll = /\b(all|none|both)\s+of\s+(the\s+)?(above|these)\b/i;
 
+export type QuestionCheck = { ok: true; question: BankQuestion } | { ok: false; reason: string };
+// One question on its own: the platform content library holds questions singly, a school's set holds them in levels.
+export function checkQuestion(item: unknown): QuestionCheck {
+  if (!item || typeof item !== 'object') return { ok: false, reason: 'bad_question' };
+  const q = item as Record<string, unknown>;
+  if (!Number.isInteger(q.level) || (q.level as number) < 1 || (q.level as number) > LEVEL_COUNT) return { ok: false, reason: 'bad_level' };
+  if (!text(q.prompt, 5, 200)) return { ok: false, reason: 'bad_prompt' };
+  const explanation = q.explanation === undefined || q.explanation === null || q.explanation === '' ? null : text(q.explanation, 3, 200) ? squash(q.explanation as string) : undefined;
+  if (explanation === undefined) return { ok: false, reason: 'bad_explanation' };
+  const base = { level: q.level as number, prompt: squash(q.prompt as string), explanation };
+  if (q.kind === 'choice') {
+    const options = q.options;
+    if (!Array.isArray(options) || options.length < 3 || options.length > 4 || !options.every(o => text(o, 1, 80))) return { ok: false, reason: 'bad_options' };
+    const clean = options.map(o => squash(o as string));
+    // Options differing only in capital letters or punctuation are allowed: that is what a capital-letter question tests.
+    if (new Set(clean).size !== clean.length || clean.some(o => catchAll.test(o))) return { ok: false, reason: 'bad_options' };
+    if (!Number.isInteger(q.correctOption) || (q.correctOption as number) < 0 || (q.correctOption as number) >= clean.length) return { ok: false, reason: 'bad_answer' };
+    return { ok: true, question: { ...base, kind: 'choice', options: clean, correctOption: q.correctOption as number, answer: null } };
+  }
+  if (q.kind === 'number') {
+    const answer = q.answer;
+    if (typeof answer !== 'number' || !Number.isFinite(answer) || Math.abs(answer) > 1e9 || Number(answer.toFixed(6)) !== answer) return { ok: false, reason: 'bad_answer' };
+    return { ok: true, question: { ...base, kind: 'number', options: null, correctOption: null, answer } };
+  }
+  return { ok: false, reason: 'bad_kind' };
+}
+
 export function checkQuestions(raw: unknown): QuestionsCheck {
   if (!Array.isArray(raw)) return { ok: false, reason: 'not_a_list' };
   const questions: BankQuestion[] = [];
   for (const item of raw) {
-    if (!item || typeof item !== 'object') return { ok: false, reason: 'bad_question' };
-    const q = item as Record<string, unknown>;
-    if (!Number.isInteger(q.level) || (q.level as number) < 1 || (q.level as number) > LEVEL_COUNT) return { ok: false, reason: 'bad_level' };
-    if (!text(q.prompt, 5, 200)) return { ok: false, reason: 'bad_prompt' };
-    const explanation = q.explanation === undefined || q.explanation === null || q.explanation === '' ? null : text(q.explanation, 3, 200) ? squash(q.explanation as string) : undefined;
-    if (explanation === undefined) return { ok: false, reason: 'bad_explanation' };
-    const base = { level: q.level as number, prompt: squash(q.prompt as string), explanation };
-    if (q.kind === 'choice') {
-      const options = q.options;
-      if (!Array.isArray(options) || options.length < 3 || options.length > 4 || !options.every(o => text(o, 1, 80))) return { ok: false, reason: 'bad_options' };
-      const clean = options.map(o => squash(o as string));
-      // Options differing only in capital letters or punctuation are allowed: that is what a capital-letter question tests.
-      if (new Set(clean).size !== clean.length || clean.some(o => catchAll.test(o))) return { ok: false, reason: 'bad_options' };
-      if (!Number.isInteger(q.correctOption) || (q.correctOption as number) < 0 || (q.correctOption as number) >= clean.length) return { ok: false, reason: 'bad_answer' };
-      questions.push({ ...base, kind: 'choice', options: clean, correctOption: q.correctOption as number, answer: null });
-    } else if (q.kind === 'number') {
-      const answer = q.answer;
-      if (typeof answer !== 'number' || !Number.isFinite(answer) || Math.abs(answer) > 1e9 || Number(answer.toFixed(6)) !== answer) return { ok: false, reason: 'bad_answer' };
-      questions.push({ ...base, kind: 'number', options: null, correctOption: null, answer });
-    } else return { ok: false, reason: 'bad_kind' };
+    const one = checkQuestion(item);
+    if (!one.ok) return one;
+    questions.push(one.question);
   }
   for (let level = 1; level <= LEVEL_COUNT; level++) {
     const n = questions.filter(q => q.level === level).length;

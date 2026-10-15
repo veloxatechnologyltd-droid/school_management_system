@@ -37,6 +37,7 @@ const Assistant=lazyModule(()=>import('./modules/Assistant'),'Assistant');
 const LearnerPage=lazyModule(()=>import('./modules/LearnerPage'),'LearnerPage');
 const FamilyNotes=lazyModule(()=>import('./modules/LearnerNotes'),'FamilyNotes');
 const Accounts=lazyModule(()=>import('./modules/Accounts'),'Accounts');
+const ContentLibrary=lazyModule(()=>import('./modules/ContentLibrary'),'ContentLibrary');
 const GettingStarted=lazyModule(()=>import('./modules/GettingStarted'),'GettingStarted');
 type NavItem={id:string;label:string;icon:string};
 const nav=(id:string,label:string,icon:string):NavItem=>({id,label,icon});
@@ -78,7 +79,7 @@ function EarlyYearsWork({schoolId,csrfToken,role}:ModuleProps) {
 const legacyIds:Record<string,string>={learning:'assessment',school:'settings',teaching:'settings',accounts:'settings'};
 type School = {id:string;name:string;role:string;version:number;address?:string|null;phone?:string|null;motto?:string|null;readOnly?:boolean};
 const detailsOf=(s:School)=>({address:s.address??'',phone:s.phone??'',motto:s.motto??''});
-type Session = {displayName:string;csrfToken:string;schools:School[];platformAdmin:boolean;mustChangePassword:boolean;mfaRequired:boolean;mfaEnrolled:boolean;mfaVerified:boolean};
+type Session = {displayName:string;csrfToken:string;schools:School[];platformAdmin:boolean;contentRoles:string[];mustChangePassword:boolean;mfaRequired:boolean;mfaEnrolled:boolean;mfaVerified:boolean};
 type AuditPage = {items:Audit[];total:number};
 type Audit = {id:string;action:string;created_at:string;metadata:{version?:number}};
 function App() {
@@ -169,6 +170,7 @@ function App() {
   const schoolDetails=school&&<><section><h2>School details</h2>{school.role==='headteacher'?<form onSubmit={save}><label>School name<input value={name} minLength={3} maxLength={120} onChange={e=>setName(e.target.value)} required/></label><label>Address (printed on report cards and receipts)<input value={details.address} maxLength={200} onChange={e=>setDetails({...details,address:e.target.value})} placeholder="P.O. Box 12, Kasoa, Central Region"/></label><label>Phone<input value={details.phone} maxLength={40} onChange={e=>setDetails({...details,phone:e.target.value})} placeholder="024 123 4567"/></label><label>Motto<input value={details.motto} maxLength={120} onChange={e=>setDetails({...details,motto:e.target.value})}/></label><div className="actions"><button disabled={busy||!detailsChanged}>{busy?'Saving…':'Save details'}</button><button className="secondary" type="button" disabled={busy} onClick={()=>selectSchool(school.id).catch(error=>setStatus(error.message))}>Reload details</button></div><p className="muted">{detailsChanged?'Unsaved changes':`Saved version ${school.version}`}</p></form>:<p>School details are maintained by the headteacher.</p>}<p role="status" aria-live="polite">{status}</p></section></>;
   const recentChanges=school&&<section><h2>Recent changes</h2><AuditExport key={school.id} schoolId={school.id} csrfToken={session.csrfToken}/>{audit.length?<><ul className="history">{audit.map(item=><li key={item.id}><strong>{({"school.details.updated":"School details saved","audit.export.requested":"Audit export requested"} as Record<string,string>)[item.action]??item.action.replaceAll("."," ")}</strong><span>{item.metadata.version?`Version ${item.metadata.version} · `:""}{new Date(item.created_at).toLocaleString('en-GH',{timeZone:'Africa/Accra'})}</span></li>)}</ul>{audit.length<auditTotal&&<p>Showing {audit.length} of {auditTotal} changes. <button type="button" className="secondary" onClick={()=>void moreAudit()}>Show older changes</button></p>}</>:<p>No changes recorded yet.</p>}</section>;
   const sid=school?.id??'',csrf=session.csrfToken,role=school?.role??'';
+  const contentRoles=session.contentRoles??[],showContent=contentRoles.length>0&&(!school||tab.split('/')[0]==='content');
   const teachingView=<Teaching key={`teaching:${sid}`} schoolId={sid} csrfToken={csrf} role={role} onAccessRefresh={()=>setTeacherAccessRefresh(value=>value+1)}/>;
   const attendanceView=<Attendance key={`attendance:${sid}`} schoolId={sid} csrfToken={csrf} role={role} accessRefresh={teacherAccessRefresh}/>;
   const settingsSteps:{id:string;label:string;render:()=>React.ReactNode}[]=[
@@ -206,7 +208,7 @@ function App() {
   const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=learnerPage?(role==='headteacher'?'learners':'progress'):legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];
   const roleName=role==='frontdesk'?'Front desk':role.charAt(0).toUpperCase()+role.slice(1);
   const meta=!learnerPage&&current&&pageMeta[current.id];
-  const navGroup=(g:NavGroup)=><div key={g.items[0].id} className="nav-section">{g.group&&<p className="nav-group">{g.group}</p>}{g.items.map(item=><a key={item.id} href={`#/${item.id}`} aria-current={item.id===current?.id?'page':undefined}><Icon name={item.icon}/><span className="label">{item.label}</span></a>)}</div>;
+  const navGroup=(g:NavGroup)=><div key={g.items[0].id} className="nav-section">{g.group&&<p className="nav-group">{g.group}</p>}{g.items.map(item=><a key={item.id} href={`#/${item.id}`} aria-current={!showContent&&item.id===current?.id?'page':undefined}><Icon name={item.icon}/><span className="label">{item.label}</span></a>)}</div>;
   const initials=(school?.name??'V').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]!.toUpperCase()).join('');
   return <div className="shell">
     <a href="#main" className="skip-link" onClick={e=>{e.preventDefault();document.getElementById('main')?.focus();}}>Skip to content</a>
@@ -214,13 +216,14 @@ function App() {
       <a href="#/" className="brand"><span className="logo" aria-hidden="true">{initials}</span><span className="brand-text"><strong>{school?.name??'Veloxa SmartSchool'}</strong><span>{roleName||'Signed in'}</span></span></a>
       {session.schools.length>1&&<label className="school-picker">School<select value={school?.id??''} disabled={busy} onChange={e=>{setBusy(true);selectSchool(e.target.value).catch(error=>setStatus(error.message)).finally(()=>setBusy(false));}}>{!school&&<option value="">Loading…</option>}{session.schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
       {school&&<nav aria-label="Sections"><div className="nav-scroll">{groups.filter(g=>!g.pinned).map(navGroup)}</div>{groups.some(g=>g.pinned)&&<div className="nav-pinned">{groups.filter(g=>g.pinned).map(g=>navGroup({...g,group:''}))}</div>}</nav>}
+      {contentRoles.length>0&&<nav aria-label="Content"><div className="nav-section">{school&&<p className="nav-group">Content team</p>}<a href="#/content" aria-current={showContent?'page':undefined}><Icon name="library_books"/><span className="label">Content library</span></a></div></nav>}
       <p className="sidebar-foot">Veloxa SmartSchool</p>
     </aside>
     {menuOpen&&<div className="scrim" onClick={()=>setMenuOpen(false)}/>}
     <div className="content">
       <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
       {school?.readOnly&&<p role="status" style={{margin:0,padding:'8px 16px',background:'var(--info-soft)',color:'var(--info)',fontSize:13,fontWeight:600}}>Demo school with sample data · read-only. Explore every page and try Ask; changes and password changes are switched off.</p>}
-      <main id="main" tabIndex={-1}>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{school&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{learnerPage?views.learner!():current&&views[current.id]()}</Suspense></>}{!school&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
+      <main id="main" tabIndex={-1}>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{showContent&&<Suspense fallback={<p role="status">Loading…</p>}><ContentLibrary csrfToken={csrf}/></Suspense>}{school&&!showContent&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{learnerPage?views.learner!():current&&views[current.id]()}</Suspense></>}{!school&&!showContent&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
     </div>
   </div>;
 }

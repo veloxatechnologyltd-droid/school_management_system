@@ -7,6 +7,7 @@ import { Access } from '../../core/access';
 import { Database } from '../../core/database';
 import { PageDto } from '../learners/learners.dto';
 import { hashPassword } from '../identity/identity.controller';
+import { StaffDto } from '../content/content.dto';
 
 class NewSchoolDto {
   @IsString() @MinLength(3) @MaxLength(120) @Matches(/\S.{1,}\S/) name!: string;
@@ -74,5 +75,35 @@ export class PlatformController {
   @Post('schools/:schoolId/enter')
   enter(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string) {
     return this.admin(req,true,async client => ({membershipId:(await client.query('SELECT platform_enter_school($1) AS id',[schoolId])).rows[0].id}));
+  }
+
+  // Content roles (author, reviewer, lead) for the shared content library. They are granted here, not by schools or content leads.
+  @Get('content-staff')
+  contentStaff(@Req() req: Request) {
+    return this.admin(req,false,async client => ({items:(await client.query('SELECT id,user_id AS "userId",name,login,role,granted_at AS "grantedAt",revoked_at AS "revokedAt" FROM platform_content_staff()')).rows}));
+  }
+  // With a name: a new account with a temporary password. Without: an existing account found by its email address.
+  @Post('content-staff')
+  addContentStaff(@Req() req: Request,@Body() body: StaffDto) {
+    const password = temporaryPassword();
+    return this.admin(req,true,async client => {
+      try {
+        if (body.name) {
+          const userId = (await client.query('SELECT platform_create_content_user($1,$2,$3,$4) AS id',[body.name.trim(),body.email,await hashPassword(password),body.role])).rows[0].id;
+          return {userId,email:body.email.toLowerCase(),role:body.role,temporaryPassword:password};
+        }
+        const user = (await client.query('SELECT id FROM users WHERE synthetic_login=$1',[body.email.trim().toLowerCase()])).rows[0];
+        if (!user) throw new NotFoundException('No account has that email address. Add a name to create one');
+        await client.query('SELECT platform_grant_content_role($1,$2)',[user.id,body.role]);
+        return {userId:user.id as string,email:body.email.toLowerCase(),role:body.role};
+      } catch (error) {
+        if ((error as {code?:string;constraint?:string}).code === '23505' && (error as {constraint?:string}).constraint === 'content_staff_active') throw new ConflictException('They already hold that role');
+        throw error;
+      }
+    });
+  }
+  @Post('content-staff/:id/revoke')
+  revokeContentStaff(@Req() req: Request,@Param('id',new ParseUUIDPipe()) id: string) {
+    return this.admin(req,true,async client => { await client.query('SELECT platform_revoke_content_role($1)',[id]); return {revoked:true}; });
   }
 }

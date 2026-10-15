@@ -9,7 +9,7 @@ export async function request<T>(url:string, options:RequestInit = {}):Promise<T
   const data = isJson ? await response.json().catch(() => null) : null;
   if (!response.ok) {
     if (data === null || response.status >= 502) throw Object.assign(new Error(serverProblem),{status:response.status,retryable:true});
-    const error = new Error(Array.isArray(data.message) ? data.message.join('. ') : data.message ?? 'Request failed'); Object.assign(error,{status:response.status}); throw error;
+    const error = new Error(Array.isArray(data.message) ? data.message.join('. ') : data.message ?? 'Request failed'); Object.assign(error,{status:response.status,code:data.code,details:data.details}); throw error;
   }
   if (data === null && response.status !== 204) throw Object.assign(new Error(serverProblem),{status:response.status,retryable:true});
   return data as T;
