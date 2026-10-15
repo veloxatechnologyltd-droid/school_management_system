@@ -1034,13 +1034,31 @@ async function practiceNow() {
   }
   step('Home practice switched on, and some practice done on the demo parent\'s phone');
   await head.put('/practice/settings', { enabled: true }, 'practice-settings');
-  // The demo parent's children, and a dozen other families, so teachers' class views show a school where some families practise and most do not.
-  for (let n = 0; n < 12; n++) {
-    if (!state.accounts[`family${n}`]) continue;
-    const parent = await as(`family${n}`);
+  // The demo parent's children first, then a few children in every class who are weak on a topic that has approved questions
+  // (found from the school's own Gaps), with more in Basic 6 whose class teacher is a shared demo login. Families differ in how they get on.
+  const withSets = new Set(Object.keys(demoQuestionSets).map(topic => { const s = TOPICS.findIndex(list => list.some(([d]) => d === topic)); return state.indicatorIds[s]![TOPICS[s]!.findIndex(([d]) => d === topic)]!; }));
+  const chosen: { l: L; variant: number }[] = [];
+  for (const [c, cid] of state.classIds[1]!.entries()) {
+    if (!cid) continue;
+    const gaps = (await head.get(`/assessment/classes/${cid}/gaps?termId=${state.termIds.t4}`)).items as { indicatorId: string; below: { learnerId: string }[] }[];
+    const counts = new Map<string, number>();
+    for (const g of gaps) if (withSets.has(g.indicatorId)) for (const b of g.below) counts.set(b.learnerId, (counts.get(b.learnerId) ?? 0) + 1);
+    const wanted = c === BASIC6 ? 6 : 3;
+    [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, wanted).forEach(([learnerId], n) => {
+      const l = model.learners.find(x => state.learners[x.key] === learnerId);
+      if (l && l.family >= 0 && state.links[l.key]) chosen.push({ l, variant: n });
+    });
+  }
+  const families = new Set<number>([0]);
+  for (const { l } of chosen) families.add(l.family);
+  for (const f of families) {
+    if (!state.accounts[`family${f}`]) continue;
+    const parent = await as(`family${f}`);
     for (const child of (await parent.get('/guardian/children')) as { id: string }[]) {
       const key = `practice:t4:${child.id}`; if (done(key)) continue;
-      await playDemoWeek(parent, child.id, key);
+      const mine = chosen.find(x => idOf(x.l) === child.id);
+      if (f !== 0 && !mine) continue;
+      await playDemoWeek(parent, child.id, key, mine?.variant ?? 0);
       mark(key);
     }
   }

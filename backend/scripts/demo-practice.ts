@@ -137,12 +137,14 @@ export async function playDemoSession(api: DemoApi, childId: string, indicatorId
   }
   return null;
 }
-// What a family might have done by now: the first topic twice (a clean 5 of 5, then 3 of 5), the second topic once (4 of 5).
-export async function playDemoWeek(api: DemoApi, childId: string, keyPrefix: string = randomUUID()) {
+// What a family might have done by now. Variant 0: the first topic twice (a clean 5 of 5, then 3 of 5), the second topic once (4 of 5).
+// Variants make families differ: a steady climber, a stumble, a struggling child, one quick session, and a strong run.
+const plans: [number, number][][] = [[[0, 5], [0, 3], [1, 4]], [[0, 4], [1, 2]], [[0, 3], [0, 2]], [[0, 5]], [[0, 4], [0, 5], [1, 5]]];
+export async function playDemoWeek(api: DemoApi, childId: string, keyPrefix: string = randomUUID(), variant = 0) {
   const topics = ((await api.get(`/guardian/children/${childId}/practice`)).topics ?? []) as { indicatorId: string; open: unknown; availableToday: boolean }[];
   const fresh = topics.filter(t => !t.open && t.availableToday);
   const out: string[] = [];
-  const plan: [number, number][] = [[0, 5], [0, 3], [1, 4]];
+  const plan = plans[variant % plans.length]!;
   for (const [n, [which, right]] of plan.entries()) {
     const t = fresh[which]; if (!t) continue;
     // A topic can reach its daily limit part-way (an earlier run): skip it rather than fail the load.

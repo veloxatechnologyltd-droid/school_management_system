@@ -116,6 +116,16 @@ test('a child is offered their weakest topics that have approved questions, with
   assert.equal((await start(kid.ama,randomUUID())).status,404);
 });
 
+test('Nursery and KG families are not offered home practice, since it rests on tagged Primary and JHS class work',async()=>{
+  const kg=randomUUID(),kgChild=randomUUID();
+  await owner.query("INSERT INTO class_sections(id,school_id,academic_year_id,name,level,capacity) VALUES($1,$2,$3,'KG 2','KG',30)",[kg,school,year]);
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,'HP-KG','Kindergarten Child')",[kgChild,school]);
+  await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,$5)",[randomUUID(),school,kgChild,kg,shift(-50)]);
+  await owner.query("INSERT INTO guardian_links(id,school_id,learner_id,guardian_membership_id,guardian_display_name,academic,billing,pickup,contact,verified_at,verified_by,verification_reason) VALUES($1,$2,$3,$4,'Abena Sample',true,false,false,false,now(),$5,'Synthetic access')",[randomUUID(),school,kgChild,guardianM,headM]);
+  assert.deepEqual((await call(route(kgChild),'GET',undefined,guardian)).body,{enabled:false},'no practice card for a KG child');
+  assert.equal((await call(route(kid.ama),'GET',undefined,guardian)).body.enabled,true,'a Primary child still has it');
+});
+
 test('a session gives five questions without answers, marks each one, and moves the child up at 4 of 5',async()=>{
   const s=await start(kid.ama,topic.fractions);assert.equal(s.status,201,JSON.stringify(s.body));
   assert.deepEqual([s.body.topic,s.body.level,s.body.total,s.body.answered,s.body.summary],['Fractions',1,5,0,null]);

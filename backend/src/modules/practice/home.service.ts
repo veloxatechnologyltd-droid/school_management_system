@@ -83,6 +83,10 @@ export class HomePracticeService {
     await this.guardianOf(client,actor,learnerId);
     if (!(await this.settings(client,actor.schoolId)).enabled) return {enabled:false as const};
     const today = await accraToday(client);
+    // Practice is built on tagged class work, which only Primary and JHS classes have: Nursery and KG families see nothing here.
+    const level = (await client.query(`SELECT c.level FROM enrolments e JOIN class_sections c ON c.school_id=e.school_id AND c.id=e.class_id
+      WHERE e.school_id=$1 AND e.learner_id=$2 AND e.superseded_at IS NULL AND e.start_date<=$3::date AND (e.end_date IS NULL OR e.end_date>$3::date) LIMIT 1`,[actor.schoolId,learnerId,today])).rows[0]?.level as string | undefined;
+    if (level !== 'Primary' && level !== 'JHS') return {enabled:false as const};
     const firstName = ((await client.query('SELECT full_name FROM learners WHERE school_id=$1 AND id=$2',[actor.schoolId,learnerId])).rows[0].full_name as string).split(' ')[0]!;
     const learned = await this.learned(client,actor.schoolId,learnerId,today), byTopic = new Map(learned.map(l => [l.indicatorId,l]));
     const weak = await this.weakTopics(client,actor.schoolId,learnerId,today);
