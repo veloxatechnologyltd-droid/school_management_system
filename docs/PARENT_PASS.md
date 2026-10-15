@@ -48,7 +48,7 @@ Parents pay **GH₵50 per child per term** (launch price) for learning their chi
 Today's question banks are per school **(exists: `practice_sets`, `practice_questions`, approved by a school teacher)**. A sellable product needs content written once, reviewed centrally and used by every school.
 
 ### Data
-- [x] Platform curriculum catalogue (no `school_id`): subject, class level (Basic 1–JHS 3), strand, sub-strand, official indicator code, description, term guidance, with origin (`official` or `platform`) and a source note on every entry; a lead adds and retires entries, wording is never edited. **Built, slice 2a (migration 046).** Schools get a read path with the matching screen below; the platform ships no NaCCA text until redistribution rights are confirmed.
+- [x] Platform curriculum catalogue (no `school_id`): subject, class level (Basic 1–JHS 3), strand, sub-strand, official indicator code, description, term guidance, with origin (`official` or `platform`) and a source note on every entry; a lead adds and retires entries, wording is never edited. **Built, slice 2a (migrations 046 and 047).** Schools get a read path with the matching screen below; the platform ships no NaCCA text until redistribution rights are confirmed.
 - [ ] Matching school indicators to catalogue entries: automatic by official code where `origin = 'official'` **(field exists)**, plus a headteacher screen to match or skip the rest.
 - [ ] Platform content items: question, guide, picture, audio, passage, mock paper; each versioned and append-only, with status draft → in review → published → retired (with reason). **Questions and parent guides built (slice 2a): a draft can be reworded by its author until submitted, then the version is frozen; a fix is a new version, and publishing it retires the previous live one. Picture, audio, passage and mock paper come with media.**
 - [x] Every content item records its catalogue indicator, stage, level, author (person or AI run) and named reviewer. **Stage comes from the indicator's class level; `author_kind` and `ai_run_id` are ready for Claude drafts.**
@@ -237,7 +237,7 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 - [ ] AI spend caps per school and platform-wide **(per-school cap exists)**; content drafting runs on the platform's own budget.
 - [ ] Support inbox: parent questions, refund requests, wrong-answer reports; response targets.
 - [ ] Incident runbook: payments down, content error published, data exposure.
-- [ ] Security review before launch *(slice 2a: a read-only review of the content tables, roles and checks was requested; the full launch review is still open)*: payment routes, webhooks, pass checks, school isolation of all new tables (RLS on every school table **(pattern exists)**), platform tables read-only to schools.
+- [ ] Security review before launch *(slice 2a: an independent read-only review of the content tables, roles and checks is done and its six findings are fixed in migration 047; the full launch review is still open)*: payment routes, webhooks, pass checks, school isolation of all new tables (RLS on every school table **(pattern exists)**), platform tables read-only to schools.
 
 ---
 
@@ -250,7 +250,7 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 - [ ] Load test: 2,000 children practising in the same evening hour across schools.
 - [ ] Content QA sign-off per stage against the coverage targets.
 - [ ] Sunrise demo school loaded with every feature and walked through as parent, teacher, headteacher and platform admin before each push. *(Repeats every slice. Slice 2a: demo content library loaded locally with `npm run demo:content` and walked through as lead, author, reviewer and platform admin; not run on hosted. No parent, teacher or headteacher screen exists for it yet.)*
-- [ ] Local tests, demo, hosted deployment and school acceptance are reported separately; none stands for another. *(Repeats every slice. Slice 2a: local tests and local demo only; hosted migration 046, deployment and school acceptance not done.)*
+- [ ] Local tests, demo, hosted deployment and school acceptance are reported separately; none stands for another. *(Repeats every slice. Slice 2a: local tests and local demo, then hosted migrations 046 and 047 applied and the slice pushed on 2026-10-15 at Evans's request; the live `/readyz` check after Render's deploy, the demo content on hosted, and school acceptance are not done.)*
 
 ---
 
@@ -267,3 +267,10 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 Phases 2–6 make the product worth paying for; build them first on the demo school with hand-granted passes (Phase 7 without payments). Then Phase 8–9 once Phase 1 decisions are made, then Phase 11–12 hardening, then Phase 13. Each slice: tested, loaded into the Sunrise demo, walked through per role, pushed; STATUS.md updated and items ticked here.
 
 Approval needed from Evans before: hosted migrations, running the hosted demo loader, any payment provider or real money, contacting real schools or parents, buying or licensing content, pictures or audio.
+
+## Progress and where to resume
+
+- **Slice 2a done, applied to hosted and pushed (2026-10-15):** content roles, catalogue, versioned questions and guides, automatic checks, review screen, Content library page. See the last paragraph of STATUS.md.
+- **Next, slice 2b:** Claude drafts questions in batches (20–30 per indicator per level) into the library. Needs a platform-level run log and budget cap (the school `ai_runs` table needs a `school_id`, so it cannot be reused), and drafts must be created through a definer function that checks the run: since migration 047 a person cannot insert an `ai` version directly (`author_kind` and `ai_run_id` are ready). Human reviewer still required for every draft.
+- **Then, slice 2c:** match school indicators to the catalogue (automatic on official code, a headteacher screen for the rest), schools hide platform items with a reason, error reports withdrawing an item at once, 5% sampling QA, media storage. **Needs Evans first:** who approves what reaches families (central reviewers or the school's teacher), and whether parents may see numbers (MEMORY.md, 2026-10-15).
+- **Small open item:** the labelling-word check blocks words like "disorder" or "syndrome" even in JHS science; probably a warning for JHS. Awaiting Evans's yes.
