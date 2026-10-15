@@ -149,14 +149,14 @@ export class FinanceService {
   }
   // One learner's bills, newest term first, for the headteacher's learner page.
   async learnerFees(client: PoolClient, schoolId: string, learnerId: string) {
-    const rows = (await client.query(`SELECT i.id,t.name AS term_name,${dueSql}::float8 AS total_pesewas,${paidSql}::float8 AS paid_pesewas FROM invoices i JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id
+    const rows = (await client.query(`SELECT i.id,t.name AS term_name,ay.name AS year_name,${dueSql}::float8 AS total_pesewas,${paidSql}::float8 AS paid_pesewas FROM invoices i JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id JOIN academic_years ay ON ay.school_id=t.school_id AND ay.id=t.academic_year_id
       WHERE i.school_id=$1 AND i.learner_id=$2 ORDER BY t.start_date DESC,i.id`,[schoolId,learnerId])).rows;
     return rows.map(row => ({...row,balance_pesewas:row.total_pesewas - row.paid_pesewas}));
   }
   async statement(client: PoolClient, actor: Actor, learnerId: string) {
     const link = (await client.query('SELECT id FROM guardian_links WHERE school_id=$1 AND learner_id=$2 AND guardian_membership_id=$3 AND billing=true AND verified_at IS NOT NULL AND revoked_at IS NULL FOR SHARE',[actor.schoolId,learnerId,actor.membershipId])).rows[0];
     if (!link) throw new NotFoundException('Child unavailable');
-    const invoices = (await client.query(`SELECT i.id,t.name AS term_name,${dueSql}::float8 AS total_pesewas,${paidSql}::float8 AS paid_pesewas,i.lines,${adjustmentsJson} AS adjustments FROM invoices i JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id WHERE i.school_id=$1 AND i.learner_id=$2 ORDER BY t.start_date DESC,i.id`,[actor.schoolId,learnerId])).rows;
+    const invoices = (await client.query(`SELECT i.id,t.name AS term_name,ay.name AS year_name,${dueSql}::float8 AS total_pesewas,${paidSql}::float8 AS paid_pesewas,i.lines,${adjustmentsJson} AS adjustments FROM invoices i JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id JOIN academic_years ay ON ay.school_id=t.school_id AND ay.id=t.academic_year_id WHERE i.school_id=$1 AND i.learner_id=$2 ORDER BY t.start_date DESC,i.id`,[actor.schoolId,learnerId])).rows;
     return {items:invoices.map(row => ({...row,balance_pesewas:row.total_pesewas - row.paid_pesewas}))};
   }
 }

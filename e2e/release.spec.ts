@@ -497,6 +497,7 @@ test('a guardian practises approved questions with their child on a phone, the c
   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}),shift=(d:number)=>new Date(Date.parse(`${today}T00:00:00Z`)+d*86400000).toISOString().slice(0,10);
   async function send(method:'POST'|'PUT',route:string,body:Record<string,unknown>,status=201){const response=await page.request.fetch(`/api/v1/schools/${school}${route}`,{method,headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
   const year=await send('POST','/academic-years',{name:`Practice year ${suffix}`,startDate:shift(-60),endDate:shift(120)}),section=await send('POST','/classes',{name:`Practice class ${suffix}`,level:'Primary',capacity:5,academicYearId:year.id});
+  const kg=await send('POST','/classes',{name:`Practice KG ${suffix}`,level:'KG',capacity:5,academicYearId:year.id});
   const subject=await send('POST','/assessment/subjects',{name:`Maths ${suffix}`}),term=await send('POST','/assessment/terms',{academicYearId:year.id,name:`Term ${suffix}`,startDate:shift(-55),endDate:shift(30)});
   await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',sourceNote:'Synthetic scheme of work',items:[{description:topic}]});
   const indicator=(await (await page.request.get(`/api/v1/schools/${school}/assessment/indicators?subjectId=${subject.id}`)).json()).items[0].id;
@@ -545,6 +546,10 @@ test('a guardian practises approved questions with their child on a phone, the c
   await page.getByRole('tab',{name:'Home practice',exact:true}).click();
   const row=page.getByRole('row').filter({has:page.getByRole('link',{name})});await expect(row.getByText(topic)).toBeVisible();await expect(row.getByText('Level 2 of 3')).toBeVisible();
   await expect(page.getByText('1 of 1').first()).toBeVisible();
+  // Nursery and KG children are not offered home practice, and the tab says so instead of listing them as "Not yet".
+  await page.getByRole('combobox',{name:'Class',exact:true}).selectOption({label:`${kg.name} · Practice year ${suffix}`});
+  await page.getByRole('tab',{name:'Home practice',exact:true}).click();
+  await expect(page.getByText('Home practice is for Primary and JHS')).toBeVisible();await expect(page.getByText('Practising this week')).toHaveCount(0);
 
   // Switching the school's setting off takes practice away from families.
   const on=await (await page.request.get(`/api/v1/schools/${school}/practice/settings`)).json();
@@ -553,4 +558,15 @@ test('a guardian practises approved questions with their child on a phone, the c
   await expect(family.getByText('Notes with the school').first()).toBeVisible();
   await expect(family.getByRole('region',{name:'Practice at home',exact:true})).toHaveCount(0);
   await family.close();expect(errors).toEqual([]);expect(familyErrors).toEqual([]);
+});
+test('Early years and Fees say they are loading, not "No reports yet" or "No terms yet", while the answer is on its way',async({page})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  const slow=async(route:any)=>{await new Promise(resolve=>setTimeout(resolve,1500));await route.continue();};
+  await page.route('**/early-years/reports?**',slow);await page.route('**/finance/terms**',slow);
+  await signIn(page,'head@example.test','Early years');await page.getByRole('tab',{name:'Progress reports',exact:true}).click();
+  await expect(page.getByText('Loading reports…')).toBeVisible();await expect(page.getByText('No reports yet')).toHaveCount(0);
+  await expect(page.getByText('Loading reports…')).toHaveCount(0,{timeout:20000});
+  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Fees',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Loading'}).first()).toBeVisible();await expect(page.getByText('No terms yet')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0,{timeout:20000});expect(errors).toEqual([]);
 });

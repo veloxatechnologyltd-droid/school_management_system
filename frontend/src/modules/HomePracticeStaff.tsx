@@ -29,9 +29,10 @@ export function LearnerHomePractice({ schoolId, learnerId }: { schoolId: string;
 }
 
 // A class's home practice this term: who has practised, on what topic at which level, and how recently.
-export function ClassHomePractice({ schoolId, classId, termId }: { schoolId: string; classId: string; termId: string }) {
+export function ClassHomePractice({ schoolId, classId, termId, earlyYears = false }: { schoolId: string; classId: string; termId: string; earlyYears?: boolean }) {
   const [data, setData] = useState<ClassView | null>(null); const [error, setError] = useState('');
   useEffect(() => { let live = true; setData(null); setError(''); request<ClassView>(`/schools/${schoolId}/assessment/classes/${classId}/home-practice?termId=${termId}`).then(r => { if (live) setData(r); }).catch(e => { if (live) setError((e as Error).message); }); return () => { live = false; }; }, [schoolId, classId, termId]);
+  if (earlyYears) return <Empty title="Home practice is for Primary and JHS" hint="It is built from class exercises, homework and tests, which Nursery and KG classes do not record. These children are not offered it."/>;
   if (error) return <p role="alert">{error}</p>;
   if (!data) return <p className="muted">Loading…</p>;
   if (!data.total) return <Empty title="No learners in this class for the term"/>;

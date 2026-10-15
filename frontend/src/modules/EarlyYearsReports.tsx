@@ -38,6 +38,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
   const [filter, setFilter] = useState<'all' | 'review' | 'draft' | 'published'>('all');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [reportsLoaded, setReportsLoaded] = useState(false);
   const [reportTotal, setReportTotal] = useState(0); const [statusTotals, setStatusTotals] = useState<Record<string, number>>({});
   const head = role === 'headteacher';
   const guardian = role === 'guardian';
@@ -73,7 +74,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
       return;
     }
     loadClasses().catch(reason => setError((reason as Error).message));
-    loadReports().catch(reason => setError((reason as Error).message));
+    loadReports().catch(reason => setError((reason as Error).message)).finally(() => setReportsLoaded(true));
   }, [schoolId, role, level]);
 
   useEffect(() => {
@@ -157,9 +158,9 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
   const shown = reports.filter(row => filter === 'all' || (filter === 'review' ? ['submitted', 'approved'].includes(row.status) : filter === 'draft' ? ['draft', 'returned'].includes(row.status) : row.status === 'published'));
   return <section aria-labelledby="early-years-reports-title" className="page">
     <div className="stats">
-      <Stat label="Drafts" value={count('draft', 'returned')} caption="Being written by teachers" tone={count('draft', 'returned') ? 'caution' : 'neutral'} icon="edit_note"/>
-      <Stat label="To review" value={count('submitted', 'approved')} caption={head ? 'Waiting for you' : 'With the headteacher'} tone={count('submitted', 'approved') ? 'info' : 'neutral'} icon="rate_review"/>
-      <Stat label="Published" value={count('published')} caption="Visible to families" tone="positive" icon="family_restroom"/>
+      <Stat label="Drafts" value={reportsLoaded ? count('draft', 'returned') : '–'} caption="Being written by teachers" tone={count('draft', 'returned') ? 'caution' : 'neutral'} icon="edit_note"/>
+      <Stat label="To review" value={reportsLoaded ? count('submitted', 'approved') : '–'} caption={head ? 'Waiting for you' : 'With the headteacher'} tone={count('submitted', 'approved') ? 'info' : 'neutral'} icon="rate_review"/>
+      <Stat label="Published" value={reportsLoaded ? count('published') : '–'} caption="Visible to families" tone="positive" icon="family_restroom"/>
     </div>
     {!writing && <>{notice && <p role="status" aria-live="polite">{notice}</p>}{error && <p role="alert">{error}</p>}</>}
     <div className="card">
@@ -179,7 +180,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
           {['returned', 'published'].includes(row.status) && (head || row.can_edit) && <details><summary>Start a new revision</summary><label>Reason for new revision<input value={correctionReasons[row.report_id] ?? ''} onChange={event => setCorrectionReasons(current => ({ ...current, [row.report_id]: event.target.value }))}/></label><button className="secondary" disabled={busy || (correctionReasons[row.report_id] ?? '').trim().length < 3} onClick={() => perform(() => post(`/schools/${schoolId}/early-years/reports/${row.report_id}/revisions`, csrfToken, { version: row.version, correctionReason: correctionReasons[row.report_id], strengths: row.strengths, nextSteps: row.next_steps, ...(row.teacher_note ? { teacherNote: row.teacher_note } : {}) }), 'New report revision drafted.')}>Create new revision</button></details>}
           {row.status === 'returned' && row.approved_at && <p className="muted">This report was approved earlier, then returned because its evidence changed. Its approval remains in the review history.</p>}
         </li>;
-      })}</ul> : <Empty title={reports.length ? 'No reports in this list' : 'No reports yet'} hint={reports.length ? undefined : 'Start one with New report. Observations recorded for the period are included.'}/>}
+      })}</ul> : !reportsLoaded ? <p role="status" className="card-body muted">Loading reports…</p> : <Empty title={reports.length ? 'No reports in this list' : 'No reports yet'} hint={reports.length ? undefined : 'Start one with New report. Observations recorded for the period are included.'}/>}
     </div>
     {writing && <Dialog title="New progress report" wide onClose={() => setWriting(false)}>
       {error && <p role="alert">{error}</p>}

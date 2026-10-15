@@ -30,12 +30,15 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [adjust, setAdjust] = useState<{ invoiceIds: string[]; kind: 'discount' | 'charge'; label: string; amount: string; reason: string } | null>(null);
   const [owingOnly, setOwingOnly] = useState(false);
+  // Empty states are only true once the first answer is in; before that the page says it is loading.
+  const [termsReady, setTermsReady] = useState(false); const [loadedKey, setLoadedKey] = useState('');
+  const dataKey = `${termId}|${classId}|${owingOnly}`;
   const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
 
   useEffect(() => {
     Promise.all([request<{ items: Term[] }>(`/schools/${schoolId}/finance/terms`), request<{ items: ClassOption[] }>(`/schools/${schoolId}/finance/classes`)])
-      .then(([t, c]) => { setTerms(t.items); setClasses(c.items); const term = currentTerm(t.items); if (term) setTermId(prior => prior || term.id); }).catch(e => setError((e as Error).message));
+      .then(([t, c]) => { setTerms(t.items); setClasses(c.items); const term = currentTerm(t.items); if (term) setTermId(prior => prior || term.id); }).catch(e => setError((e as Error).message)).finally(() => setTermsReady(true));
   }, [schoolId]);
   const load = useCallback(async () => {
     if (!termId) { setItems([]); setInvoices([]); setSummary(null); setByClass([]); return; }
@@ -46,7 +49,7 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
         request<Summary>(`/schools/${schoolId}/finance/summary?termId=${termId}`),
         request<{ items: ClassSummary[] }>(`/schools/${schoolId}/finance/summary-by-class?termId=${termId}`),
       ]);
-      setItems(i.items); setInvoices(inv.items); setSummary(s); setByClass(bc.items);
+      setItems(i.items); setInvoices(inv.items); setSummary(s); setByClass(bc.items); setLoadedKey(`${termId}|${classId}|${owingOnly}`);
     } catch (e) { setError((e as Error).message); }
   }, [schoolId, termId, classId, owingOnly]);
   useEffect(() => { void load(); }, [load]);
@@ -75,13 +78,13 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
     setAdjust(null);
   }); };
   const termPicker = <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>;
-  const itemList = items.length ? <div className="table-wrap"><table><thead><tr><th>Item</th><th>Applies to</th><th className="num">Amount</th></tr></thead><tbody>{items.map(i => <tr key={i.id}><td>{i.name}</td><td>{i.class_name ?? i.level ?? 'All levels'}</td><td className="num">{cedis(i.amount_pesewas)}</td></tr>)}</tbody></table></div> : <Empty title="No fee items for this term"/>;
+  const itemList = items.length ? <div className="table-wrap"><table><thead><tr><th>Item</th><th>Applies to</th><th className="num">Amount</th></tr></thead><tbody>{items.map(i => <tr key={i.id}><td>{i.name}</td><td>{i.class_name ?? i.level ?? 'All levels'}</td><td className="num">{cedis(i.amount_pesewas)}</td></tr>)}</tbody></table></div> : loadedKey !== dataKey ? <p role="status" className="card-body muted">Loading…</p> : <Empty title="No fee items for this term"/>;
   const messages = <>{error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}</>;
 
   if (view === 'setup') return <section aria-label="Fees and receipts" className="page">
     {messages}
     <Card title="Fee items" hint="What each learner is billed for in a term." action={termPicker} flush>
-      {!terms.length ? <Empty title="No terms yet" hint="Add terms under Subjects, terms & grading first."/> : termId && <>{itemList}
+      {!terms.length ? (termsReady ? <Empty title="No terms yet" hint="Add terms under Subjects, terms & grading first."/> : <p role="status" className="card-body muted">Loading…</p>) : termId && <>{itemList}
         <form onSubmit={addItem} className="card-body"><h4>Add a fee item</h4><div className="grid"><label>Item name<input value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} required minLength={2} placeholder="Tuition"/></label>
           <label>Amount (GH₵)<input inputMode="decimal" value={newItem.amount} onChange={e => setNewItem({ ...newItem, amount: e.target.value })} required placeholder="450.00"/></label>
           <label>Applies to<select value={newItem.level} onChange={e => setNewItem({ ...newItem, level: e.target.value })}><option value="">All levels</option>{['Nursery', 'KG', 'Primary', 'JHS'].map(l => <option key={l} value={l}>{l}</option>)}<optgroup label="One class only">{classes.map(c => <option key={c.id} value={`class:${c.id}`}>{c.name} · {c.year_name}</option>)}</optgroup></select></label></div><button disabled={busy}>Add fee item</button></form></>}
@@ -93,7 +96,7 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
   return <section aria-label="Fees and receipts" className="page">
     <PageHeader eyebrow="Money" title="Fees" blurb="Bills, payments and receipts for each term. Nothing is ever deleted." actions={termPicker}/>
     {!pay && !receipt && messages}
-    {!terms.length ? <Card><Empty title="No terms yet" hint="The headteacher adds terms and fee items in Settings."/></Card> : !termId ? <Card><Empty title="Choose a term"/></Card> : <>
+    {!terms.length ? <Card>{termsReady ? <Empty title="No terms yet" hint="The headteacher adds terms and fee items in Settings."/> : <p role="status" className="card-body muted">Loading…</p>}</Card> : !termId ? <Card><Empty title="Choose a term"/></Card> : <>
       {summary && <div className="stats">
         <Stat label="Billed" value={cedis(summary.billedPesewas)} caption={`${summary.invoices} invoices`} icon="request_quote"/>
         <Stat label="Collected" value={cedis(summary.collectedPesewas)} caption={`${paidShare}% of what was billed`} tone="positive" icon="payments"/>
@@ -124,7 +127,7 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
             <td className="num">{inv.balance_pesewas > 0 ? <strong className="tone-critical">{cedis(inv.balance_pesewas)}</strong> : inv.balance_pesewas < 0 ? <Pill tone="info">Credit {cedis(-inv.balance_pesewas)}</Pill> : <Pill tone="positive">Settled</Pill>}{inv.arrears_pesewas > 0 ? <span className="sub tone-critical">+ {cedis(inv.arrears_pesewas)} from earlier terms</span> : inv.arrears_pesewas < 0 && <span className="sub">{cedis(-inv.arrears_pesewas)} credit from earlier terms</span>}</td>
             <td className="num"><div className="row-actions">{inv.balance_pesewas > 0 && <button type="button" className="secondary" onClick={() => { setError(''); setMessage(''); setPay({ invoiceId: inv.id, amount: '', method: 'cash', reference: '', receivedOn: today }); }}>Record payment</button>}
               <button type="button" className="secondary" onClick={() => startAdjust([inv.id])}>Adjust</button></div></td>
-          </tr>)}</tbody></table></div> : <Empty title="No invoices yet" hint={classId ? 'Generate this class’s invoices from the fee items.' : 'Choose a class, then generate its invoices.'}/>}
+          </tr>)}</tbody></table></div> : loadedKey !== dataKey ? <p role="status" className="card-body muted">Loading invoices…</p> : <Empty title="No invoices yet" hint={classId ? 'Generate this class’s invoices from the fee items.' : 'Choose a class, then generate its invoices.'}/>}
         </Card>
         <Card title="Fee items" hint="Set by the headteacher in Settings." flush>{itemList}</Card>
         {role === 'headteacher' && <p className="muted">To correct a wrong payment, a headteacher can reverse it with a reason; nothing is ever deleted.</p>}
@@ -158,7 +161,7 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
   </section>;
 }
 
-type Statement = { id: string; term_name: string; total_pesewas: number; paid_pesewas: number; balance_pesewas: number };
+type Statement = { id: string; term_name: string; year_name: string; total_pesewas: number; paid_pesewas: number; balance_pesewas: number };
 export function GuardianStatement({ schoolId }: { schoolId: string }) {
   const [children, setChildren] = useState<{ id: string; full_name: string; billing: boolean }[]>([]);
   const [childId, setChildId] = useState(''); const [rows, setRows] = useState<Statement[]>([]); const [error, setError] = useState(''); const [loaded, setLoaded] = useState(false);
@@ -176,7 +179,7 @@ export function GuardianStatement({ schoolId }: { schoolId: string }) {
         <Stat label="Balance" value={cedis(totals.balance)} caption={totals.balance > 0 ? 'Still owed' : 'Nothing owed'} tone={totals.balance > 0 ? 'critical' : 'positive'} icon="pending_actions"/>
       </div>
       <Card title="School fees statement" flush>
-        {rows.length ? <div className="table-wrap"><table><thead><tr><th>Term</th><th className="num">Billed</th><th className="num">Paid</th><th className="num">Balance</th></tr></thead><tbody>{rows.map(r => <tr key={r.id}><td>{r.term_name}</td><td className="num">{cedis(r.total_pesewas)}</td><td className="num">{cedis(r.paid_pesewas)}</td><td className="num">{r.balance_pesewas > 0 ? <strong className="tone-critical">{cedis(r.balance_pesewas)}</strong> : r.balance_pesewas < 0 ? <Pill tone="info">Credit {cedis(-r.balance_pesewas)}</Pill> : <Pill tone="positive">Settled</Pill>}</td></tr>)}</tbody></table></div> : <Empty title="No invoices yet"/>}
+        {rows.length ? <div className="table-wrap"><table><thead><tr><th>Term</th><th className="num">Billed</th><th className="num">Paid</th><th className="num">Balance</th></tr></thead><tbody>{rows.map(r => <tr key={r.id}><td>{r.term_name} · {r.year_name}</td><td className="num">{cedis(r.total_pesewas)}</td><td className="num">{cedis(r.paid_pesewas)}</td><td className="num">{r.balance_pesewas > 0 ? <strong className="tone-critical">{cedis(r.balance_pesewas)}</strong> : r.balance_pesewas < 0 ? <Pill tone="info">Credit {cedis(-r.balance_pesewas)}</Pill> : <Pill tone="positive">Settled</Pill>}</td></tr>)}</tbody></table></div> : <Empty title="No invoices yet"/>}
       </Card>
     </>}
   </section>;

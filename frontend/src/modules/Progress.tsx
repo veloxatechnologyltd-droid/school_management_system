@@ -152,7 +152,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
               {assessments.map(a => <tr key={a.id}><td>{shortDate(a.held_on)}</td><td>{a.title}<span className="sub">{kindLabel(a.kind)} · out of {a.max_mark}{a.indicators?.length ? ` · ${a.indicators.map(i => i.code ?? i.description).join(', ')}` : ''}</span></td><td>{a.subject_name}</td><td className="num">{a.marked}</td><td><Score value={a.average}/></td>
                 <td><button type="button" className="secondary" disabled={busy} onClick={() => void act(() => openMarks(a))}>Enter marks</button></td></tr>)}</tbody></table></div>}
         </> : tab === 'ca' ? <CaSheet schoolId={schoolId} classId={classId} termId={termId} subjects={subjects} subjectId={subjectId} onSubject={setSubjectId}/>
-        : tab === 'practice' ? <ClassHomePractice key={`${classId}:${termId}`} schoolId={schoolId} classId={classId} termId={termId}/>
+        : tab === 'practice' ? <ClassHomePractice key={`${classId}:${termId}`} schoolId={schoolId} classId={classId} termId={termId} earlyYears={['Nursery', 'KG'].includes(classes.find(c => c.id === classId)?.level ?? '')}/>
         : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects}
           onPlan={(id, subject, concern) => planFor({ subjectId: subject, learnerIds: [id], concern })}/>
         : tab === 'support' ? <>

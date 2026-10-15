@@ -75,7 +75,7 @@ test('payments issue sequential receipts, cannot overpay, and reversals need a r
 });
 
 test('guardians see statements only for children where they hold verified billing rights',async()=>{
-  const mine=await call(`/guardian/children/${kids[0]}/statement`,'GET',undefined,guardian);assert.equal(mine.status,200);assert.equal(mine.body.items[0].balance_pesewas,20000);
+  const mine=await call(`/guardian/children/${kids[0]}/statement`,'GET',undefined,guardian);assert.equal(mine.status,200);assert.equal(mine.body.items[0].balance_pesewas,20000);assert.equal(mine.body.items[0].year_name,'Finance year','a statement names the academic year beside the term');
   assert.equal((await call(`/guardian/children/${kids[1]}/statement`,'GET',undefined,guardian)).status,404);
   assert.equal((await call(`/guardian/children/${kids[0]}/statement`,'GET',undefined,acct)).status,403);
 });

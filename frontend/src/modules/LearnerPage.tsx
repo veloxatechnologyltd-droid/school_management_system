@@ -23,7 +23,7 @@ type Profile = {
   reports: { term_id: string; term_name: string; year_name: string; class_name: string; average: number | null; position: number | null; class_size: number | null; revision: number; teacher_remark: string | null }[];
   plans: { id: string; className: string; subject: string; topic: string | null; concern: string; action: string; owner: string; startDate: string; closed: boolean; due: boolean; nextReview: string | null }[];
   mock: { round: string | null; average: number | null; change: number | null; below: { name: string; percent: number }[] | string[]; needsSupport: boolean } | null;
-  fees?: { id: string; term_name: string; total_pesewas: number; paid_pesewas: number; balance_pesewas: number }[];
+  fees?: { id: string; term_name: string; year_name: string; total_pesewas: number; paid_pesewas: number; balance_pesewas: number }[];
   notes: Note[];
 };
 
@@ -121,7 +121,7 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
         </Card>
         {data.fees && <Card title="Fees">
           {!data.fees.length ? <p className="muted">No bills yet.</p>
-            : <ul className="plain-list">{data.fees.map(f => <li key={f.id}><strong>{f.term_name}</strong><span className="sub">Billed {cedis(f.total_pesewas)} · paid {cedis(f.paid_pesewas)}{f.balance_pesewas > 0 ? ` · owing ${cedis(f.balance_pesewas)}` : ' · paid in full'}</span></li>)}</ul>}
+            : <ul className="plain-list">{data.fees.map(f => <li key={f.id}><strong>{f.term_name} · {f.year_name}</strong><span className="sub">Billed {cedis(f.total_pesewas)} · paid {cedis(f.paid_pesewas)}{f.balance_pesewas > 0 ? ` · owing ${cedis(f.balance_pesewas)}` : ' · paid in full'}</span></li>)}</ul>}
         </Card>}
         <Card title="Classes">
           <ul className="plain-list">{data.enrolments.map((e, i) => <li key={i}><strong>{e.className}</strong><span className="sub">From {date(e.startDate)}{e.endDate ? ` to ${date(e.endDate)}${e.endReason ? ` (${e.endReason})` : ''}` : ''}</span></li>)}</ul>
