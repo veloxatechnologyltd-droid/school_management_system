@@ -381,7 +381,7 @@ class Person {
   register(schoolName: string) { return this.auth('register', { name: this.account.name, schoolName, email: this.account.email, password: this.account.password }); }
   async session() { await pace(); const r = await fetch(`${API}/auth/session`, { headers: { cookie: this.cookie } }); return r.json(); }
   async call<T = any>(method: 'GET' | 'POST' | 'PUT' | 'PATCH', route: string, body?: Record<string, unknown>, key?: string): Promise<T> {
-    const plain = route.startsWith('/accounts') || route === '';
+    const plain = route.startsWith('/accounts') || route.startsWith('/assistant/') || route === '';
     const id = key ? uuidFrom(`${state.schoolId}|${RUN}|${key}`) : randomUUID();
     const payload = method === 'GET' ? undefined : JSON.stringify(plain ? body ?? {} : { operationId: id, ...body });
     for (let attempt = 1; ; attempt++) {
