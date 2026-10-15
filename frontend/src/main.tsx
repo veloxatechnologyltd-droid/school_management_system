@@ -36,13 +36,14 @@ const Accounts=lazyModule(()=>import('./modules/Accounts'),'Accounts');
 const GettingStarted=lazyModule(()=>import('./modules/GettingStarted'),'GettingStarted');
 type NavItem={id:string;label:string;icon:string};
 const nav=(id:string,label:string,icon:string):NavItem=>({id,label,icon});
-const navByRole:Record<string,{group:string;items:NavItem[]}[]>={
+type NavGroup={group:string;items:NavItem[];pinned?:boolean};
+const navByRole:Record<string,NavGroup[]>={
   headteacher:[
     {group:'Overview',items:[nav('today','Home','space_dashboard'),nav('ask','Ask','forum')]},
     {group:'People',items:[nav('attendance','Attendance','event_available'),nav('learners','Learners','groups'),nav('guardians','Guardians','family_restroom'),nav('collection','Pickup','directions_walk')]},
     {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('early-years','Early years','child_care')]},
     {group:'Office',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign'),nav('promotion','Promotion','trending_up')]},
-    {group:'Administration',items:[nav('settings','Settings','settings')]}],
+    {group:'Administration',pinned:true,items:[nav('settings','Settings','settings')]}],
   teacher:[{group:'My work',items:[nav('today','Today','today'),nav('ask','Ask','forum'),nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('early-years','Early years','child_care')]}],
   accountant:[{group:'Money',items:[nav('fees','Fees','receipt_long')]}],
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
@@ -198,19 +199,21 @@ function App() {
   const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];
   const roleName=role==='frontdesk'?'Front desk':role.charAt(0).toUpperCase()+role.slice(1);
   const meta=current&&pageMeta[current.id];
+  const navGroup=(g:NavGroup)=><div key={g.items[0].id} className="nav-section">{g.group&&<p className="nav-group">{g.group}</p>}{g.items.map(item=><a key={item.id} href={`#/${item.id}`} aria-current={item.id===current?.id?'page':undefined}><Icon name={item.icon}/><span className="label">{item.label}</span></a>)}</div>;
   const initials=(school?.name??'V').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]!.toUpperCase()).join('');
   return <div className="shell">
+    <a href="#main" className="skip-link" onClick={e=>{e.preventDefault();document.getElementById('main')?.focus();}}>Skip to content</a>
     <aside className={menuOpen?'sidebar open':'sidebar'}>
       <a href="#/" className="brand"><span className="logo" aria-hidden="true">{initials}</span><span className="brand-text"><strong>{school?.name??'Veloxa SmartSchool'}</strong><span>{roleName||'Signed in'}</span></span></a>
       {session.schools.length>1&&<label className="school-picker">School<select value={school?.id??''} disabled={busy} onChange={e=>{setBusy(true);selectSchool(e.target.value).catch(error=>setStatus(error.message)).finally(()=>setBusy(false));}}>{!school&&<option value="">Loading…</option>}{session.schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
-      {school&&<nav aria-label="Sections">{groups.map(g=><div key={g.items[0].id} className="nav-section">{g.group&&<p className="nav-group">{g.group}</p>}{g.items.map(item=><a key={item.id} href={`#/${item.id}`} aria-current={item.id===current?.id?'page':undefined}><Icon name={item.icon}/><span className="label">{item.label}</span></a>)}</div>)}</nav>}
+      {school&&<nav aria-label="Sections"><div className="nav-scroll">{groups.filter(g=>!g.pinned).map(navGroup)}</div>{groups.some(g=>g.pinned)&&<div className="nav-pinned">{groups.filter(g=>g.pinned).map(g=>navGroup({...g,group:''}))}</div>}</nav>}
       <p className="sidebar-foot">Veloxa SmartSchool</p>
     </aside>
     {menuOpen&&<div className="scrim" onClick={()=>setMenuOpen(false)}/>}
     <div className="content">
       <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
       {school?.readOnly&&<p role="status" style={{margin:0,padding:'8px 16px',background:'var(--info-soft)',color:'var(--info)',fontSize:13,fontWeight:600}}>Demo school with sample data · read-only. Explore every page and try Ask; changes and password changes are switched off.</p>}
-      <main>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{school&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{current&&views[current.id]()}</Suspense></>}{!school&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
+      <main id="main" tabIndex={-1}>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{school&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{current&&views[current.id]()}</Suspense></>}{!school&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
     </div>
   </div>;
 }
