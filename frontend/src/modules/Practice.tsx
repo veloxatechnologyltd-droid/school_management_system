@@ -1,6 +1,7 @@
 import React, { FormEvent, useEffect, useState } from 'react';
 import { request } from '../lib/api';
-import { Dialog, Empty, Icon, Pill } from '../lib/ui';
+import { Dialog, Empty, Icon, Pill, Tabs } from '../lib/ui';
+import { PracticeQuestions } from './PracticeQuestions';
 
 export type Resource = { id: string; kind: string; title: string; detail: string | null; url: string | null; for_families: boolean; mine?: boolean; retired_at?: string | null; retirement_reason?: string | null };
 const kinds = [['worksheet', 'Worksheet'], ['textbook', 'Textbook pages'], ['link', 'Link'], ['activity', 'Activity']] as const;
@@ -27,7 +28,7 @@ export function PracticeDialog({ schoolId, csrfToken, indicatorId, onClose, onCh
   const [data, setData] = useState<{ indicator: { code: string | null; description: string; retired_at: string | null }; canRetireAny: boolean; items: Resource[] } | null>(null);
   const [form, setForm] = useState({ kind: 'worksheet', title: '', detail: '', url: '', forFamilies: false });
   const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false); const [showRetired, setShowRetired] = useState(false);
-  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [sheet, setSheet] = useState<Sheet | null>(null); const [tab, setTab] = useState<'materials' | 'questions'>('materials');
   const load = () => request<NonNullable<typeof data>>(`/schools/${schoolId}/assessment/indicators/${indicatorId}/resources`).then(setData).catch(e => setError((e as Error).message));
   useEffect(() => { void load(); }, [schoolId, indicatorId]);
   const send = (path: string, body: object) => request(`/schools/${schoolId}${path}`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), ...body }) });
@@ -49,6 +50,9 @@ export function PracticeDialog({ schoolId, csrfToken, indicatorId, onClose, onCh
     void act(async () => { await send(`/assessment/indicator-resources/${r.id}/retire`, { reason }); await load(); onChanged?.(); setMessage('Retired.'); }); };
   const current = data?.items.filter(r => !r.retired_at) ?? [], retired = data?.items.filter(r => r.retired_at) ?? [];
   return <Dialog title={data ? `Practice: ${data.indicator.code ? `${data.indicator.code} ` : ''}${data.indicator.description}` : 'Practice materials'} wide onClose={onClose}>
+    <Tabs label="Practice" value={tab} onChange={setTab} options={[{ id: 'materials', label: 'Materials' }, { id: 'questions', label: 'Home practice questions' }]}/>
+    {tab === 'questions' && <PracticeQuestions schoolId={schoolId} csrfToken={csrfToken} indicatorId={indicatorId} onChanged={onChanged}/>}
+    {tab === 'materials' && <>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {data && <>
       {!current.length ? <Empty title="No practice materials yet" hint="Add the worksheet, textbook pages or activity you use to re-teach this."/>
@@ -71,6 +75,7 @@ export function PracticeDialog({ schoolId, csrfToken, indicatorId, onClose, onCh
         <div className="actions"><button disabled={busy || (!form.detail.trim() && !form.url.trim())}>Add</button>
           {form.kind === 'worksheet' && form.detail.trim() && <button type="button" className="secondary" onClick={() => printSheet(form.title || 'Practice', form.detail)}><Icon name="print"/>Print sheet</button>}</div>
       </form>}
+    </>}
     </>}
   </Dialog>;
 }

@@ -70,6 +70,13 @@ export class AiController {
     const done = await this.drafts.completeWorksheet(prepared);
     return this.access.school(req,schoolId,['headteacher','teacher'],(client,actor) => this.drafts.recordWorksheet(client,actor,indicatorId,done),true);
   }
+  // Levelled home-practice questions for one indicator; a teacher edits and approves them before any family can see them.
+  @Post('indicators/:indicatorId/questions-draft')
+  async questionsDraft(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('indicatorId',new ParseUUIDPipe()) indicatorId: string) {
+    const prepared = await this.access.school(req,schoolId,['headteacher','teacher'],(client,actor) => this.drafts.prepareQuestions(client,actor,indicatorId),true);
+    const done = await this.drafts.completeQuestions(prepared);
+    return this.access.school(req,schoolId,['headteacher','teacher'],(client,actor) => this.drafts.recordQuestions(client,actor,indicatorId,done),true);
+  }
   @Post('runs/:runId/feedback')
   feedback(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('runId',new ParseUUIDPipe()) runId: string,@Body() body: FeedbackDto) {
     return this.access.school(req,schoolId,['headteacher','teacher'],(client,actor) => this.ai.feedback(client,actor,runId,body.outcome),true);

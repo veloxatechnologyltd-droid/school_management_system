@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, renameSync } from 'node:fs';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { demoQuestionSets } from './demo-practice';
 
 // Shareable demo school on the live system: "Sunrise International School (Demo)" holds a full Ghanaian school year
 // (2025/26 complete, 2026/27 Term 1 up to today) so prospects can sign in and see a working school, including Ask.
@@ -1021,6 +1022,18 @@ async function notesNow() {
   }
 }
 
+// ---------------------------------------------------------------- home practice: approved question sets for the weakest topics
+async function practiceNow() {
+  const head = await as('head');
+  step('Approved home-practice question sets for the weakest topics');
+  for (const [topic, questions] of Object.entries(demoQuestionSets)) {
+    const key = `questions:${topic}`; if (done(key)) continue;
+    const s = TOPICS.findIndex(list => list.some(([d]) => d === topic));
+    await head.post(`/assessment/indicators/${state.indicatorIds[s]![TOPICS[s]!.findIndex(([d]) => d === topic)]}/questions`, { questions }, key);
+    mark(key);
+  }
+}
+
 // ---------------------------------------------------------------- finish: shareable logins, AI for this school, family sharing
 async function finish() {
   const head = await as('head');
@@ -1125,8 +1138,8 @@ async function ask() {
 
 // ---------------------------------------------------------------- main
 const phases: Record<string, () => Promise<void>> = {
-  setup, roll, t1: () => pastTerm('t1'), t2: () => pastTerm('t2'), t3: () => pastTerm('t3'), promote, current, finish, verify, ask, notes: notesNow,
-  year: async () => { for (const p of ['setup', 'roll', 't1', 't2', 't3', 'promote', 'current', 'finish']) { if (!done(`phase:${p}`)) { console.log(`\n=== ${p} ===`); await phases[p]!(); mark(`phase:${p}`); flush(); } } },
+  setup, roll, t1: () => pastTerm('t1'), t2: () => pastTerm('t2'), t3: () => pastTerm('t3'), promote, current, finish, verify, ask, notes: notesNow, practice: practiceNow,
+  year: async () => { for (const p of ['setup', 'roll', 't1', 't2', 't3', 'promote', 'current', 'finish', 'practice']) { if (!done(`phase:${p}`)) { console.log(`\n=== ${p} ===`); await phases[p]!(); mark(`phase:${p}`); flush(); } } },
   status: async () => {
     const planned = { learners: model.learners.length, families: model.families.length, openDays: TERMS.reduce((n, t) => n + openDays(t).length, 0) };
     console.log(JSON.stringify({ target: API, hosted: HOSTED, school: state.schoolId, today: TODAY, planned, calls: state.calls, phases: Object.keys(state.done).filter(k => k.startsWith('phase:') || k.startsWith('term:')), registers: Object.keys(state.regs).length, findings: state.findings }, null, 2));

@@ -7,6 +7,8 @@ import { PlanDraftText, PlanFacts, attendanceWord, buildPlanPrompt, planDigest, 
 import { AiService } from './ai.service';
 import { LearnerFact, RemarkDraft, buildRemarksPrompt, factsFor, remarksDigest, remarksTemplateVersion, templateRemark, validateRemarks } from './report-remarks-draft';
 import { IndicatorFact, WorksheetDraft, buildWorksheetPrompt, numbered, templateWorksheet, validateWorksheet, worksheetDigest, worksheetTemplateVersion } from './worksheet-draft';
+import { BankQuestion } from '../practice/questions';
+import { buildQuestionsPrompt, levelsDrafted, questionsDigest, questionsTemplateVersion, shuffleOptions, templateQuestions, validateQuestionsDraft } from './practice-questions-draft';
 
 const CHUNK = 10;
 type Usage = { provider: string; model: string | null; inputTokens: number | null; outputTokens: number | null };
@@ -90,6 +92,28 @@ export class AiDraftsService {
     const runId = await this.ai.logRun(client,actor,{feature:'practice.worksheet',templateVersion:worksheetTemplateVersion,...done.usage,source:done.source,status:done.status,
       sourceRefs:{indicatorId},digest:worksheetDigest(done.draft),latencyMs:done.latencyMs,note:done.note});
     return {runId,source:done.source,status:done.status,note:done.note,...done.draft,detail:numbered(done.draft.questions)};
+  }
+
+  // Home-practice questions for one indicator: the same indicator-only facts as a worksheet. The teacher edits and approves; nothing is saved here.
+  prepareQuestions(client: PoolClient, actor: Actor, indicatorId: string) { return this.prepareWorksheet(client,actor,indicatorId); }
+
+  async completeQuestions(prepared: Awaited<ReturnType<AiDraftsService['prepareQuestions']>>) {
+    const started = Date.now(), provider = prepared.note ? null : this.ai.providerFor();
+    const local = (note: string): { questions: BankQuestion[]; usage: Usage; source: 'template'; status: 'fallback'; note: string; latencyMs: number } =>
+      ({questions:templateQuestions(),usage:{provider:'template',model:null,inputTokens:null,outputTokens:null},source:'template',status:'fallback',note,latencyMs:Date.now() - started});
+    if (!provider) return local(prepared.note ?? 'no_provider');
+    try {
+      const result = await provider.complete(buildQuestionsPrompt(prepared.fact));
+      const checked = validateQuestionsDraft(result.text);
+      if (!checked.ok) return local(`rejected:${checked.reason}`);
+      return {questions:shuffleOptions(checked.questions),usage:{provider:provider.name,model:provider.model,inputTokens:result.inputTokens,outputTokens:result.outputTokens},source:'ai' as const,status:'ok' as const,note:null,latencyMs:Date.now() - started};
+    } catch { return local('provider_error'); }
+  }
+
+  async recordQuestions(client: PoolClient, actor: Actor, indicatorId: string, done: Awaited<ReturnType<AiDraftsService['completeQuestions']>>) {
+    const runId = await this.ai.logRun(client,actor,{feature:'practice.questions',templateVersion:questionsTemplateVersion,...done.usage,source:done.source,status:done.status,
+      sourceRefs:{indicatorId,perLevel:levelsDrafted(done.questions)},digest:questionsDigest(done.questions),latencyMs:done.latencyMs,note:done.note});
+    return {runId,source:done.source,status:done.status,note:done.note,questions:done.questions};
   }
 
   // A support plan for named learners in one subject (and optionally one topic), drafted from their term data.

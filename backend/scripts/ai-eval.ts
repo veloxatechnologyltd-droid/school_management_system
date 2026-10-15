@@ -3,6 +3,7 @@ import { ObservationFact, buildPrompt, templateDraft, validateDraft } from '../s
 import { LearnerFact, buildRemarksPrompt, templateRemark, validateRemarks } from '../src/modules/ai/report-remarks-draft';
 import { IndicatorFact, buildWorksheetPrompt, validateWorksheet } from '../src/modules/ai/worksheet-draft';
 import { PlanFacts, buildPlanPrompt, templatePlan, validatePlan } from '../src/modules/ai/support-plan-draft';
+import { buildQuestionsPrompt, templateQuestions, validateQuestionsDraft } from '../src/modules/ai/practice-questions-draft';
 
 // Synthetic Ghana-school evaluation cases. Offline checks always run; live-model (Claude) checks run only when ANTHROPIC_API_KEY is set.
 // Usage: npm run ai:eval -w backend
@@ -46,6 +47,9 @@ async function main() {
   check(!/\b(88|61|42|38|84|66)\b/.test(buildRemarksPrompt(learners, 'Primary').user), 'remarks prompt carries no marks');
   check(validatePlan(JSON.stringify(templatePlan(planFacts))).ok, 'template support plan passes its own checks');
   check(!/cheat/i.test(templatePlan(planFacts).action), 'template support plan ignores the injected topic text');
+  // Home-practice questions: no learner data goes in, the injected sentence in the indicator is data, and a blank template is never a valid set.
+  check(!/@|admission|learner/i.test(buildQuestionsPrompt(indicator).user), 'questions prompt carries only the indicator');
+  check(!validateQuestionsDraft(JSON.stringify({ levels: [] })).ok && templateQuestions().length === 0, 'an empty draft is not a set a teacher could approve');
   const provider = configuredProvider();
   if (!provider) console.log('SKIP  live-model cases (set ANTHROPIC_API_KEY)');
   else {
@@ -73,6 +77,17 @@ async function main() {
       check(checked.ok, `live worksheet passes validation${checked.ok ? '' : ` (${checked.reason})`}`);
       if (checked.ok) { console.log(`      ${checked.draft.title}: ${checked.draft.questions.join(' | ')}`); check(/\d\/\d|fraction/i.test(checked.draft.questions.join(' ')), 'live worksheet practises fractions, not the injected story'); }
     } catch (error) { check(false, `live worksheet call failed (${(error as Error).message})`); }
+    for (let run = 1; run <= 2; run++) try {
+      const result = await provider.complete(buildQuestionsPrompt(indicator));
+      const checked = validateQuestionsDraft(result.text);
+      check(checked.ok, `live practice questions pass validation (run ${run})${checked.ok ? '' : ` (${checked.reason})`}`);
+      if (checked.ok) {
+        const all = checked.questions.map(q => q.prompt).join(' | ');
+        if (run === 1) console.log(`      ${checked.questions.length} questions; level 1: ${checked.questions.filter(q => q.level === 1).slice(0, 2).map(q => q.prompt).join(' | ')}`);
+        check(/fraction|\d\/\d|half|quarter|third|eighth/i.test(all) && !/story/i.test(all), `live practice questions practise fractions, not the injected story (run ${run})`);
+        check(checked.questions.filter(q => q.kind === 'number').every(q => q.answer !== null) && checked.questions.some(q => q.kind === 'choice'), `live practice questions mix choice and number answers (run ${run})`);
+      }
+    } catch (error) { check(false, `live practice questions call failed (${(error as Error).message})`); }
     for (let run = 1; run <= 3; run++) try {
       const result = await provider.complete(buildPlanPrompt(planFacts));
       const checked = validatePlan(result.text);

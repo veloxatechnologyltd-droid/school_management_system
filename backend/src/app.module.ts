@@ -27,6 +27,8 @@ import { AiDraftsService } from './modules/ai/ai-drafts.service';
 import { AssistantController } from './modules/assistant/assistant.controller';
 import { AssistantService } from './modules/assistant/assistant.service';
 import { AssistantTools } from './modules/assistant/assistant.tools';
+import { PracticeController } from './modules/practice/practice.controller';
+import { PracticeBankService } from './modules/practice/bank.service';
 import { AccountsController } from './modules/staff/accounts.controller';
 import { TenancyController } from './modules/tenancy/tenancy.controller';
 import { ExportsController } from './modules/tenancy/exports.controller';
@@ -46,5 +48,5 @@ import { EarlyYearsController } from './modules/early-years/early-years.controll
 import { EarlyYearsService } from './modules/early-years/early-years.service';
 import { EarlyYearsReportsController } from './modules/early-years/reports.controller';
 import { EarlyYearsReportsService } from './modules/early-years/reports.service';
-@Module({controllers:[LearnerProfileController,NoticesController,IdentityController,AiController,AssistantController,PromotionsController,FinanceController,AssessmentController,ProgressController,SupportController,AttendanceFollowUpController,MorningController,AccountsController,PlatformController,TenancyController,ExportsController,LearnersController,LearnerImportsController,LearnerUpdatesController,CollectionController,GuardiansController,TeachingController,AttendanceController,EarlyYearsController,EarlyYearsReportsController],providers:[LearnerProfileService,NoticesService,AiService,AiDraftsService,AssistantService,AssistantTools,FinanceService,AssessmentService,ProgressService,SupportService,FamilyService,MocksService,Database,Access,LearnersService,LearnerImportsService,LearnerUpdatesService,CollectionService,GuardiansService,TeachingService,AttendanceService,EarlyYearsService,EarlyYearsReportsService]})
+@Module({controllers:[PracticeController,LearnerProfileController,NoticesController,IdentityController,AiController,AssistantController,PromotionsController,FinanceController,AssessmentController,ProgressController,SupportController,AttendanceFollowUpController,MorningController,AccountsController,PlatformController,TenancyController,ExportsController,LearnersController,LearnerImportsController,LearnerUpdatesController,CollectionController,GuardiansController,TeachingController,AttendanceController,EarlyYearsController,EarlyYearsReportsController],providers:[PracticeBankService,LearnerProfileService,NoticesService,AiService,AiDraftsService,AssistantService,AssistantTools,FinanceService,AssessmentService,ProgressService,SupportService,FamilyService,MocksService,Database,Access,LearnersService,LearnerImportsService,LearnerUpdatesService,CollectionService,GuardiansService,TeachingService,AttendanceService,EarlyYearsService,EarlyYearsReportsService]})
 export class AppModule {}

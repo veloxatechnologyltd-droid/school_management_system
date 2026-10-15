@@ -316,3 +316,14 @@ td .link-button{display:inline-flex;align-items:center;min-height:40px;text-alig
 a.learner-link{color:var(--accent-text);font-weight:600;text-decoration:none}a.learner-link:hover{text-decoration:underline}
 .draft-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;background:var(--info-soft);color:var(--info);border:1px solid var(--info-line);border-radius:12px;padding:10px 14px;font-size:14px;font-weight:600;margin:8px 0 12px}
 .draft-basis{margin:0 0 12px;font-size:14px}.draft-basis summary{cursor:pointer;font-weight:600;color:var(--accent-text)}.draft-basis ul{margin:8px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--ink-2)}
+/* Home-practice question bank (staff): approved set view and the question editor */
+.question-bank details{border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:0 0 10px}.question-bank summary{cursor:pointer;min-height:var(--tap);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.q-list{list-style:none;counter-reset:q;margin:6px 0 0;padding:0}.q-list>li{counter-increment:q;position:relative;display:grid;gap:4px;padding:12px 0 12px 30px;border-top:1px solid var(--line)}.q-list>li::before{content:counter(q);position:absolute;left:0;top:12px;font-weight:600;color:var(--ink-3)}.q-prompt{font-weight:600}
+.q-options{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:2px}.q-options li{display:flex;align-items:flex-start;gap:8px;color:var(--ink-2)}.q-options li.right{color:var(--positive);font-weight:600}.q-options .icon{font-size:20px;flex:none;color:var(--ink-3)}.q-options li.right .icon{color:var(--positive)}.q-number{color:var(--positive)}.q-why{font-style:italic}
+.q-level{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 14px;display:grid;gap:10px}.q-level>legend{font-weight:600;padding:0 6px}
+.q-card{border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:8px;background:var(--surface)}.q-card label{margin:0}.q-kind{flex:0 1 180px}.q-options-edit{border:0;padding:0;margin:0;display:grid;gap:6px}.q-options-edit legend{font-size:13px;font-weight:600;margin-bottom:4px}
+.q-option{display:flex;align-items:center;gap:10px}.q-option input[type=radio]{width:22px;height:22px;flex:none;accent-color:var(--accent)}.q-card .small{justify-self:start}
+
+.q-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}.q-level .q-list>li{padding-right:0}.q-level .q-list{margin:0}.q-level .q-list>li:first-child{border-top:0}
+.q-options-edit{grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))}.q-level,.q-options-edit{min-width:0}.q-options-edit legend{grid-column:1/-1}
+.q-level>button.small{justify-self:start}

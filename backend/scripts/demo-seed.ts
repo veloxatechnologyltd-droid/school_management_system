@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { randomBytes, randomUUID, scryptSync } from 'node:crypto';
 import { localConfig } from '../src/core/database';
+import { demoQuestionSets } from './demo-practice';
 
 // Loads a realistic Ghanaian basic school into the local demo database (LOCAL_DB_NAME=school_demo) for client
 // demonstrations. Accounts and the school row are inserted directly; everything else goes through the running API
@@ -362,6 +363,11 @@ async function main() {
     for (const [s, topic, items] of practice) {
       const indicatorId = indicatorIds[s]![topics[s]!.findIndex(([d]) => d === topic)]!;
       for (const r of items) await head.post(`/assessment/indicators/${indicatorId}/resources`, r);
+    }
+    // Approved home-practice questions for the weakest topics (written by hand, approved by the headteacher), so families can be offered sessions.
+    for (const [topic, questions] of Object.entries(demoQuestionSets)) {
+      const s = topics.findIndex(list => list.some(([d]) => d === topic));
+      await head.post(`/assessment/indicators/${indicatorIds[s]![topics[s]!.findIndex(([d]) => d === topic)]}/questions`, { questions });
     }
     // A few grade-specific indicators too, so tagging shows a class its own grade first.
     for (const [subject, grade, items] of [[0, 'JHS 3', ['Argumentative essay writing', 'Summary writing', 'Letter writing: formal and informal']], [0, 'Basic 4', ['Reading aloud with expression', 'Using capital letters and full stops']],

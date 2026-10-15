@@ -1,0 +1,118 @@
+// Home-practice question sets for the Sunrise demo school: hand-written (so the loader needs no model), three levels of five
+// questions for the demo's weakest topics. Both demo loaders post these through the API as a teacher's approval.
+type Row = [level: number, prompt: string, correct: string | number, wrong: string[] | null, why: string];
+export interface DemoQuestion { level: number; kind: 'choice' | 'number'; prompt: string; options?: string[]; correctOption?: number; answer?: number; explanation: string }
+
+// The right option rotates through the positions so the answer is not always first.
+function build(rows: Row[]): DemoQuestion[] {
+  return rows.map(([level, prompt, correct, wrong, explanation], i) => {
+    if (!wrong) return { level, kind: 'number' as const, prompt, answer: correct as number, explanation };
+    const at = i % (wrong.length + 1), options = [...wrong]; options.splice(at, 0, correct as string);
+    return { level, kind: 'choice' as const, prompt, options, correctOption: at, explanation };
+  });
+}
+
+export const demoQuestionSets: Record<string, DemoQuestion[]> = {
+  'Fractions': build([
+    [1, 'What is 1/4 + 2/4?', '3/4', ['3/8', '2/4', '1/4'], 'Add the tops: 1 + 2 = 3. The bottom stays 4.'],
+    [1, 'Which fraction is the same as one half?', '2/4', ['1/3', '2/3', '1/4'], '2/4 is 2 of 4 equal parts, which is half.'],
+    [1, 'In the fraction 3/5, what is the denominator?', '5', ['3', '8', '15'], 'The denominator is the bottom number: it says how many equal parts.'],
+    [1, 'What is 2/7 + 3/7? Type the top number of the answer (the bottom stays 7).', 5, null, '2 + 3 = 5, so the answer is 5/7.'],
+    [1, 'Which is bigger, 1/2 or 1/4?', '1/2', ['1/4', 'They are equal', 'You cannot tell'], 'A half is bigger than a quarter.'],
+    [2, 'Ama has 24 mangoes and sells 1/3 of them. How many does she sell?', 8, null, '24 divided by 3 is 8.'],
+    [2, 'What is 3/8 + 4/8?', '7/8', ['7/16', '1/8', '12/8'], '3 + 4 = 7 eighths.'],
+    [2, 'Which fraction is the smallest?', '1/4', ['3/4', '1/2', '2/3'], 'A quarter is smaller than a half, two thirds and three quarters.'],
+    [2, 'Kojo ate 2/9 of a loaf and Esi ate 4/9. How many ninths did they eat altogether?', 6, null, '2 + 4 = 6 ninths.'],
+    [2, 'What is 7/8 - 3/8?', '4/8', ['10/8', '4/16', '3/8'], '7 - 3 = 4 eighths.'],
+    [3, 'What is 1/2 + 1/4 as a decimal?', 0.75, null, '1/2 is 0.5 and 1/4 is 0.25, so 0.75.'],
+    [3, 'Yaw reads 2/5 of a 100-page book on Monday and 1/5 on Tuesday. How many pages are left?', 40, null, '3/5 of 100 is 60 pages read, so 40 are left.'],
+    [3, 'Which fraction equals 0.25?', '1/4', ['1/5', '2/5', '1/2'], '1 divided by 4 is 0.25.'],
+    [3, 'A trotro carries 36 passengers and 2/3 are adults. How many are children?', 12, null, '1/3 of 36 is 12 children.'],
+    [3, 'Which statement is correct?', '1/3 + 1/3 = 2/3', ['1/3 + 1/3 = 2/6', '1/3 + 1/3 = 1/6', '1/3 + 1/3 = 1/3'], 'Add the tops and keep the bottom: 1 + 1 = 2 thirds.'],
+  ]),
+  'Grammar: tenses and agreement': build([
+    [1, 'Choose the correct word: She ___ to school every day.', 'goes', ['go', 'gone', 'going'], 'With "she" the everyday (present) verb takes -s.'],
+    [1, 'Yesterday, Kofi ___ football.', 'played', ['play', 'plays', 'playing'], '"Yesterday" needs the past tense.'],
+    [1, 'The children ___ in the compound now.', 'are playing', ['is playing', 'plays', 'played'], '"Now" needs are playing with a plural subject.'],
+    [1, 'Which sentence is in the past tense?', 'Ama washed her uniform.', ['Ama washes her uniform.', 'Ama will wash her uniform.', 'Ama is washing her uniform.'], '"Washed" shows it already happened.'],
+    [1, 'Choose the correct word: My brother ___ a farmer.', 'is', ['are', 'am', 'be'], 'One brother takes "is".'],
+    [2, 'Tomorrow, we ___ to the market.', 'will go', ['went', 'goes', 'gone'], '"Tomorrow" needs the future: will go.'],
+    [2, 'The goat and the sheep ___ in the pen.', 'are', ['is', 'was', 'be'], 'Two animals take "are".'],
+    [2, 'Each of the girls ___ a book.', 'has', ['have', 'are having', 'having'], '"Each" is singular, so it takes "has".'],
+    [2, 'Which sentence is correct?', 'The teacher has marked our books.', ['The teacher have marked our books.', 'The teacher marking our books.', 'The teacher has mark our books.'], 'One teacher takes "has", and "marked" completes it.'],
+    [2, 'Last week, Esi ___ her aunt in Kumasi.', 'visited', ['visit', 'visits', 'will visit'], '"Last week" needs the past tense.'],
+    [3, 'By the time we arrived, the match ___.', 'had started', ['has started', 'starts', 'will start'], 'It started before we arrived, so use had started.'],
+    [3, 'Which sentence has a mistake?', 'He don\'t like rice.', ['She doesn\'t like rice.', 'They don\'t like rice.', 'We don\'t like rice.'], '"He" needs "doesn\'t", not "don\'t".'],
+    [3, 'Choose the correct sentence.', 'The books on the table belong to Ama.', ['The books on the table belongs to Ama.', 'The books on the table belonging to Ama.', 'The books on the table is belong to Ama.'], '"Books" is plural, so the verb is "belong".'],
+    [3, 'If it rains tomorrow, the match ___ cancelled.', 'will be', ['was', 'had been', 'were'], 'A future result uses will be.'],
+    [3, 'She has lived in Tamale ___ 2019.', 'since', ['for', 'from', 'at'], 'Use "since" with a starting year.'],
+  ]),
+  'Composition writing': build([
+    [1, 'Which sentence starts with a capital letter and ends correctly?', 'My mother sells fish at the market.', ['my mother sells fish at the market.', 'My mother sells fish at the market', 'my mother sells fish at the market'], 'A sentence starts with a capital and ends with a full stop.'],
+    [1, 'A good story has a beginning, a middle and an ___.', 'end', ['answer', 'title', 'address'], 'Every story needs an ending.'],
+    [1, 'Which word is a joining word?', 'and', ['table', 'happy', 'jump'], '"And" joins words and ideas.'],
+    [1, 'What do we put at the end of a question?', '?', ['.', '!', ','], 'A question ends with a question mark.'],
+    [1, 'Which sentence belongs at the beginning of a story?', 'One morning, Kofi woke up early to feed the goats.', ['And that is how the story ended.', 'Thank you for reading.', 'The end.'], 'A beginning introduces who and when.'],
+    [2, 'Which sentence is best for the middle of a story about a market day?', 'Ama bargained for a bag of tomatoes and a fresh fish.', ['Once upon a time there was a girl.', 'That was the end of the day.', 'The end.'], 'The middle tells what happens.'],
+    [2, 'Which word fits? Kofi was tired ___ he finished his homework.', 'but', ['so', 'because', 'or'], '"But" joins two ideas that go against each other.'],
+    [2, 'A paragraph should be about...', 'one main idea', ['ten different ideas', 'only names', 'nothing at all'], 'Each paragraph keeps to one main idea.'],
+    [2, 'Which is the best ending for a story about a lost goat?', 'At last Kofi found the goat and took it home safely.', ['Kofi likes rice.', 'The goat has four legs.', 'Tomorrow is Monday.'], 'An ending settles the problem in the story.'],
+    [2, 'Which sentence uses capital letters for names correctly?', 'Yesterday, Ama and Kofi went to Accra.', ['yesterday, ama and kofi went to accra.', 'Yesterday, ama and Kofi went to accra.', 'yesterday Ama and kofi went to Accra.'], 'Names of people and places start with capital letters.'],
+    [3, 'Which opening sentence makes the reader want to read on?', 'The drum stopped, and everyone in the village turned to look at Esi.', ['This is a story.', 'I will write about my day.', 'My name is Esi.'], 'A good opening makes us ask what happens next.'],
+    [3, 'In a letter to a friend, where does the date usually go?', 'At the top right', ['At the bottom', 'In the middle', 'Nowhere'], 'The address and date go at the top right.'],
+    [3, 'Which sentence is better because it gives detail?', 'The old woman carried a heavy basket of yams on her head.', ['The woman carried something.', 'She went.', 'The basket.'], 'Detail helps the reader see the scene.'],
+    [3, 'A story should stay in one tense. Which sentence keeps the past tense?', 'Kofi opened the door and saw his uncle.', ['Kofi opened the door and sees his uncle.', 'Kofi opens the door and saw his uncle.', 'Kofi will open the door and saw his uncle.'], 'Both verbs are in the past tense.'],
+    [3, 'A composition with a beginning, a middle and an end needs at least how many paragraphs?', 3, null, 'One paragraph for each part: beginning, middle, end.'],
+  ]),
+  'Energy and its forms': build([
+    [1, 'Which is a source of light energy?', 'The Sun', ['A stone', 'A book', 'A chair'], 'The Sun gives out light.'],
+    [1, 'Which form of energy do we hear?', 'Sound', ['Light', 'Heat', 'Movement'], 'We hear sound energy.'],
+    [1, 'An electric iron gives out mainly which form of energy?', 'Heat', ['Sound', 'Light', 'Movement'], 'An iron is for heating clothes.'],
+    [1, 'A rolling ball has ___ energy.', 'movement', ['sound', 'light', 'chemical'], 'Moving things have movement energy.'],
+    [1, 'Which energy do plants use to make food?', 'Light from the Sun', ['Sound', 'Wind', 'Salt'], 'Plants use sunlight to make their food.'],
+    [2, 'A solar panel changes light energy into ___ energy.', 'electrical', ['sound', 'chemical', 'nuclear'], 'Solar panels make electricity from sunlight.'],
+    [2, 'A fan changes electrical energy into ___ energy.', 'movement', ['light', 'chemical', 'nuclear'], 'The blades move.'],
+    [2, 'Food gives our bodies ___ energy.', 'chemical', ['sound', 'light', 'electrical'], 'Food stores chemical energy.'],
+    [2, 'Which of these is a renewable source of energy?', 'The Sun', ['Coal', 'Crude oil', 'Diesel'], 'The Sun will not run out; coal and oil can.'],
+    [2, 'Which of these is a fuel?', 'Charcoal', ['Water', 'Sand', 'Stone'], 'Charcoal burns to give heat.'],
+    [3, 'You rub your hands together and they get warm. Which energy change is this?', 'Movement to heat', ['Light to sound', 'Heat to movement', 'Sound to light'], 'Rubbing is movement; friction makes heat.'],
+    [3, 'Which energy change happens at a hydroelectric dam such as Akosombo?', 'Movement of water to electrical', ['Light to heat', 'Sound to movement', 'Heat to light'], 'Falling water turns turbines to make electricity.'],
+    [3, 'A school uses 6 bulbs for 5 hours a day. How many bulb-hours is that each day?', 30, null, '6 times 5 is 30.'],
+    [3, 'Why is it wise to switch off lights when you leave a room?', 'To save electrical energy', ['To make the bulb brighter', 'So the room is hotter', 'Because light is heavy'], 'Switching off saves energy and money.'],
+    [3, 'A car burns petrol and moves. Which energy change takes place?', 'Chemical to movement', ['Light to sound', 'Sound to heat', 'Electrical to light'], 'Petrol stores chemical energy that becomes movement.'],
+  ]),
+  'Map reading': build([
+    [1, 'Which direction is opposite to north?', 'South', ['East', 'West', 'Up'], 'North and south are opposites.'],
+    [1, 'A map key (legend) explains the ___ on a map.', 'symbols', ['colour of the paper', 'prices', 'weather'], 'The key tells what each symbol means.'],
+    [1, 'The four main directions are north, south, east and ___.', 'west', ['up', 'down', 'left'], 'West completes the four.'],
+    [1, 'A drawing of a place from above, made smaller, is called a ___.', 'map', ['photograph', 'poem', 'diary'], 'That is a map.'],
+    [1, 'What do we call the arrow on a map that shows north?', 'North arrow', ['Map key', 'Title', 'Scale'], 'The north arrow points north.'],
+    [2, 'If you face north and turn right, which direction do you face?', 'East', ['West', 'South', 'North'], 'Right of north is east.'],
+    [2, 'A map scale is 1 cm to 2 km. Two towns are 3 cm apart on the map. How many km apart are they?', 6, null, '3 times 2 is 6 km.'],
+    [2, 'What helps you find a place on a map using letters and numbers?', 'A grid reference', ['A map key', 'A north arrow', 'A map title'], 'A grid reference gives the square.'],
+    [2, 'On a map of Ghana, in which direction is Tamale from Accra?', 'North', ['South', 'East', 'West'], 'Tamale is in the north of Ghana.'],
+    [2, 'In which direction is the sea from Accra?', 'South', ['North', 'East', 'West'], 'The Gulf of Guinea lies to the south.'],
+    [3, 'A map scale is 1 cm to 5 km. A road measures 8 cm on the map. How many km is it really?', 40, null, '8 times 5 is 40 km.'],
+    [3, 'In which direction do you travel from Kumasi to Cape Coast?', 'South', ['North', 'East', 'North-east'], 'Cape Coast is on the coast, south of Kumasi.'],
+    [3, 'Lines on a map joining places of the same height are called ___.', 'contour lines', ['rivers', 'roads', 'borders'], 'Contour lines show height.'],
+    [3, 'A route goes 3 km north then 4 km east. How many km did you walk in all?', 7, null, '3 + 4 = 7 km walked.'],
+    [3, 'What is the main use of a map scale?', 'To work out real distances', ['To show north', 'To give the map a title', 'To name the colours'], 'The scale links map length to real distance.'],
+  ]),
+  'Governance and citizenship': build([
+    [1, 'Who is the head of state of Ghana?', 'The President', ['The Headmaster', 'The Pastor', 'The market queen'], 'The President is the head of state.'],
+    [1, 'Which of these is a duty of a good citizen?', 'Paying taxes', ['Dropping litter', 'Breaking the law', 'Cheating in exams'], 'Taxes pay for roads, schools and clinics.'],
+    [1, 'We vote to choose ___.', 'our leaders', ['the weather', 'school fees', 'the date'], 'Voting chooses leaders.'],
+    [1, 'Which colour is at the top of the Ghana flag?', 'Red', ['Gold', 'Green', 'Black'], 'The flag is red, gold and green, with a black star.'],
+    [1, 'A law is a rule made for ___.', 'all citizens', ['one person', 'only teachers', 'only chiefs'], 'Laws apply to everyone.'],
+    [2, 'Who makes laws in Ghana?', 'Parliament', ['The courts', 'The police', 'The army'], 'Parliament makes laws.'],
+    [2, 'Which of these is a right of every child in Ghana?', 'The right to go to school', ['The right to skip school', 'The right to harm others', 'The right to take things'], 'Every child has the right to education.'],
+    [2, 'Who explains the law and decides if someone broke it?', 'The courts', ['Parliament', 'The police', 'The market queen'], 'The courts judge cases.'],
+    [2, 'The District Assembly is part of ___ government.', 'local', ['national only', 'foreign', 'school'], 'District assemblies run local government.'],
+    [2, 'At what age can a Ghanaian vote?', 18, null, 'Citizens vote from the age of 18.'],
+    [3, 'Which statement about the three arms of government is correct?', 'The Legislature makes laws, the Executive carries them out', ['The Judiciary makes laws and the Legislature judges cases', 'The Executive makes laws and the Judiciary carries them out', 'The Legislature carries out laws and the Executive judges cases'], 'The Legislature makes laws, the Executive carries them out and the Judiciary applies them.'],
+    [3, 'Why is it important to vote in elections?', 'So citizens help choose their leaders', ['So leaders win without being chosen', 'So the polling station stays busy', 'Because voting is a game'], 'Voting gives citizens a say.'],
+    [3, 'Which shows a citizen being responsible?', 'Helping keep the community clean', ['Throwing rubbish in a gutter', 'Ignoring the law', 'Cheating in exams'], 'Responsible citizens look after the community.'],
+    [3, 'Ghana became independent in 1957. In which year was its 50th anniversary?', 2007, null, '1957 + 50 = 2007.'],
+    [3, 'Which body in a district is led by the District Chief Executive?', 'The District Assembly', ['Parliament', 'The Supreme Court', 'The Police Service'], 'The DCE leads the District Assembly.'],
+  ]),
+};
