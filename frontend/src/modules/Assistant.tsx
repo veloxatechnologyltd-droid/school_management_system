@@ -1,9 +1,6 @@
-import React, { FormEvent, useEffect, useRef, useState } from 'react';
-import { request } from '../lib/api';
+import React, { FormEvent, useEffect, useRef } from 'react';
 import { Icon } from '../lib/ui';
-
-type Turn = { role: 'user' | 'assistant'; text: string };
-type Reply = { runId: string; reply: string; people: Record<string, string>; tools: string[] };
+import { ask, chatKey, setDraft, startOver, useChat } from '../lib/chatStore';
 
 const suggestions: Record<string, string[]> = {
   headteacher: ['How is Basic 6 performing this term?', 'Who was absent most last week?', 'Which classes have the lowest attendance this month?', 'How did JHS 3 do in the latest mock?', 'How much in fees is still outstanding, and which classes owe most?', 'Which support plans are due for review?'],
@@ -51,41 +48,31 @@ function Rendered({ text, people }: { text: string; people: Record<string, strin
 }
 
 // The school assistant: ask about classes, attendance, learners, support plans, mocks and fees in plain words.
-// The conversation lives in this page only; each question is answered from the school's records with the asker's own access.
+// The conversation is kept in this browser while the person stays signed in (see lib/chatStore.ts), so it is still here after
+// they visit another page or reload; "New conversation" clears it. Each question is answered from the school's records with the asker's own access.
 export function Assistant({ schoolId, csrfToken, role }: { schoolId: string; csrfToken: string; role: string }) {
-  const [turns, setTurns] = useState<Turn[]>([]); const [people, setPeople] = useState<Record<string, string>>({});
-  const [used, setUsed] = useState<Record<number, string[]>>({}); const [draft, setDraft] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  const end = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [turns, busy]);
+  const key = chatKey(schoolId, csrfToken);
+  const { turns, people, used, draft, busy, error } = useChat(key);
+  const log = useRef<HTMLDivElement>(null), end = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null), opened = useRef(false);
+  useEffect(() => {
+    // Coming back to a saved chat shows its latest message without moving the page; new messages scroll smoothly into view.
+    if (!opened.current) { opened.current = true; if (log.current) log.current.scrollTop = log.current.scrollHeight; return; }
+    end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [turns, busy]);
 
-  async function ask(question: string) {
-    const text = question.trim();
-    if (!text || busy) return;
-    // Keep the last 9 exchanges so the request stays within the 20-message limit.
-    const history = [...turns, { role: 'user' as const, text }].slice(-19);
-    setTurns(t => [...t, { role: 'user', text }]); setDraft(''); setBusy(true); setError('');
-    try {
-      const r = await request<Reply>(`/schools/${schoolId}/assistant/chat`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ messages: history }) });
-      setPeople(p => ({ ...p, ...r.people }));
-      setUsed(u => ({ ...u, [turns.length + 1]: r.tools })); setTurns(t => [...t, { role: 'assistant', text: r.reply }]);
-    } catch (e) {
-      const status = (e as { status?: number }).status ?? 0;
-      setError(status === 0 ? 'Connection problem. Check your internet connection and ask again.' : status >= 502 ? 'The assistant could not get an answer just now. Wait a moment and ask again.' : (e as Error).message);
-      setTurns(t => t.slice(0, -1)); setDraft(text);
-    } finally { setBusy(false); input.current?.focus(); }
-  }
-  const submit = (e: FormEvent) => { e.preventDefault(); void ask(draft); };
-  const restart = () => { setTurns([]); setPeople({}); setUsed({}); setError(''); setDraft(''); input.current?.focus(); };
+  const send = (question: string) => { void ask(key, schoolId, csrfToken, question).then(() => input.current?.focus()); };
+  const submit = (e: FormEvent) => { e.preventDefault(); send(draft); };
+  const restart = () => { startOver(key); input.current?.focus(); };
 
   return <section className="assistant" aria-labelledby="assistant-title">
     <div className="assistant-head">
-      <div><h2 id="assistant-title">Ask about your school</h2><p className="card-hint">Answers come from your school's records, limited to what your account can see. Check important figures on the page they come from.</p></div>
+      <div><h2 id="assistant-title">Ask about your school</h2><p className="card-hint">Answers come from your school's records, limited to what your account can see. Check important figures on the page they come from.</p><p className="card-hint">{turns.length ? 'This conversation stays here while you are signed in. Start a new one any time.' : 'Your conversation is kept while you stay signed in.'}</p></div>
       {turns.length > 0 && <button type="button" className="secondary" onClick={restart} disabled={busy}><Icon name="add_comment"/>New conversation</button>}
     </div>
-    <div className="assistant-log" aria-live="polite">
+    <div className="assistant-log" aria-live="polite" ref={log}>
       {!turns.length && <div className="assistant-start">
         <p className="muted">Try one of these, or ask in your own words. You can follow up, for example "What can we do about it?"</p>
-        <div className="assistant-suggestions">{(suggestions[role] ?? suggestions.teacher!).map(s => <button type="button" key={s} className="secondary" onClick={() => void ask(s)} disabled={busy}>{s}</button>)}</div>
+        <div className="assistant-suggestions">{(suggestions[role] ?? suggestions.teacher!).map(s => <button type="button" key={s} className="secondary" onClick={() => send(s)} disabled={busy}>{s}</button>)}</div>
       </div>}
       {turns.map((t, i) => <div key={i} className={`bubble bubble-${t.role}`}>
         {t.role === 'user' ? <p>{t.text}</p> : <Rendered text={t.text} people={people}/>}
@@ -98,7 +85,7 @@ export function Assistant({ schoolId, csrfToken, role }: { schoolId: string; csr
     <form className="assistant-form" onSubmit={submit}>
       <label className="sr-only" htmlFor="assistant-question">Your question</label>
       <textarea id="assistant-question" ref={input} rows={2} maxLength={4000} value={draft} placeholder="Ask a question, e.g. How is Basic 6 doing in Mathematics?"
-        onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void ask(draft); } }} disabled={busy}/>
+        onChange={e => setDraft(key, e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(draft); } }} disabled={busy}/>
       <button type="submit" disabled={busy || !draft.trim()}><Icon name="send"/>Ask</button>
     </form>
     <p className="assistant-note">The assistant only reads records; it cannot change anything. Learner names from your records are not sent to the AI provider.</p>

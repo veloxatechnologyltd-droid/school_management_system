@@ -2,6 +2,7 @@ import React, { FormEvent, Suspense, lazy, useEffect, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import './style.css';
 import { request } from './lib/api';
+import { forgetChats } from './lib/chatStore';
 import { Mfa } from './modules/Mfa';
 import { PlatformAdmin } from './modules/PlatformAdmin';
 import { Icon, PageHeader, Tabs } from './lib/ui';
@@ -96,7 +97,7 @@ function App() {
   const [loading,setLoading] = useState(true);
   const [tab,setTab] = useState(()=>location.hash.replace(/^#\//,''));
   const [menuOpen,setMenuOpen] = useState(false);
-  useEffect(()=>{const change=()=>{setTab(location.hash.replace(/^#\//,''));setMenuOpen(false);};addEventListener('hashchange',change);return ()=>removeEventListener('hashchange',change);},[]);
+  useEffect(()=>{const change=()=>{setTab(location.hash.replace(/^#\//,''));setMenuOpen(false);window.scrollTo(0,0);};addEventListener('hashchange',change);return ()=>removeEventListener('hashchange',change);},[]);
   const selectionEpoch=useRef(0);
   async function selectSchool(id:string) {
     const epoch=++selectionEpoch.current;
@@ -108,7 +109,7 @@ function App() {
       if(current.role==='headteacher') {const events=await request<AuditPage>(`/schools/${id}/audit`);if(epoch===selectionEpoch.current){setAudit(events.items);setAuditTotal(events.total);}}
     } catch(error) {
       if(epoch!==selectionEpoch.current)return;
-      if((error as {status?:number}).status===401){setSession(null);setStatus('Your session ended. Sign in again.');}
+      if((error as {status?:number}).status===401){setSession(null);forgetChats();setStatus('Your session ended. Sign in again.');}
       else setStatus((error as Error).message);
     }
   }
@@ -117,7 +118,7 @@ function App() {
     setSession(current);
     if(current.schools.length) await selectSchool(current.schools[0].id);
   }
-  useEffect(() => {restore().catch(() => setSession(null)).finally(() => setLoading(false));},[]);
+  useEffect(() => {restore().catch(() => {setSession(null);forgetChats();}).finally(() => setLoading(false));},[]);
   async function signIn(event:FormEvent) {
     event.preventDefault();setBusy(true);setStatus('');
     try { await request('/auth/login',{method:'POST',body:JSON.stringify({email,password})});setPassword('');await restore(); }
@@ -153,7 +154,7 @@ function App() {
   }
   async function signOut() {
     if(!session)return;setBusy(true);
-    try {await request('/auth/logout',{method:'POST',headers:{'x-csrf-token':session.csrfToken}});selectionEpoch.current++;setSession(null);setSchool(null);setAudit([]);setStatus('Signed out');}
+    try {await request('/auth/logout',{method:'POST',headers:{'x-csrf-token':session.csrfToken}});selectionEpoch.current++;forgetChats();setSession(null);setSchool(null);setAudit([]);setStatus('Signed out');}
     catch(error){setStatus((error as Error).message);}finally{setBusy(false);}
   }
   if(loading)return <main><p role="status">Loading workspace…</p></main>;

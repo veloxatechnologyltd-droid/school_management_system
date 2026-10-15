@@ -445,3 +445,44 @@ test('the headteacher previews learner corrections from a CSV, applies them with
   await expect(drawer).toContainText('Name: Abena Mensa → Abena Mensah');await expect(drawer).toContainText('Date of birth: not recorded → 2015-02-14');await expect(drawer).toContainText('Checked against the birth certificate');
   expect(errors).toEqual([]);
 });
+test('the Ask conversation survives leaving the page and a reload, keeps its follow-up context, clears on request and is gone after signing out',async({page})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  const sent:string[][]=[];
+  await page.route('**/assistant/chat',async route=>{
+    const messages=(route.request().postDataJSON() as {messages:{text:string}[]}).messages.map(m=>m.text);sent.push(messages);
+    if(messages.at(-1)?.includes('slowly'))await new Promise(done=>setTimeout(done,1500));
+    await route.fulfill({json:{runId:randomUUID(),reply:`Answer ${sent.length}: Basic 6 is doing well.`,people:{},tools:['school_overview']}});
+  });
+  const sections=page.getByRole('navigation',{name:'Sections',exact:true}),question=page.getByLabel('Your question',{exact:true}),savedChats=()=>page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('ask:')));
+  await signIn(page,'head@example.test','Ask');
+  await question.fill('How is Basic 6 doing?');await page.getByRole('button',{name:'Ask',exact:true}).click();
+  await expect(page.getByText('Answer 1: Basic 6 is doing well.')).toBeVisible();
+  // Leave the page with an unsent draft, then come back.
+  await question.fill('a half-written question');
+  await sections.getByRole('link',{name:'Home',exact:true}).click();await expect(page.getByRole('heading',{name:'Ask about your school'})).toHaveCount(0);
+  await sections.getByRole('link',{name:'Ask',exact:true}).click();
+  await expect(page.getByText('How is Basic 6 doing?',{exact:true})).toBeVisible();await expect(page.getByText('Answer 1: Basic 6 is doing well.')).toBeVisible();await expect(question).toHaveValue('a half-written question');
+  // A reload keeps it too, and a follow-up carries the earlier turns.
+  await page.reload();await pickSchool(page);
+  await expect(page.getByText('Answer 1: Basic 6 is doing well.')).toBeVisible();
+  await question.fill('What can we do about it?');await question.press('Enter');
+  await expect(page.getByText('Answer 2: Basic 6 is doing well.')).toBeVisible();
+  expect(sent[1]).toEqual(['How is Basic 6 doing?','Answer 1: Basic 6 is doing well.','What can we do about it?']);
+  // An answer that arrives after the person has gone elsewhere is still saved.
+  await question.fill('Answer slowly please');await question.press('Enter');
+  await sections.getByRole('link',{name:'Home',exact:true}).click();await page.waitForTimeout(2000);
+  await sections.getByRole('link',{name:'Ask',exact:true}).click();
+  await expect(page.getByText('Answer 3: Basic 6 is doing well.')).toBeVisible();
+  expect(await savedChats()).toHaveLength(1);
+  // New conversation clears it.
+  await page.getByRole('button',{name:'New conversation',exact:true}).click();
+  await expect(page.getByText('Answer 1: Basic 6 is doing well.')).toHaveCount(0);await expect(page.getByRole('button',{name:'How is Basic 6 performing this term?',exact:true})).toBeVisible();
+  expect(await savedChats()).toHaveLength(0);
+  // Signing out deletes whatever is saved; signing in again starts clean.
+  await question.fill('One more question');await question.press('Enter');await expect(page.getByText(/^Answer 4:/)).toBeVisible();expect(await savedChats()).toHaveLength(1);
+  await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();
+  expect(await savedChats()).toHaveLength(0);
+  await signIn(page,'head@example.test','Ask');
+  await expect(page.getByText(/^Answer \d/)).toHaveCount(0);await expect(page.getByRole('button',{name:'How is Basic 6 performing this term?',exact:true})).toBeVisible();
+  expect(errors).toEqual([]);
+});
