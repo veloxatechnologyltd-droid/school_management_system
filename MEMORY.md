@@ -231,3 +231,8 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was decided:** Evans asked that the Ask chat stay visible when leaving and returning, belong to the signed-in account, and be clearable ("New conversation"). It is saved in browser storage, keyed by a hash of the session's CSRF token and the school, and deleted on sign-out, when the app opens without a valid session, after 12 hours and when another session's chat opens. The earlier rejection of storing conversations on the server stands.
 **Why:** Answers contain real learner names and figures; keeping them in the browser for the session adds no child records at rest on the server, needs no migration or hosted apply, and cannot show one person's chat to another account on a shared school computer.
 **What was rejected:** Server-side storage for now. It would let the chat follow the account across devices, but it reverses the earlier decision, needs a migration with row-level security and a retention rule, and passes through the data-protection gate. Revisit only if schools ask for cross-device history.
+
+## 2026-10-15, Palette revised: white screen, blue sidebar with off-white text (supersedes the cream background)
+**What was decided:** Evans did not want a cream page background. The app uses the default white screen for the page, cards and header; the sidebar is brand blue `#1449a8` with off-white text (`#f6f3ea`) and an off-white pill for the active item. Blue remains the only brand colour and red stays reserved for errors.
+**Why:** Cream looked odd to him; a blue sidebar gives the brand presence without tinting the work area.
+**What was rejected:** Cream or any warm tint on the page, cards or header.

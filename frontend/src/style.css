@@ -1,4 +1,4 @@
-/* Visual language: cream paper, warm-white cards, blue as the one brand colour, Google Sans.
+/* Visual language: the default white screen, blue as the one brand colour, Google Sans.
    Red is kept for errors and absences only, so it never competes with the brand.
    Sizing: 44px fields, 40px buttons, 40px menu rows; every control grows by 4px on touch screens (see "Touch screens"). */
 :root{
@@ -6,8 +6,8 @@
   --accent:#1a5fd0;--accent-hover:#1449a8;--accent-text:#174a9c;--accent-soft:#e2ebfa;--accent-ring:rgba(26,95,208,.24);--accent-deep:#123f8c;
   --critical:#b3261e;--critical-soft:#fce8e6;--critical-line:#efb1ab;
   --ink:#1d2740;--ink-2:#434f69;--ink-3:#5a667f;
-  --paper:#faf5e9;--surface:#fffdf7;--wash:#f8f2e2;--sunken:#f3ecda;
-  --line:#e7dfca;--line-strong:#d6ccb1;--field-line:#8a90a0;--field-hover:#5f6679;--placeholder:#6b7690;--selection:#cfdcf5;
+  --paper:#fff;--surface:#fff;--wash:#f6f8fb;--sunken:#eef2f8;
+  --line:#e3e8ef;--line-strong:#cfd8e3;--field-line:#8a90a0;--field-hover:#5f6679;--placeholder:#6b7690;--selection:#cfdcf5;
   --positive:#1b6e37;--positive-soft:#e1f0e4;--positive-line:#9fd3ae;--caution:#8a4b00;--caution-soft:#fbe8b8;--caution-line:#e8c26a;--info:#1a5fd0;--info-soft:#e2ebfa;--info-line:#a8c3f0;
   --shadow:0 1px 3px rgba(40,50,80,.12),0 1px 2px rgba(40,50,80,.08);--shadow-lift:0 12px 32px rgba(30,40,70,.24),0 4px 8px rgba(30,40,70,.12);
   --control-h:44px;--button-h:40px;--small-h:34px;--tap:44px;
@@ -287,3 +287,18 @@ td .link-button{display:inline-flex;align-items:center;min-height:40px;text-alig
   .page-heading{font-size:26px}
 }
 .login [role=status]:not(:empty){margin:12px 0 0;padding:10px 14px;border-radius:10px;background:var(--wash);border-left:4px solid var(--accent);color:var(--ink);font-weight:500}
+/* Sidebar: brand blue with off-white text (contrast: text 7.4:1, labels 5.5:1; active item is an off-white pill with deep-blue text) */
+.sidebar{--side-bg:#1449a8;--side-text:#f6f3ea;--side-muted:#c5d3ef;--side-hover:rgba(246,243,234,.14);--side-line:rgba(246,243,234,.2);background:var(--side-bg);border-right:0;color:var(--side-text)}
+.sidebar .brand{color:var(--side-text);border-bottom-color:var(--side-line)}
+.sidebar .brand-text span{color:var(--side-muted)}.sidebar .brand-text span::before{background:#9ec0ff}
+.sidebar .logo{background:var(--side-text);color:#123f8c;box-shadow:none}
+.sidebar .school-picker{color:var(--side-muted)}
+.sidebar nav a{color:var(--side-text)}.sidebar nav a .icon{color:#dbe5f8}
+.sidebar nav a:hover{background:var(--side-hover);color:var(--side-text)}
+.sidebar nav a[aria-current=page]{background:var(--side-text);color:#123f8c;font-weight:700}.sidebar nav a[aria-current=page] .icon{color:#123f8c}
+.sidebar .nav-group{color:var(--side-muted)}
+.sidebar .nav-pinned{border-top-color:var(--side-line)}
+.sidebar-foot{background:transparent;border-top-color:var(--side-line);color:var(--side-muted)}
+.sidebar .nav-scroll{scrollbar-color:rgba(246,243,234,.35) transparent}
+.sidebar :focus-visible{outline-color:var(--side-text)}
+.sidebar.open{box-shadow:var(--shadow-lift)}
