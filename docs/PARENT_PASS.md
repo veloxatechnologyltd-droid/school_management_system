@@ -40,7 +40,7 @@ Parents pay, so none of the infrastructure counts until a parent would pay for w
 
 **Agreed direction (Evans, 2026-10-15):** what a child learns comes from the school's own term material; no central catalogue and no central review team are needed (MEMORY.md).
 
-**Still proposed, not decided:** make one stage good before breadth: **Upper Primary (Basic 4–6) Maths and English first**, because it builds on what exists (weak topics from class marks; multiple-choice and number questions need no pictures or audio). Then pull forward what a parent sees: term material with grounded drafting and one-click Plan learning (phase 2), the daily plan, guides in the portal and the end-of-term report. Run it free with staff families at one school (phase 13, step 1) and ask parents the five questions above before any payment work (phases 7–9). Lower Primary needs audio, pictures and a player and JHS needs timed papers and passages, so both come after.
+**Which subjects and classes (Evans, 2026-10-15):** whatever subjects the school adds material for, not a fixed pair. The earlier proposal to start with Upper Primary Maths and English is withdrawn. What does limit the order is the question types: text-only questions (multiple choice, number) work for any subject and class today; Lower Primary games that need pictures and audio, and JHS timed papers and passages, arrive with phase 3. Run the first version free with staff families at one school (phase 13, step 1) and ask parents the five questions above before any payment work (phases 7–9).
 
 ---
 
@@ -81,13 +81,13 @@ Why: a child taught something the school has not covered gains nothing in the en
 - [ ] No learner data goes to the model, only the material and the indicator **(rule exists)**.
 - [ ] Automatic checks before the teacher sees a question: number answers worked out by the computer, no repeats, labelling words, reading level for the stage, exactly one right answer **(the checks module exists, built for the central library; reuse it)**.
 - [ ] The teacher reads, edits and approves; nothing reaches a child until then **(exists for question sets)**; the same for worksheets and guides.
-- [ ] Enough questions per indicator and level that a child does not run out (working figure: 20 per level, about two weeks without repeats), drafted on demand when a teacher plans learning for a weak topic, not for the whole syllabus in advance.
+- [ ] Because the child can choose any topic (phase 4), drafting runs for the term's topics when material is added: per class, subject and term, within the school's monthly cap, into a teacher approval queue per topic (a quick screen: read, edit, approve). Enough questions per indicator and level that a child does not run out (working figure: 20 per level, about two weeks without repeats). Plan learning on a weak topic drafts anything still missing. A child only ever sees topics that are approved.
 - [ ] A teacher can flag any question "not what we taught" or "the answer looks wrong": it stops being served at once and goes back to the teacher to fix as a new version.
 
 ### Media
 - [ ] Pictures and audio arrive with the question types in phase 3 and need object storage (none exists today). Not needed for Upper Primary.
 
-**Done when:** a teacher adds a term's material for one class, clicks Plan on a weak topic, and gets a plan plus questions that cite that material; approves them; and the child's home practice uses them. A topic the material does not cover is refused, not invented.
+**Done when:** a teacher adds a term's material for one class and approves the drafted topics; clicks Plan on a weak topic and gets a plan plus practice that cites that material; and the child, on the parent's phone, can either improve on that weak topic or pick any other approved topic to learn on their own. A topic the material does not cover is refused, not invented.
 
 ### Built before this direction, now parked (not on the path)
 Slices 2a and 2b built a platform-owned library: content roles (author, reviewer, lead), a central curriculum catalogue, versioned platform questions and parent guides, a central review queue, and Claude batch drafting with a platform run log and token budget (migrations 046–048, on hosted, idle: the drafting budget is 0). Nothing from it reaches a school or a child. It stays in place for now; removing it needs Evans's go-ahead. Worth reusing: the automatic checks, the answer-and-options validator, the three-phase drafting pattern with its prompt-injection and unstorable-character fixes, and the budget idea (a platform-wide spend cap).
@@ -129,6 +129,9 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 
 ## Phase 4. Learning engine
 
+- [ ] **The child chooses how to learn (Evans, 2026-10-15):** (a) *Improve from my class work*: the weak topics from the school's continuous assessment, as home practice does today **(exists)**; (b) *Learn on my own*: any topic of any subject the school has added material for and the teacher has approved. Only approved topics are listed; subjects are whatever the school uploaded. Learners have no logins, so the choice is made on the parent's phone, inside the child's profile.
+- [ ] A short lesson drafted from the school's own notes comes before practice on a topic the child chose on their own (teacher-approved, with citations); the same lesson is available on a weak topic.
+- [ ] Self-chosen practice is evidence beside class marks, never part of CA or report scores **(rule exists for home practice)**; the parent and the teacher can see what the child chose and how it went.
 - [ ] Mastery per child per indicator, from practice and the school's class marks **(class marks exist)**.
 - [ ] Levels per indicator (keep 3 **(exists)** or extend per stage; decide).
 - [ ] No-repeat window: a child doesn't see the same question for 14 days while others are available.
@@ -175,7 +178,7 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 
 - [ ] Onboarding: first visit explains free vs paid in one screen, with a sample session the child can try free.
 - [ ] Child picker for families with several children **(exists in the portal)**; each child shows pass status.
-- [ ] Today screen per child: today's plan, streak, last result, one line from the teacher if any.
+- [ ] Today screen per child: today's plan, streak, last result, one line from the teacher if any, and the child's choice: "Improve from my class work" or "Learn on my own" (any approved topic in the school's subjects).
 - [ ] "How to help at home" guide per topic: what the child is learning, one worked example, common mistakes, a 5-minute activity with things in the house; audio version.
 - [ ] Weekly message (portal and SMS **(SMS sending exists)**): what the child practised, what's next. Parent can switch SMS off.
 - [ ] Mid-term check-in: on track or needs more practice.
@@ -283,15 +286,15 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 
 ## Build order
 
-Phases 2–6 make the product worth paying for; build them first on the demo school with hand-granted passes (Phase 7 without payments). Phase 2 is school-grounded (term material, grounded drafting) with a one-click Plan learning that drafts the plan and the practice for a weak topic. Then phases 4–6 (daily plan, parent guides, end-of-term report), then phase 13 step 1 (free staff pilot; ask parents the five questions), then phases 7–9 (payments, revenue share) once the Phase 1 decisions are made, then phases 11–12 hardening. Each slice: tested, loaded into the Sunrise demo, walked through per role, pushed; STATUS.md updated and items ticked here.
+Phases 2–6 make the product worth paying for; build them first on the demo school with hand-granted passes (Phase 7 without payments). Phase 2 is school-grounded (term material, grounded drafting) with a one-click Plan learning that drafts the plan and the practice for a weak topic, and two ways for the child to choose what to learn (improve from class work, or on their own). Then phases 4–6 (daily plan, parent guides, end-of-term report), then phase 13 step 1 (free staff pilot; ask parents the five questions), then phases 7–9 (payments, revenue share) once the Phase 1 decisions are made, then phases 11–12 hardening. Each slice: tested, loaded into the Sunrise demo, walked through per role, pushed; STATUS.md updated and items ticked here.
 
 Approval needed from Evans before: hosted migrations, running the hosted demo loader, any payment provider or real money, contacting real schools or parents, buying or licensing content, pictures or audio.
 
 ## Progress and where to resume
 
 - **Direction decided 2026-10-15 (MEMORY.md):** school-grounded content, no central catalogue. Slices 2a and 2b (migrations 046–048) are on hosted and parked.
-- **Next, slice 2c (new):** term material (pasted, per class, subject and term, versioned, private to the school) and grounded drafting with citations, worksheet and question set first. The per-school AI switch, cap and run log already exist.
+- **Next, slice 2c (new):** term material (pasted, per class, subject and term, versioned, private to the school) and grounded drafting with citations, drafted for the term's topics when material is added, with a teacher approval queue per topic. Then the child's two ways to learn: "Improve from my class work" (as today) and "Learn on my own" (a short lesson from the school's notes, then practice, on any approved topic). The per-school AI switch, cap and run log already exist.
 - **Then:** Plan learning in one click (the plan, the practice for the weak topic, what the child will get at home, a printable test for children without a phone).
 - **Then:** measurement: marks before and after on the next tagged class test, the teacher's "not what we taught" flag, and an end-of-term view of practised topics beside results (wording never claims the app caused a change).
-- **Open for Evans:** whether parents may see numbers (needed before the parent report); whether the stage-first proposal above is accepted; whether the parked central library should be removed (needs his go-ahead); teacher approval of Claude's drafts stays as the current rule unless he says otherwise.
+- **Open for Evans:** whether parents may see numbers (needed before the parent report); whether Claude's drafts for topics a child picks on their own may reach the child without the teacher's approval (recommended: no; approve per topic when material is added, and the child sees only approved topics); whether the parked central library should be removed (needs his go-ahead). Teacher approval stays the rule unless he says otherwise.
 - **Small open item:** the labelling-word check blocks words like "disorder" or "syndrome" even in JHS science; probably a warning for JHS. It matters again because the checks module is reused for school drafts.
