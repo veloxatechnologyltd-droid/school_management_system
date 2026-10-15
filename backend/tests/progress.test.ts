@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 const {createApp}=require('../dist/main');
-const {attentionFor,mondayOf,mean}=require('../dist/modules/assessment/progress.service');
+const {attentionFor,mondayOf,mean,caFromParts,examGap,partOf}=require('../dist/modules/assessment/progress.service');
 const config={host:path.resolve(__dirname,'../../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local'};
 const owner=new Pool({...config,user:process.env.USER});
 const school=randomUUID(),year=randomUUID(),cls=randomUUID(),cls2=randomUUID(),headM=randomUUID(),teacherM=randomUUID(),guardianM=randomUUID();
@@ -70,10 +70,32 @@ test('marks stay within the maximum, only for learners in the class, and keep th
   assert.equal(list.length,5);assert.equal(list[4].id,tests[0]);assert.equal(list[4].marked,2);assert.equal(list[4].average,85);
 });
 
-test('the CA suggestion averages each learner\'s assessments; the teacher still saves the CA',async()=>{
-  const r=(await call(`/assessment/classes/${cls}/ca-suggestion?termId=${termId}&subjectId=${maths}`,'GET',undefined,teacher)).body.items;
-  const by=(id:string)=>r.find((x:any)=>x.learnerId===id);
-  assert.deepEqual([by(kids[0]).ca,by(kids[1]).ca,by(kids[2]).ca],[85,64.6,44.3]);assert.equal(by(kids[2]).assessments,3);
+test('CA parts weight exercises, homework and tests; missing parts are left out, not counted as zero',()=>{
+  const parts={exercises:30,homework:30,tests:40,projects:0};
+  assert.equal(caFromParts({exercises:89,homework:85,tests:80,projects:82},parts),84.2,'projects weighted 0 are ignored');
+  assert.equal(caFromParts({exercises:45,homework:null,tests:40},parts),42.1,'no homework: exercises and tests scaled up');
+  assert.equal(caFromParts({projects:90},parts),null);
+  assert.deepEqual(['classwork','quiz','homework','class_test','project','mock'].map(partOf),['exercises','exercises','homework','tests','projects',null]);
+  assert.equal(examGap(60,75,5),null);assert.equal(examGap(40,85,2),null,'too little class work to compare');
+  assert.deepEqual(examGap(42.1,85,3),{direction:'exam_higher',difference:42.9});assert.deepEqual(examGap(66.4,40,5),{direction:'exam_lower',difference:-26.4});
+});
+
+test('the CA suggestion weights each learner\'s class work by the school\'s CA parts; the teacher still saves the CA',async()=>{
+  const suggest=async()=>{const r=(await call(`/assessment/classes/${cls}/ca-suggestion?termId=${termId}&subjectId=${maths}`,'GET',undefined,teacher)).body.items;return kids.map(id=>r.find((x:any)=>x.learnerId===id).ca);};
+  // Default parts: exercises (class exercise + quiz) 30, homework 30, class tests 40, projects 0.
+  assert.deepEqual(await suggest(),[84.2,66.4,42.1]);
+  const policy=(await call('/assessment/policy','GET',undefined,head)).body.policy;
+  assert.deepEqual(policy.ca_parts,{exercises:30,homework:30,tests:40,projects:0});
+  const save=(caParts:unknown,version:number,actor=head)=>call('/assessment/policy','PUT',{operationId:randomUUID(),caWeight:30,examWeight:70,bands,sourceNote:'Synthetic progress policy',caParts,version},actor);
+  assert.equal((await save({exercises:30,homework:30,tests:30,projects:0},policy.version)).status,400,'parts must add up to 100');
+  assert.equal((await save({exercises:100,homework:0,tests:0,projects:0},policy.version,teacher)).status,403);
+  const changed=(await save({exercises:100,homework:0,tests:0,projects:0},policy.version)).body;
+  assert.equal(changed.version,policy.version+1);assert.deepEqual(await suggest(),[89,70,45]);
+  const kept=(await call('/assessment/policy','PUT',{operationId:randomUUID(),caWeight:30,examWeight:70,bands,sourceNote:'Synthetic progress policy',version:changed.version})).body;
+  assert.deepEqual(kept.ca_parts,{exercises:100,homework:0,tests:0,projects:0},'saving without parts keeps them');
+  await save({exercises:30,homework:30,tests:40,projects:0},kept.version);
+  await assert.rejects(owner.query(`UPDATE assessment_policies SET ca_parts='{"exercises":50,"homework":30,"tests":40,"projects":0}' WHERE school_id=$1`,[school]),/ca_parts/);
+  await assert.rejects(owner.query(`UPDATE assessment_policies SET ca_parts='{"exercises":30,"homework":30,"tests":40,"projects":0,"extra":0}' WHERE school_id=$1`,[school]),/ca_parts/);
   assert.equal((await owner.query('SELECT count(*) FROM assessment_score_entries WHERE school_id=$1',[school])).rows[0].count,'0','nothing written');
 });
 
@@ -101,6 +123,24 @@ test('learner progress shows weeks, months and term results; teachers only for t
   const yearView=(await call(`/assessment/learners/${kids[0]}/progress?period=year`,'GET',undefined,head)).body;
   assert.deepEqual(yearView.buckets.map((b:any)=>b.label),['Progress year']);assert.equal(yearView.subjects[0].points[0].termResult,88.5);
   assert.equal((await call(`/assessment/learners/${kids[0]}/progress?period=decade`,'GET',undefined,head)).status,400);
+});
+
+test('the CA sheet shows each part, each class test, the CA, exam and total, and class work far from the exam',async()=>{
+  await ok(`/assessment/classes/${cls}/scores`,'POST',{termId,subjectId:maths,scores:[{learnerId:kids[1],kind:'exam',score:40},{learnerId:kids[2],kind:'exam',score:85}]},teacher);
+  assert.equal((await call(`/assessment/classes/${cls2}/ca-sheet?termId=${termId}&subjectId=${maths}`,'GET',undefined,teacher)).status,404);
+  assert.equal((await call(`/assessment/classes/${cls}/ca-sheet?termId=${termId}&subjectId=${maths}`,'GET',undefined,guardian)).status,403);
+  const sheet=(await call(`/assessment/classes/${cls}/ca-sheet?termId=${termId}&subjectId=${maths}`,'GET',undefined,teacher)).body;
+  assert.deepEqual(sheet.set,{exercises:2,homework:1,tests:1,projects:1});assert.equal(sheet.tests.length,1);
+  assert.deepEqual(sheet.policy.parts,{exercises:30,homework:30,tests:40,projects:0});
+  const row=(id:string)=>sheet.items.find((x:any)=>x.learnerId===id);
+  assert.deepEqual(row(kids[0]).parts.exercises,{average:89,marked:2});assert.deepEqual(row(kids[0]).tests,[80]);
+  assert.deepEqual([row(kids[0]).ca,row(kids[0]).recordedCa,row(kids[0]).exam,row(kids[0]).total,row(kids[0]).gap],[84.2,85,90,88.5,null],'total uses the CA recorded for the report');
+  assert.deepEqual([row(kids[1]).ca,row(kids[1]).recordedCa,row(kids[1]).total,row(kids[1]).gap],[66.4,null,47.9,{direction:'exam_lower',difference:-26.4}]);
+  assert.deepEqual(row(kids[2]).parts.homework,{average:null,marked:0});assert.deepEqual(row(kids[2]).gap,{direction:'exam_higher',difference:42.9});
+  const load=(await call(`/assessment/classes/${cls}/workload?termId=${termId}`,'GET',undefined,teacher)).body;
+  assert.equal(load.asOf,today);assert.equal(load.items.length,1);
+  assert.deepEqual(load.items[0].term,{exercises:2,homework:1,tests:1,projects:1});assert.deepEqual(load.items[0].week,{exercises:0,homework:0,tests:0,projects:1});
+  assert.equal((await call(`/assessment/classes/${cls2}/workload?termId=${termId}`,'GET',undefined,teacher)).status,404);
 });
 
 let fractions:string,addition:string;

@@ -209,7 +209,7 @@ async function main() {
     step('Subjects, grading policy and scores');
     const subjectIds: string[] = [];
     for (const s of subjects) subjectIds.push((await head.post('/assessment/subjects', { name: s })).id);
-    await head.call('PUT', '/assessment/policy', { caWeight: 30, examWeight: 70, sourceNote: 'Grading scheme approved by the Sunrise academic board for basic school terminal reports', bands: [{ min: 80, grade: 'A', remark: 'Excellent' }, { min: 70, grade: 'B', remark: 'Very good' }, { min: 60, grade: 'C', remark: 'Good' }, { min: 50, grade: 'D', remark: 'Credit' }, { min: 40, grade: 'E', remark: 'Pass' }, { min: 0, grade: 'F', remark: 'Needs support' }] });
+    await head.call('PUT', '/assessment/policy', { caWeight: 30, examWeight: 70, caParts: { exercises: 30, homework: 30, tests: 40, projects: 0 }, sourceNote: 'Grading scheme approved by the Sunrise academic board for basic school terminal reports', bands: [{ min: 80, grade: 'A', remark: 'Excellent' }, { min: 70, grade: 'B', remark: 'Very good' }, { min: 60, grade: 'C', remark: 'Good' }, { min: 50, grade: 'D', remark: 'Credit' }, { min: 40, grade: 'E', remark: 'Pass' }, { min: 0, grade: 'F', remark: 'Needs support' }] });
     const graded = classes.map((c, i) => ({ ...c, i })).filter(c => c.level === 'Primary' || c.level === 'JHS');
     const score = (l: Learner, subject: number, kind: string) => Math.round(clamp(normal(l.ability + (subject % 3 - 1) * 4 + (kind === 'ca' ? 6 : 0), 9), 12, 99));
     const scoreTerm = async (term: typeof terms[number], kinds: string[], cls: typeof graded) => {
@@ -448,6 +448,16 @@ async function main() {
             .map(l => ({ learnerId: l.id, mark: Math.round(clamp(normal(l.ability + (s % 3 - 1) * 4 - 6 + round * 3, 9), 5, 99)) })) });
         }
       }
+    }
+
+    step('This term\'s CA filled from class work');
+    // As a teacher would with "Fill CA from assessments": the core subjects' CA comes from the term's class work, weighted by
+    // the school's CA parts, so the CA sheet agrees with the marks. Published (locked) learners keep their CA.
+    for (const c of graded) for (const subjectId of subjectIds.slice(0, 4)) {
+      const locked = new Set(((await head.get(`/assessment/classes/${c.id}/grid?termId=${current.id}&subjectId=${subjectId}`)).items as { learnerId: string; locked: boolean }[]).filter(r => r.locked).map(r => r.learnerId));
+      const scores = ((await head.get(`/assessment/classes/${c.id}/ca-suggestion?termId=${current.id}&subjectId=${subjectId}`)).items as { learnerId: string; ca: number | null }[])
+        .filter(i => i.ca !== null && !locked.has(i.learnerId)).map(i => ({ learnerId: i.learnerId, kind: 'ca', score: i.ca }));
+      if (scores.length) await head.post(`/assessment/classes/${c.id}/scores`, { termId: current.id, subjectId, scores });
     }
 
     step('End-of-term remarks stage for JHS 2, and AI drafting switched on');

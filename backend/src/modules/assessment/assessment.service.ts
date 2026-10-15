@@ -5,7 +5,10 @@ import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
 import { PolicyDto, PublishDto, RecordScoresDto, ReissueDto, ReopenDto, RemarksDto, SubjectDto, TermDto } from './assessment.dto';
 
-type Policy = { ca_weight: number; exam_weight: number; bands: { min: number; grade: string; remark: string }[]; source_note: string; version: number };
+export type CaParts = { exercises: number; homework: number; tests: number; projects: number };
+// Matches the column default in migration 041.
+export const DEFAULT_CA_PARTS: CaParts = {exercises:30,homework:30,tests:40,projects:0};
+type Policy = { ca_weight: number; exam_weight: number; ca_parts: CaParts; bands: { min: number; grade: string; remark: string }[]; source_note: string; version: number };
 type Learner = { id: string; full_name: string; admission_number: string; left: boolean };
 type Entry = { learner_id: string; subject_id: string; kind: string; score: number };
 
@@ -22,19 +25,22 @@ export function gradeFor(total: number, bands: Policy['bands']) {
 @Injectable()
 export class AssessmentService {
   async policy(client: PoolClient, schoolId: string) {
-    return (await client.query('SELECT ca_weight,exam_weight,bands,source_note,version FROM assessment_policies WHERE school_id=$1',[schoolId])).rows[0] as Policy | undefined;
+    return (await client.query('SELECT ca_weight,exam_weight,ca_parts,bands,source_note,version FROM assessment_policies WHERE school_id=$1',[schoolId])).rows[0] as Policy | undefined;
   }
   async setPolicy(client: PoolClient, actor: Actor, body: PolicyDto) {
     if (body.caWeight + body.examWeight !== 100) throw new BadRequestException('Continuous assessment and exam weights must add up to 100');
     const mins = body.bands.map(band => band.min);
     if (new Set(mins).size !== mins.length || !mins.includes(0)) throw new BadRequestException('Grade bands need distinct minimum scores and one starting at 0');
+    if (body.caParts && body.caParts.exercises + body.caParts.homework + body.caParts.tests + body.caParts.projects !== 100) throw new BadRequestException('The parts of continuous assessment must add up to 100');
     return command(client,actor,body.operationId,'assessment.policy',body,async () => {
       const current = await this.policy(client,actor.schoolId);
       if (current && body.version !== current.version) throw new ConflictException('The assessment policy changed. Reload before saving');
-      const values = [actor.schoolId,body.caWeight,body.examWeight,JSON.stringify(body.bands),body.sourceNote.trim(),actor.membershipId];
+      // Parts left out keep what the school had (or the default on a first save).
+      const parts = body.caParts ? {exercises:body.caParts.exercises,homework:body.caParts.homework,tests:body.caParts.tests,projects:body.caParts.projects} : null;
+      const values = [actor.schoolId,body.caWeight,body.examWeight,JSON.stringify(body.bands),body.sourceNote.trim(),actor.membershipId,parts && JSON.stringify(parts)];
       const row = current
-        ? (await client.query('UPDATE assessment_policies SET ca_weight=$2,exam_weight=$3,bands=$4,source_note=$5,updated_by=$6,updated_at=now(),version=version+1 WHERE school_id=$1 RETURNING ca_weight,exam_weight,bands,source_note,version',values)).rows[0]
-        : (await client.query('INSERT INTO assessment_policies(school_id,ca_weight,exam_weight,bands,source_note,updated_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING ca_weight,exam_weight,bands,source_note,version',values)).rows[0];
+        ? (await client.query('UPDATE assessment_policies SET ca_weight=$2,exam_weight=$3,bands=$4,source_note=$5,updated_by=$6,updated_at=now(),version=version+1,ca_parts=coalesce($7::jsonb,ca_parts) WHERE school_id=$1 RETURNING ca_weight,exam_weight,ca_parts,bands,source_note,version',values)).rows[0]
+        : (await client.query('INSERT INTO assessment_policies(school_id,ca_weight,exam_weight,bands,source_note,updated_by,ca_parts) VALUES($1,$2,$3,$4,$5,$6,coalesce($7::jsonb,$8::jsonb)) RETURNING ca_weight,exam_weight,ca_parts,bands,source_note,version',[...values,JSON.stringify(DEFAULT_CA_PARTS)])).rows[0];
       await audit(client,actor,'assessment.policy.saved',actor.schoolId,{version:row.version});
       return row;
     });

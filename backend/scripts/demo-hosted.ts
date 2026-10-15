@@ -488,7 +488,7 @@ async function setup() {
   for (const [s, name] of SUBJECTS.entries()) if (!state.subjectIds[s]) { state.subjectIds[s] = (await head.post('/assessment/subjects', { name }, `subject:${s}`)).id; save(); }
   const policy = await head.get('/assessment/policy');
   if (!policy?.policy) await head.put('/assessment/policy', {
-    caWeight: 30, examWeight: 70, sourceNote: 'GES basic school terminal report: class score 30%, end-of-term examination 70%; bands adopted by the Sunrise academic board for the 2025/2026 year',
+    caWeight: 30, examWeight: 70, caParts: { exercises: 30, homework: 30, tests: 40, projects: 0 }, sourceNote: 'GES basic school terminal report: class score 30%, end-of-term examination 70%; bands adopted by the Sunrise academic board for the 2025/2026 year',
     bands: [{ min: 80, grade: '1', remark: 'Highest' }, { min: 70, grade: '2', remark: 'Higher' }, { min: 60, grade: '3', remark: 'High' }, { min: 55, grade: '4', remark: 'High average' }, { min: 50, grade: '5', remark: 'Average' }, { min: 45, grade: '6', remark: 'Low average' }, { min: 40, grade: '7', remark: 'Low' }, { min: 35, grade: '8', remark: 'Lower' }, { min: 0, grade: '9', remark: 'Lowest' }],
   }, 'policy');
   if (!done('indicators')) {

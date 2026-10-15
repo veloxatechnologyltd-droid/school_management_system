@@ -1,6 +1,7 @@
 import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, Pill, currentTerm } from '../lib/ui';
+import { caPartLabels } from '../lib/caParts';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -8,7 +9,9 @@ type Term = { id: string; name: string; year_name: string; start_date: string; e
 type ClassOption = { id: string; name: string; level: string; year_name: string };
 type Year = { id: string; name: string };
 type Band = { min: number; grade: string; remark: string };
-type Policy = { ca_weight: number; exam_weight: number; bands: Band[]; source_note: string; version: number } | null;
+type CaParts = { exercises: number; homework: number; tests: number; projects: number };
+type Policy = { ca_weight: number; exam_weight: number; ca_parts: CaParts; bands: Band[]; source_note: string; version: number } | null;
+
 type GridRow = { learnerId: string; fullName: string; admissionNumber: string; ca: number | null; exam: number | null; locked: boolean; published: boolean };
 type Result = { learnerId: string; fullName: string; complete: boolean; average: number | null; position: number | null; subjects: { name: string; total: number | null; grade: string | null }[] };
 type Remark = { learnerId: string; fullName: string; locked: boolean; conduct: string | null; attitude: string | null; interest: string | null; teacherRemark: string | null; headRemark: string | null };
@@ -38,7 +41,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const [printLevel, setPrintLevel] = useState('');
   const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [newSubject, setNewSubject] = useState(''); const [newTerm, setNewTerm] = useState({ academicYearId: '', name: '', startDate: '', endDate: '' });
-  const [policyForm, setPolicyForm] = useState({ caWeight: '30', examWeight: '70', bands: '80,A,Excellent\n65,B,Good\n50,C,Credit\n0,D,Needs support', sourceNote: '' });
+  const [policyForm, setPolicyForm] = useState({ caWeight: '50', examWeight: '50', bands: '80,A,Excellent\n65,B,Good\n50,C,Credit\n0,D,Needs support', sourceNote: '', parts: { exercises: '30', homework: '30', tests: '40', projects: '0' } as Record<keyof CaParts, string> });
 
   const loadSetup = useCallback(async () => {
     try {
@@ -51,7 +54,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
       setSubjects(s.items); setTerms(t.items); setPolicy(p.policy); setClasses(c.items);
       // Open on something to look at: the first class and subject in the current term.
       setClassId(prior => prior || c.items[0]?.id || ''); setTermId(prior => prior || currentTerm(t.items)?.id || ''); setSubjectId(prior => prior || s.items[0]?.id || '');
-      if (p.policy) setPolicyForm({ caWeight: String(p.policy.ca_weight), examWeight: String(p.policy.exam_weight), bands: bandsToText(p.policy.bands), sourceNote: p.policy.source_note });
+      if (p.policy) { const parts = p.policy.ca_parts; setPolicyForm({ caWeight: String(p.policy.ca_weight), examWeight: String(p.policy.exam_weight), bands: bandsToText(p.policy.bands), sourceNote: p.policy.source_note, parts: { exercises: String(parts.exercises), homework: String(parts.homework), tests: String(parts.tests), projects: String(parts.projects) } }); }
       if (head) setYears((await request<{ items: Year[] }>(`/schools/${schoolId}/academic-years?limit=100`)).items);
     } catch (e) { setError((e as Error).message); }
   }, [schoolId, head]);
@@ -82,8 +85,11 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const send = <T,>(path: string, method: string, body: object) => request<T>(`/schools/${schoolId}${path}`, { method, headers, body: JSON.stringify({ operationId: crypto.randomUUID(), ...body }) });
   const addSubject = (e: FormEvent) => { e.preventDefault(); void act(async () => { await send('/assessment/subjects', 'POST', { name: newSubject }); setNewSubject(''); await loadSetup(); setMessage('Subject added.'); }); };
   const addTerm = (e: FormEvent) => { e.preventDefault(); void act(async () => { await send('/assessment/terms', 'POST', newTerm); setNewTerm({ academicYearId: '', name: '', startDate: '', endDate: '' }); await loadSetup(); setMessage('Term added.'); }); };
+  const partsTotal = Object.values(policyForm.parts).reduce((sum, v) => sum + (Number(v) || 0), 0);
   const savePolicy = (e: FormEvent) => { e.preventDefault(); void act(async () => {
-    await send('/assessment/policy', 'PUT', { caWeight: Number(policyForm.caWeight), examWeight: Number(policyForm.examWeight), bands: parseBands(policyForm.bands), sourceNote: policyForm.sourceNote, ...(policy ? { version: policy.version } : {}) });
+    if (partsTotal !== 100) throw new Error(`The parts of continuous assessment add up to ${partsTotal}. Make them add up to 100.`);
+    const caParts = Object.fromEntries(Object.entries(policyForm.parts).map(([k, v]) => [k, Number(v)]));
+    await send('/assessment/policy', 'PUT', { caWeight: Number(policyForm.caWeight), examWeight: Number(policyForm.examWeight), bands: parseBands(policyForm.bands), caParts, sourceNote: policyForm.sourceNote, ...(policy ? { version: policy.version } : {}) });
     await loadSetup(); setMessage('Assessment policy saved.');
   }); };
   const saveScores = () => void act(async () => {
@@ -96,11 +102,12 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   // Fills the CA boxes with each learner's average over the term's dated assessments; nothing is saved until the teacher saves.
   const fillCa = () => void act(async () => {
     if (!subjectId) throw new Error('Choose a subject first.');
-    const r = await request<{ items: { learnerId: string; ca: number | null; assessments: number }[] }>(`/schools/${schoolId}/assessment/classes/${classId}/ca-suggestion?termId=${termId}&subjectId=${subjectId}`);
+    const r = await request<{ parts: CaParts; items: { learnerId: string; ca: number | null; assessments: number }[] }>(`/schools/${schoolId}/assessment/classes/${classId}/ca-suggestion?termId=${termId}&subjectId=${subjectId}`);
     const filled = r.items.filter(i => i.ca !== null && grid.some(row => row.learnerId === i.learnerId && !row.locked));
     if (!filled.length) throw new Error('No assessment marks have been recorded for this subject this term. Add them on the Progress page.');
     setEdits(prior => ({ ...prior, ...Object.fromEntries(filled.map(i => [`${i.learnerId}:ca`, String(i.ca)])) }));
-    setMessage(`Filled the continuous assessment for ${filled.length} learner(s) from their assessments this term. Check the scores, then save.`);
+    const parts = caPartLabels.filter(([key]) => r.parts[key]).map(([key, label]) => `${label.toLowerCase()} ${r.parts[key]}`).join(', ');
+    setMessage(`Filled the continuous assessment for ${filled.length} learner(s) from their class work this term (${parts}). Check the scores, then save.`);
   });
   const reopen = (row: GridRow) => { const reason = window.prompt(`Why is ${row.fullName}'s published report being corrected? This is recorded.`); if (!reason || reason.trim().length < 3) return;
     void act(async () => { await send(`/assessment/classes/${classId}/reopen`, 'POST', { termId, learnerId: row.learnerId, reason }); await loadGrid(); setMessage(`${row.fullName}'s report is open for correction. Fix the scores, then publish the corrected report.`); }); };
@@ -162,6 +169,10 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
       <form onSubmit={savePolicy}><h3>Grading policy (set from your school's own policy)</h3>
         <label>Continuous assessment weight (%)<input type="number" min={0} max={100} value={policyForm.caWeight} onChange={e => setPolicyForm({ ...policyForm, caWeight: e.target.value, examWeight: String(100 - Number(e.target.value)) })} required/></label>
         <label>Exam weight (%)<input type="number" value={policyForm.examWeight} readOnly/></label>
+        <fieldset className="ca-parts"><legend>What makes up the continuous assessment (out of 100)</legend>
+          {caPartLabels.map(([key, , long]) => <label key={key}>{long}<input type="number" min={0} max={100} step={1} value={policyForm.parts[key]} onChange={e => setPolicyForm({ ...policyForm, parts: { ...policyForm.parts, [key]: e.target.value } })} required/>
+            <span className="sub">{Math.round((Number(policyForm.parts[key]) || 0) * Number(policyForm.caWeight)) / 100}% of the final score</span></label>)}
+          <p className={partsTotal === 100 ? 'muted' : 'field-error'}>Total {partsTotal} of 100. For example, with CA and exam at 50% each, 30 / 30 / 40 gives class exercises 15%, homework 15% and two class tests 10% each of the final score. Put 0 for a part your school does not count. If a learner has no marks in a part, that part is skipped for them and the other parts count for more.</p></fieldset>
         <label>Grade bands (one per line: minimum score, grade, remark)<textarea value={policyForm.bands} onChange={e => setPolicyForm({ ...policyForm, bands: e.target.value })} required/></label>
         <label>Where this policy comes from<input value={policyForm.sourceNote} onChange={e => setPolicyForm({ ...policyForm, sourceNote: e.target.value })} required minLength={3} placeholder="e.g. School policy memo, September 2026"/></label><button disabled={busy}>Save policy</button></form></SetupWrap>}
     {view !== 'setup' && <>{!policy && <p className="muted">{head ? 'Set the grading policy above before scores can be recorded.' : 'The headteacher has not set the grading policy yet.'}</p>}

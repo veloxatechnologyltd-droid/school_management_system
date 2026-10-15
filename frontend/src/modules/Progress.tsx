@@ -4,6 +4,7 @@ import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, Tabs, currentTerm, t
 import { Plan, PlanDraft, SupportList, SupportPlanDialog, SupportPlanDrawer } from './Support';
 import { PracticeDialog } from './Practice';
 import { Mocks } from './Mocks';
+import { CaSheet, WorkSet } from './CaSheet';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -32,7 +33,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const head = role === 'headteacher';
   const [subjects, setSubjects] = useState<Subject[]>([]); const [terms, setTerms] = useState<Term[]>([]); const [classes, setClasses] = useState<ClassOption[]>([]);
   const [classId, setClassId] = useState(''); const [termId, setTermId] = useState(''); const [subjectId, setSubjectId] = useState('');
-  const [tab, setTab] = useState<'assessments' | 'trends' | 'gaps' | 'support' | 'mocks'>(initialTab === 'support' ? 'support' : 'trends');
+  const [tab, setTab] = useState<'assessments' | 'trends' | 'ca' | 'gaps' | 'support' | 'mocks'>(initialTab === 'support' ? 'support' : initialTab === 'ca' ? 'ca' : 'trends');
   // Support plans: every plan this person can see (for the due-review banner), and the ones shown on the Support tab.
   const [plans, setPlans] = useState<{ today: string; items: Plan[] } | null>(null); const [planScope, setPlanScope] = useState<'class' | 'school'>(head ? 'school' : 'class'); const [planStatus, setPlanStatus] = useState<'open' | 'closed'>('open');
   const [draft, setDraft] = useState<PlanDraft | null>(null); const [practiceFor, setPracticeFor] = useState(''); const [planId, setPlanId] = useState('');
@@ -140,7 +141,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
       <div className="toolbar">
         <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
         <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
-        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'trends', label: 'Trends' }, { id: 'gaps', label: 'Gaps' }, { id: 'support', label: `Support${plans ? ` (${plans.items.filter(p => !p.closed).length})` : ''}` }, { id: 'assessments', label: 'Assessments' }, ...(isJhs ? [{ id: 'mocks' as const, label: 'Mocks' }] : [])]}/>
+        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'trends', label: 'Trends' }, { id: 'ca', label: 'CA sheet' }, { id: 'gaps', label: 'Gaps' }, { id: 'support', label: `Support${plans ? ` (${plans.items.filter(p => !p.closed).length})` : ''}` }, { id: 'assessments', label: 'Assessments' }, ...(isJhs ? [{ id: 'mocks' as const, label: 'Mocks' }] : [])]}/>
       </div>
       {!classId || !termId ? (loaded && <Empty title={classes.length ? 'Choose a class and term' : 'No classes yet'} hint={classes.length ? undefined : head ? 'Add classes in Settings first.' : 'You have no class assigned today.'}/>)
         : tab === 'assessments' ? <>
@@ -149,7 +150,8 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
             : <div className="table-wrap"><table><thead><tr><th>Date</th><th>Assessment</th><th>Subject</th><th className="num">Marked</th><th>Class average</th><th/></tr></thead><tbody>
               {assessments.map(a => <tr key={a.id}><td>{shortDate(a.held_on)}</td><td>{a.title}<span className="sub">{kindLabel(a.kind)} · out of {a.max_mark}{a.indicators?.length ? ` · ${a.indicators.map(i => i.code ?? i.description).join(', ')}` : ''}</span></td><td>{a.subject_name}</td><td className="num">{a.marked}</td><td><Score value={a.average}/></td>
                 <td><button type="button" className="secondary" disabled={busy} onClick={() => void act(() => openMarks(a))}>Enter marks</button></td></tr>)}</tbody></table></div>}
-        </> : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects}
+        </> : tab === 'ca' ? <CaSheet schoolId={schoolId} classId={classId} termId={termId} subjects={subjects} subjectId={subjectId} onSubject={setSubjectId} onLearner={setLearnerId}/>
+        : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects}
           onPlan={(id, subject, concern) => planFor({ subjectId: subject, learnerIds: [id], concern })}/>
         : tab === 'support' ? <>
           <div className="toolbar"><Tabs label="Plan status" value={planStatus} onChange={setPlanStatus} options={[{ id: 'open', label: 'Open' }, { id: 'closed', label: 'Closed' }]}/>
@@ -182,6 +184,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
               <tr className="trend-total"><td>All subjects</td>{progress.overall.map(o => <td key={o.start}><Score value={o.average}/></td>)}</tr></tbody></table></div>}
         </>}
     </Card>
+    {tab === 'ca' && classId && termId && <WorkSet schoolId={schoolId} classId={classId} termId={termId} subjectId={subjectId}/>}
     {tab === 'trends' && progress && progress.buckets.length > 0 && <>
       <div className="stats">
         <Stat label="Class average" value={lastOverall.length ? `${lastOverall[lastOverall.length - 1]!.average}%` : '–'} caption={lastOverall.length ? bucketLabel(lastOverall[lastOverall.length - 1]!.start, period) : `Latest ${period}`} icon="insights" tone={tone(lastOverall[lastOverall.length - 1]?.average ?? null)}/>

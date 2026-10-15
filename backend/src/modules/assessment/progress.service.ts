@@ -4,9 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
 import { AddIndicatorsDto, ClassAssessmentDto, RecordMarksDto, ResourceDto, RetireIndicatorDto } from './assessment.dto';
-import { AssessmentService, weightedTotal } from './assessment.service';
+import { AssessmentService, CaParts, DEFAULT_CA_PARTS, weightedTotal } from './assessment.service';
 
-type Mark = { assessment_id: string; learner_id: string; subject_id: string; held_on: string; percent: number };
+type Mark = { assessment_id: string; learner_id: string; subject_id: string; kind: string; held_on: string; percent: number };
 // A learner needs attention in a subject when their last few marks average below the pass line,
 // or fall well below their own earlier marks this term.
 export const RECENT = 3, PASS_LINE = 50, DROP = 10;
@@ -22,6 +22,26 @@ export function attentionFor(percents: number[]) {
   return null;
 }
 
+// Continuous assessment from parts: class exercises (quizzes count with them), homework, class tests and projects, each
+// weighted by the school's share. A part the learner has no marks in, or that the school weights at 0, is left out and
+// the other parts are scaled up, so a missed homework is visible on the sheet but does not silently count as zero.
+export const CA_PARTS = ['exercises','homework','tests','projects'] as const;
+export type CaPart = typeof CA_PARTS[number];
+export const partOf = (kind: string): CaPart | null => kind === 'classwork' || kind === 'quiz' ? 'exercises' : kind === 'homework' ? 'homework' : kind === 'class_test' ? 'tests' : kind === 'project' ? 'projects' : null;
+export function caFromParts(averages: Partial<Record<CaPart, number | null>>, parts: CaParts) {
+  let weight = 0, sum = 0;
+  for (const part of CA_PARTS) { const average = averages[part]; if (average === null || average === undefined || !parts[part]) continue; weight += parts[part]; sum += average * parts[part]; }
+  return weight ? round1(sum / weight) : null;
+}
+// Class work and the exam far apart (20+ points either way, with at least 3 class-work marks) is worth a look:
+// the learner may have had a bad or unusually good exam day, been absent from class work, or worked with help.
+export const EXAM_GAP = 20, GAP_MIN_MARKS = 3;
+export function examGap(classWork: number | null, exam: number | null, marks: number) {
+  if (classWork === null || exam === null || marks < GAP_MIN_MARKS) return null;
+  const difference = round1(exam - classWork);
+  return Math.abs(difference) >= EXAM_GAP ? {direction:difference > 0 ? 'exam_higher' as const : 'exam_lower' as const,difference} : null;
+}
+
 @Injectable()
 export class ProgressService {
   constructor(private readonly assessment: AssessmentService) {}
@@ -29,7 +49,7 @@ export class ProgressService {
   // Latest mark per learner for each assessment, as a percentage of its maximum. Class work only unless asked:
   // mock exams are kept apart from trends, the CA suggestion and gaps.
   private async marks(client: PoolClient, schoolId: string, where: string, params: unknown[], withMocks = false) {
-    return (await client.query(`SELECT a.id AS assessment_id,m.learner_id,a.subject_id,a.held_on::text,round(m.mark*100/a.max_mark,1)::float AS percent
+    return (await client.query(`SELECT a.id AS assessment_id,m.learner_id,a.subject_id,a.kind,a.held_on::text,round(m.mark*100/a.max_mark,1)::float AS percent
       FROM class_assessments a JOIN LATERAL (SELECT DISTINCT ON (x.learner_id) x.learner_id,x.mark FROM class_assessment_marks x
         WHERE x.school_id=a.school_id AND x.assessment_id=a.id ORDER BY x.learner_id,x.created_at DESC,x.id DESC) m ON true
       WHERE a.school_id=$1 AND ${where} AND (${withMocks} OR a.kind<>'mock') ORDER BY a.held_on,a.created_at,a.id`,[schoolId,...params])).rows as Mark[];
@@ -97,13 +117,58 @@ export class ProgressService {
     }).catch(error => { if ((error as {code?:string}).code === '23514') throw new ConflictException((error as Error).message); throw error; });
   }
 
-  // Suggested continuous assessment score: the average percentage of the term's assessments in the subject,
-  // each assessment counting equally. The teacher reviews it and saves it as the CA score themselves.
+  // Suggested continuous assessment score from the term's class work, weighted by the school's CA parts.
+  // The teacher reviews it and saves it as the CA score themselves.
   async caSuggestion(client: PoolClient, actor: Actor, classId: string, termId: string, subjectId: string) {
     await this.assessment.classFor(client,actor,classId);
+    const parts = (await this.assessment.policy(client,actor.schoolId))?.ca_parts ?? DEFAULT_CA_PARTS;
     const marks = await this.marks(client,actor.schoolId,'a.class_id=$2 AND a.term_id=$3 AND a.subject_id=$4',[classId,termId,subjectId]);
     const learners = [...new Set(marks.map(m => m.learner_id))];
-    return {items:learners.map(learnerId => { const own = marks.filter(m => m.learner_id === learnerId).map(m => m.percent); return {learnerId,ca:mean(own),assessments:own.length}; })};
+    return {parts,items:learners.map(learnerId => { const own = marks.filter(m => m.learner_id === learnerId);
+      return {learnerId,ca:caFromParts(partAverages(own),parts),assessments:own.length}; })};
+  }
+
+  // The CA sheet for one subject: each learner's class exercises, homework and class tests (each test on its own), the CA
+  // they make under the school's parts, the CA and exam recorded for the report, the total, and class work far from the exam.
+  async caSheet(client: PoolClient, actor: Actor, classId: string, termId: string, subjectId: string) {
+    const grid = await this.assessment.grid(client,actor,classId,termId,subjectId);
+    const subject = (await client.query('SELECT id,name FROM subjects WHERE school_id=$1 AND id=$2',[actor.schoolId,subjectId])).rows[0];
+    if (!subject) throw new NotFoundException('Subject unavailable');
+    const policy = grid.policy, parts = policy?.ca_parts ?? DEFAULT_CA_PARTS;
+    const assessments = (await client.query(`SELECT id,kind,title,held_on::text,max_mark::float FROM class_assessments WHERE school_id=$1 AND class_id=$2 AND term_id=$3 AND subject_id=$4 AND kind<>'mock'
+      ORDER BY held_on,created_at,id`,[actor.schoolId,classId,termId,subjectId])).rows as { id: string; kind: string; title: string; held_on: string; max_mark: number }[];
+    const marks = await this.marks(client,actor.schoolId,'a.class_id=$2 AND a.term_id=$3 AND a.subject_id=$4',[classId,termId,subjectId]);
+    const set = Object.fromEntries(CA_PARTS.map(part => [part,assessments.filter(a => partOf(a.kind) === part).length])) as Record<CaPart, number>;
+    const tests = assessments.filter(a => a.kind === 'class_test');
+    const items = grid.items.map(l => {
+      const own = marks.filter(m => m.learner_id === l.learnerId), averages = partAverages(own);
+      const ca = caFromParts(averages,parts), recordedCa = l.ca;
+      const caForTotal = recordedCa ?? ca;
+      return {learnerId:l.learnerId,fullName:l.fullName,left:l.left,locked:l.locked,
+        parts:Object.fromEntries(CA_PARTS.map(part => [part,{average:averages[part] ?? null,marked:own.filter(m => partOf(m.kind) === part).length}])),
+        tests:tests.map(t => own.find(m => m.assessment_id === t.id)?.percent ?? null),
+        ca,recordedCa,exam:l.exam,
+        total:policy && caForTotal !== null && l.exam !== null ? weightedTotal(caForTotal,l.exam,policy) : null,
+        gap:examGap(ca ?? recordedCa,l.exam,own.length)};
+    });
+    return {class:grid.class,term:grid.term,subject,policy:policy ? {caWeight:policy.ca_weight,examWeight:policy.exam_weight,parts,sourceNote:policy.source_note} : null,
+      set,tests:tests.map(t => ({id:t.id,title:t.title,held_on:t.held_on,max_mark:t.max_mark})),items};
+  }
+
+  // How much class work has been set: per subject, the number of exercises, homework, class tests and projects this week,
+  // this month and this term (counted up to today, or the term's last day once it has ended).
+  async workload(client: PoolClient, actor: Actor, classId: string, termId: string) {
+    await this.assessment.classFor(client,actor,classId);
+    const term = await this.assessment.term(client,actor.schoolId,termId);
+    const today = (await client.query("SELECT (now() AT TIME ZONE 'Africa/Accra')::date::text AS today")).rows[0].today as string;
+    const day = today > term.end_date ? term.end_date : today < term.start_date ? term.start_date : today;
+    const week = mondayOf(day), month = day.slice(0,7);
+    const rows = (await client.query(`SELECT a.subject_id,s.name,a.kind,a.held_on::text FROM class_assessments a JOIN subjects s ON s.school_id=a.school_id AND s.id=a.subject_id
+      WHERE a.school_id=$1 AND a.class_id=$2 AND a.term_id=$3 AND a.kind<>'mock' AND a.held_on<=$4 ORDER BY s.name`,[actor.schoolId,classId,termId,day])).rows as { subject_id: string; name: string; kind: string; held_on: string }[];
+    const count = (list: typeof rows) => Object.fromEntries(CA_PARTS.map(part => [part,list.filter(r => partOf(r.kind) === part).length])) as Record<CaPart, number>;
+    const subjects = [...new Map(rows.map(r => [r.subject_id,r.name])).entries()];
+    const summarise = (list: typeof rows) => ({week:count(list.filter(r => r.held_on >= week)),month:count(list.filter(r => r.held_on.startsWith(month))),term:count(list)});
+    return {asOf:day,weekStart:week,items:subjects.map(([subjectId,name]) => ({subjectId,name,...summarise(rows.filter(r => r.subject_id === subjectId))})),all:summarise(rows)};
   }
 
   // Class average per subject for each week or month of the term, and the learners who need attention.
@@ -265,6 +330,11 @@ export class ProgressService {
     const overall = buckets.map(b => ({key:b.key,assessmentAverage:mean(marks.filter(m => markBucket(m).key === b.key).map(m => m.percent))}));
     return {learner:{id:learner.id,fullName:learner.full_name,admissionNumber:learner.admission_number},period,buckets,overall,subjects:series};
   }
+}
+
+// Each CA part's average percentage over the given marks.
+function partAverages(marks: Mark[]) {
+  return Object.fromEntries(CA_PARTS.map(part => [part,mean(marks.filter(m => partOf(m.kind) === part).map(m => m.percent))])) as Record<CaPart, number | null>;
 }
 
 // ISO week start (Monday) of a YYYY-MM-DD date.

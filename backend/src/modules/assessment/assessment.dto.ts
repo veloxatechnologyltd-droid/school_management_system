@@ -15,10 +15,18 @@ export class BandDto {
   @IsString() @MinLength(1) @MaxLength(10) grade!: string;
   @IsString() @MaxLength(40) remark!: string;
 }
+// Shares of the continuous assessment (out of 100) given to each kind of class work.
+export class CaPartsDto {
+  @IsInt() @Min(0) @Max(100) exercises!: number;
+  @IsInt() @Min(0) @Max(100) homework!: number;
+  @IsInt() @Min(0) @Max(100) tests!: number;
+  @IsInt() @Min(0) @Max(100) projects!: number;
+}
 export class PolicyDto extends OperationDto {
   @IsInt() @Min(0) @Max(100) caWeight!: number;
   @IsInt() @Min(0) @Max(100) examWeight!: number;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(15) @ValidateNested({each:true}) @Type(() => BandDto) bands!: BandDto[];
+  @IsOptional() @ValidateNested() @Type(() => CaPartsDto) caParts?: CaPartsDto;
   @IsString() @MinLength(3) @MaxLength(500) @Matches(/\S.*\S/) sourceNote!: string;
   @IsOptional() @IsInt() @Min(1) version?: number;
 }
@@ -69,6 +77,7 @@ export class AssessmentListQueryDto { @IsUUID() termId!: string; @IsOptional() @
 export class MarkDto { @IsUUID() learnerId!: string; @IsNumber({maxDecimalPlaces:2}) @Min(0) @Max(1000) mark!: number; }
 export class RecordMarksDto extends OperationDto { @IsArray() @ArrayMinSize(1) @ArrayMaxSize(300) @ValidateNested({each:true}) @Type(() => MarkDto) marks!: MarkDto[]; }
 export class CaSuggestionQueryDto { @IsUUID() termId!: string; @IsUUID() subjectId!: string; }
+export class WorkloadQueryDto { @IsUUID() termId!: string; }
 export class ClassProgressQueryDto { @IsUUID() termId!: string; @IsOptional() @IsIn(['week','month']) period?: string; }
 export class LearnerProgressQueryDto { @IsOptional() @IsIn(['week','month','term','year']) period?: string; }
 // The school's curriculum indicators: pasted in bulk per subject, with where they come from.

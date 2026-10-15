@@ -3,7 +3,7 @@ import { Request } from 'express';
 import { Access } from '../../core/access';
 import { ProgressService } from './progress.service';
 import { MocksService } from './mocks.service';
-import { AddIndicatorsDto, AssessmentListQueryDto, CaSuggestionQueryDto, ClassAssessmentDto, ClassProgressQueryDto, GapsQueryDto, IndicatorQueryDto, LearnerProgressQueryDto, RecordMarksDto, ResourceDto, RetireIndicatorDto, MockRoundDto } from './assessment.dto';
+import { AddIndicatorsDto, AssessmentListQueryDto, CaSuggestionQueryDto, ClassAssessmentDto, ClassProgressQueryDto, GapsQueryDto, IndicatorQueryDto, LearnerProgressQueryDto, RecordMarksDto, ResourceDto, RetireIndicatorDto, MockRoundDto, WorkloadQueryDto } from './assessment.dto';
 
 const head = ['headteacher'], staff = ['headteacher','teacher'];
 @Controller('api/v1/schools/:schoolId')
@@ -24,6 +24,14 @@ export class ProgressController {
   @Post('assessment/classes/:classId/assessments/:assessmentId/marks')
   mark(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Param('assessmentId',new ParseUUIDPipe()) assessmentId: string,@Body() body: RecordMarksDto) {
     return this.access.school(req,schoolId,staff,(client,actor) => this.progress.recordMarks(client,actor,classId,assessmentId,body),true);
+  }
+  @Get('assessment/classes/:classId/ca-sheet')
+  caSheet(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: CaSuggestionQueryDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.progress.caSheet(client,actor,classId,query.termId,query.subjectId));
+  }
+  @Get('assessment/classes/:classId/workload')
+  workload(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: WorkloadQueryDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.progress.workload(client,actor,classId,query.termId));
   }
   @Get('assessment/classes/:classId/ca-suggestion')
   caSuggestion(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: CaSuggestionQueryDto) {
