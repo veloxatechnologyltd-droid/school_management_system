@@ -1,7 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { Actor } from '../../core/access';
 import { AssessmentService } from '../assessment/assessment.service';
+import { ProgressService, mean } from '../assessment/progress.service';
+import { PlanDraftText, PlanFacts, attendanceWord, buildPlanPrompt, planDigest, planTemplateVersion, templatePlan, validatePlan } from './support-plan-draft';
 import { AiService } from './ai.service';
 import { LearnerFact, RemarkDraft, buildRemarksPrompt, factsFor, remarksDigest, remarksTemplateVersion, templateRemark, validateRemarks } from './report-remarks-draft';
 import { IndicatorFact, WorksheetDraft, buildWorksheetPrompt, numbered, templateWorksheet, validateWorksheet, worksheetDigest, worksheetTemplateVersion } from './worksheet-draft';
@@ -14,7 +16,7 @@ const add = (a: number | null, b: number | null) => a === null && b === null ? n
 // transaction, call the model with no transaction held, then log the run. Drafts are returned to the person and never saved by this service.
 @Injectable()
 export class AiDraftsService {
-  constructor(private readonly ai: AiService, private readonly assessment: AssessmentService) {}
+  constructor(private readonly ai: AiService, private readonly assessment: AssessmentService, private readonly progress: ProgressService) {}
 
   async prepareRemarks(client: PoolClient, actor: Actor, body: { classId: string; termId: string; learnerIds?: string[] }) {
     const results = await this.assessment.results(client,actor,body.classId,body.termId); // authorizes the class (assigned teacher or head)
@@ -88,5 +90,57 @@ export class AiDraftsService {
     const runId = await this.ai.logRun(client,actor,{feature:'practice.worksheet',templateVersion:worksheetTemplateVersion,...done.usage,source:done.source,status:done.status,
       sourceRefs:{indicatorId},digest:worksheetDigest(done.draft),latencyMs:done.latencyMs,note:done.note});
     return {runId,source:done.source,status:done.status,note:done.note,...done.draft,detail:numbered(done.draft.questions)};
+  }
+
+  // A support plan for named learners in one subject (and optionally one topic), drafted from their term data.
+  async preparePlan(client: PoolClient, actor: Actor, body: { classId: string; termId: string; subjectId: string; indicatorId?: string; learnerIds: string[] }) {
+    const sheet = await this.progress.caSheet(client,actor,body.classId,body.termId,body.subjectId); // authorizes the class (assigned teacher or head)
+    const inClass = new Map(sheet.items.filter(i => !i.left).map(i => [i.learnerId,i]));
+    const ids = [...new Set(body.learnerIds)];
+    if (!ids.length || ids.some(id => !inClass.has(id))) throw new BadRequestException('Choose learners from this class');
+    const topic = body.indicatorId ? (await client.query('SELECT description FROM curriculum_indicators WHERE school_id=$1 AND id=$2 AND subject_id=$3',[actor.schoolId,body.indicatorId,body.subjectId])).rows[0] : null;
+    if (body.indicatorId && !topic) throw new NotFoundException('Topic unavailable');
+    const practice = body.indicatorId ? (await client.query('SELECT title FROM indicator_resources WHERE school_id=$1 AND indicator_id=$2 AND retired_at IS NULL ORDER BY created_at LIMIT 5',[actor.schoolId,body.indicatorId])).rows.map(r => r.title as string) : [];
+    const gaps = (await this.progress.gaps(client,actor,body.classId,body.termId,body.subjectId)).items;
+    const term = await this.assessment.term(client,actor.schoolId,body.termId);
+    const attendance = new Map((await client.query(`SELECT m.learner_id,count(*) FILTER (WHERE m.mark<>'unmarked')::int AS marked,count(*) FILTER (WHERE m.mark IN ('present','late'))::int AS present
+      FROM attendance_marks m JOIN attendance_registers r ON r.school_id=m.school_id AND r.id=m.register_id AND r.status IN ('submitted','locked')
+      WHERE m.school_id=$1 AND m.learner_id=ANY($2::uuid[]) AND r.day BETWEEN $3::date AND $4::date GROUP BY m.learner_id`,[actor.schoolId,ids,term.start_date,term.end_date])).rows.map(r => [r.learner_id as string,r]));
+    // Up to 15 learners are described to the model; a larger group is summarised from its first 15 (weakest first).
+    const ordered = ids.map(id => inClass.get(id)!).sort((a,b) => (a.ca ?? 101) - (b.ca ?? 101)).slice(0,15);
+    const learners = [];
+    for (const [i,row] of ordered.entries()) {
+      const own = (await this.progress.learnerTerm(client,actor,row.learnerId,body.termId)).subjects.find(s => s.subjectId === body.subjectId);
+      const marks = sheet.items.find(x => x.learnerId === row.learnerId)!;
+      const att = attendance.get(row.learnerId);
+      learners.push({key:`L${i + 1}`,learnerId:row.learnerId,exercises:marks.parts.exercises?.average ?? null,homework:marks.parts.homework?.average ?? null,tests:marks.parts.tests?.average ?? null,
+        recent:own?.recent ?? null,earlier:own?.attention?.earlier ?? null,
+        trend:own?.attention ? own.attention.reason : (own?.marks ?? 0) >= 3 ? 'steady' as const : 'not_enough' as const,
+        missedWork:own ? Object.values(own.parts).reduce((n,p) => n + Math.max(0,p.set - p.marked),0) : 0,examGap:own?.gap?.direction ?? null,
+        attendance:attendanceWord(att?.present ?? 0,att?.marked ?? 0),
+        weakTopics:gaps.filter(g => g.below.some(b => b.learnerId === row.learnerId)).sort((a,b) => (a.below.find(x => x.learnerId === row.learnerId)!.average) - (b.below.find(x => x.learnerId === row.learnerId)!.average)).slice(0,2).map(g => g.description)});
+    }
+    const facts: PlanFacts = {subject:sheet.subject.name,className:sheet.class.name,topic:topic?.description ?? null,classAverage:mean(sheet.items.filter(i => !i.left && i.ca !== null).map(i => i.ca!)),practice,learners};
+    return {facts,note:await this.ai.gate(client,actor.schoolId)};
+  }
+
+  async completePlan(prepared: Awaited<ReturnType<AiDraftsService['preparePlan']>>) {
+    const started = Date.now(), provider = prepared.note ? null : this.ai.providerFor();
+    const local = (note: string): { draft: PlanDraftText; usage: Usage; source: 'template'; status: 'fallback'; note: string; latencyMs: number } =>
+      ({draft:templatePlan(prepared.facts),usage:{provider:'template',model:null,inputTokens:null,outputTokens:null},source:'template',status:'fallback',note,latencyMs:Date.now() - started});
+    if (!provider) return local(prepared.note ?? 'no_provider');
+    try {
+      const result = await provider.complete(buildPlanPrompt(prepared.facts));
+      const checked = validatePlan(result.text);
+      if (!checked.ok) return local(`rejected:${checked.reason}`);
+      return {draft:checked.draft,usage:{provider:provider.name,model:provider.model,inputTokens:result.inputTokens,outputTokens:result.outputTokens},source:'ai' as const,status:'ok' as const,note:null,latencyMs:Date.now() - started};
+    } catch { return local('provider_error'); }
+  }
+
+  async recordPlan(client: PoolClient, actor: Actor, body: { classId: string; termId: string; subjectId: string; indicatorId?: string }, prepared: Awaited<ReturnType<AiDraftsService['preparePlan']>>, done: Awaited<ReturnType<AiDraftsService['completePlan']>>) {
+    const runId = await this.ai.logRun(client,actor,{feature:'support.plan',templateVersion:planTemplateVersion,...done.usage,source:done.source,status:done.status,
+      sourceRefs:{classId:body.classId,termId:body.termId,subjectId:body.subjectId,indicatorId:body.indicatorId ?? null,learnerIds:prepared.facts.learners.map(l => l.learnerId)},digest:planDigest(done.draft),latencyMs:done.latencyMs,note:done.note});
+    return {runId,source:done.source,status:done.status,note:done.note,...done.draft,
+      basis:prepared.facts.learners.map(l => ({learnerId:l.learnerId,recent:l.recent,trend:l.trend,missedWork:l.missedWork,examGap:l.examGap,attendance:l.attendance,weakTopics:l.weakTopics}))};
   }
 }

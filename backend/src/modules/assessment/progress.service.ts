@@ -176,7 +176,7 @@ export class ProgressService {
         return {subjectId:s.id,name:s.name,
           parts:Object.fromEntries(CA_PARTS.map(part => [part,{average:averages[part],marked:own.filter(m => partOf(m.kind) === part).length,
             set:set.filter(r => r.subject_id === s.id && partOf(r.kind) === part).reduce((n,r) => n + r.n,0)}])),
-          classWork:mean(own.map(m => m.percent)),marks:own.length,lastMarked:own.length ? own[own.length - 1]!.held_on : null,
+          classWork:mean(own.map(m => m.percent)),recent:own.length >= RECENT ? mean(own.slice(-RECENT).map(m => m.percent)) : null,marks:own.length,lastMarked:own.length ? own[own.length - 1]!.held_on : null,
           ca,recordedCa,exam,total:policy && caForTotal !== null && exam !== null ? weightedTotal(caForTotal,exam,policy) : null,
           gap:examGap(ca ?? recordedCa,exam,own.length),attention:attentionFor(own.map(m => m.percent))};
       })};

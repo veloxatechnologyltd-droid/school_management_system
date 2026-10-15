@@ -3,6 +3,7 @@ import { request } from '../lib/api';
 import { Card, Empty, Icon, PageHeader, Pill, Stat, Tone } from '../lib/ui';
 import { caPartLabels } from '../lib/caParts';
 import { Note, NotesCard } from './LearnerNotes';
+import { SupportPlanDialog } from './Support';
 
 type PartKey = typeof caPartLabels[number][0];
 type SubjectTerm = { subjectId: string; name: string; parts: Record<PartKey, { average: number | null; marked: number; set: number }>; classWork: number | null; marks: number; lastMarked: string | null;
@@ -37,6 +38,7 @@ const rightLabel: Record<string, string> = { academic: 'reports', billing: 'fees
 // parts, the exam and anything worth a look), term by term, report cards, support plans, attendance, fees and notes.
 export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId: string; csrfToken: string; role: string; learnerId: string }) {
   const [termId, setTermId] = useState(''); const [data, setData] = useState<Profile | null>(null); const [error, setError] = useState('');
+  const [planFor, setPlanFor] = useState(''); const [message, setMessage] = useState('');
   const load = useCallback(async () => {
     try { setData(await request<Profile>(`/schools/${schoolId}/learners/${learnerId}/profile${termId ? `?termId=${termId}` : ''}`)); setError(''); } catch (e) { setError((e as Error).message); }
   }, [schoolId, learnerId, termId]);
@@ -52,12 +54,15 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
   const gaps = subjects.filter(s => s.gap), lookAt = subjects.filter(s => s.attention || s.gap);
   const parts = caPartLabels.filter(([key]) => (tw?.policy?.parts[key] ?? 0) > 0 || subjects.some(s => s.parts[key].set));
   const openPlans = data.plans.filter(p => !p.closed);
+  // Plans are started in the learner's current class for the current term.
+  const canPlan = !!data.currentClass && !!data.term && data.term.startDate <= data.today && data.term.endDate >= data.today;
+  const hasOpenPlan = (subject: string) => openPlans.some(p => p.subject === subject);
   const facts = [l.admissionNumber, data.currentClass ? data.currentClass.name : 'Not currently enrolled', l.dateOfBirth ? `${ageOn(l.dateOfBirth, data.today)} years (born ${date(l.dateOfBirth)})` : null, l.sex === 'female' ? 'Girl' : l.sex === 'male' ? 'Boy' : null].filter(Boolean).join(' · ');
   return <section className="page learner-page" aria-label={`Learner ${l.fullName}`}>
     <PageHeader eyebrow="Learner" title={l.fullName} blurb={facts}
       actions={<><button type="button" className="secondary" onClick={back}><Icon name="arrow_back"/>Back</button>
         {data.terms.length > 0 && <label className="inline-field">Term<select value={data.term?.id ?? ''} onChange={e => setTermId(e.target.value)}>{data.terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.yearName}</option>)}</select></label>}</>}/>
-    {error && <p role="alert">{error}</p>}
+    {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <div className="stats">
       <Stat label="Attendance" value={att?.rate !== null && att?.rate !== undefined ? `${att.rate}%` : '–'} caption={att?.marked ? `${att.absent} absent, ${att.late} late of ${att.marked} days` : 'No registers yet this term'} icon="event_available" tone={att?.rate == null ? 'neutral' : att.rate >= 90 ? 'positive' : att.rate >= 80 ? 'caution' : 'critical'}/>
       <Stat label="Class work average" value={overall === null ? '–' : `${overall}%`} caption={withWork.length ? `${withWork.length} subject${withWork.length === 1 ? '' : 's'} this term` : 'No marks yet this term'} icon="insights" tone={tone(overall)}/>
@@ -75,7 +80,8 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
                 <td><span className="pill-row">{s.attention && <Pill tone={s.attention.reason === 'dropping' ? 'critical' : 'caution'}>{s.attention.reason === 'dropping' ? `Dropping ${s.attention.earlier}% → ${s.attention.recent}%` : `Recent marks ${s.attention.recent}%`}</Pill>}
                   {s.gap && <Pill tone={s.gap.direction === 'exam_higher' ? 'caution' : 'info'}>{`Exam ${Math.round(Math.abs(s.gap.difference))} pts ${s.gap.direction === 'exam_higher' ? 'above' : 'below'} class work`}</Pill>}
                   {(() => { const missed = caPartLabels.reduce((n, [key]) => n + Math.max(0, s.parts[key].set - s.parts[key].marked), 0); return missed > 0 ? <Pill tone="neutral">{missed} piece{missed === 1 ? '' : 's'} of work without a mark</Pill> : null; })()}
-                  {!s.attention && !s.gap && <span className="muted">–</span>}</span></td></tr>)}</tbody></table></div>}
+                  {!s.attention && !s.gap && <span className="muted">–</span>}
+                  {canPlan && (s.attention || s.gap) && (hasOpenPlan(s.name) ? <Pill tone="info">Plan open</Pill> : <button type="button" className="secondary small" onClick={() => { setMessage(''); setPlanFor(s.subjectId); }}>Plan</button>)}</span></td></tr>)}</tbody></table></div>}
           {gaps.length > 0 && <p className="muted card-body">An exam 20 or more points away from class work is worth a quiet conversation, for example about a bad exam day, missed class work, or work done with help. It is not proof of anything.</p>}
         </Card>
     <div className="columns">
@@ -120,5 +126,8 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
         </Card>
       </div>
     </div>
+    {planFor && data.currentClass && data.term && <SupportPlanDialog schoolId={schoolId} csrfToken={csrfToken} classId={data.currentClass.id} termId={data.term.id}
+      draft={{ subjectId: planFor, learnerIds: [l.id], concern: '' }} subjects={subjects.map(s => ({ id: s.subjectId, name: s.name }))} roster={[{ learnerId: l.id, fullName: l.fullName }]}
+      onClose={() => setPlanFor('')} onSaved={() => { setPlanFor(''); setMessage('Support plan started. It appears under Support plans and on the Progress page.'); void load(); }}/>}
   </section>;
 }

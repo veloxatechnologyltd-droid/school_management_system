@@ -1,5 +1,6 @@
 export interface AiPrompt { system: string; user: string; maxTokens: number; timeoutMs?: number }
 export interface AiCompletion { text: string; inputTokens: number | null; outputTokens: number | null }
+const THINKING_ROOM = 4000;
 export interface AiProvider { readonly name: string; readonly model: string | null; complete(prompt: AiPrompt): Promise<AiCompletion> }
 
 // Anthropic Messages API (Claude), the school-approved provider. Only used when AI_ENABLED=true, the school has switched AI on,
@@ -12,11 +13,15 @@ export class AnthropicProvider implements AiProvider {
     const response = await fetch(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': this.apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: this.model, max_tokens: prompt.maxTokens, temperature: 0.3, system: prompt.system, messages: [{ role: 'user', content: prompt.user }] }),
+      // Claude 5 models think before answering and count that thinking against max_tokens; these drafts are short and
+      // structured, so effort is low and the cap leaves room for thinking on top of the reply. Sampling options are refused.
+      body: JSON.stringify({ model: this.model, max_tokens: prompt.maxTokens + THINKING_ROOM, output_config: { effort: 'low' }, system: prompt.system, messages: [{ role: 'user', content: prompt.user }] }),
       signal: AbortSignal.timeout(prompt.timeoutMs ?? this.timeoutMs),
     });
     if (!response.ok) throw new Error(`Provider returned ${response.status}`);
-    const data = await response.json() as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+    const data = await response.json() as { content?: { type: string; text?: string }[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };
+    // A reply cut off at the cap, or declined, is not a draft.
+    if (data.stop_reason === 'max_tokens' || data.stop_reason === 'refusal') throw new Error(`Provider stopped: ${data.stop_reason}`);
     const text = (data.content ?? []).filter(part => part.type === 'text').map(part => part.text ?? '').join('');
     return { text, inputTokens: data.usage?.input_tokens ?? null, outputTokens: data.usage?.output_tokens ?? null };
   }

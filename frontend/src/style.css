@@ -314,3 +314,5 @@ td .link-button{display:inline-flex;align-items:center;min-height:40px;text-alig
 .note-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.note-meta .muted{font-size:13px}.note-text{margin:6px 0 4px;white-space:pre-line;overflow-wrap:anywhere}
 .note-withdraw{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 a.learner-link{color:var(--accent-text);font-weight:600;text-decoration:none}a.learner-link:hover{text-decoration:underline}
+.draft-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;background:var(--info-soft);color:var(--info);border:1px solid var(--info-line);border-radius:12px;padding:10px 14px;font-size:14px;font-weight:600;margin:8px 0 12px}
+.draft-basis{margin:0 0 12px;font-size:14px}.draft-basis summary{cursor:pointer;font-weight:600;color:var(--accent-text)}.draft-basis ul{margin:8px 0 0;padding-left:18px;display:grid;gap:6px;color:var(--ink-2)}

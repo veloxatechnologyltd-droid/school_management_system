@@ -7,6 +7,7 @@ const {createApp}=require('../dist/main');
 const {AiService}=require('../dist/modules/ai/ai.service');
 const {validateRemarks,templateRemark,attendanceWord}=require('../dist/modules/ai/report-remarks-draft');
 const {validateWorksheet,numbered}=require('../dist/modules/ai/worksheet-draft');
+const {validatePlan,templatePlan}=require('../dist/modules/ai/support-plan-draft');
 const {AnthropicProvider,configuredProvider}=require('../dist/modules/ai/ai.provider');
 const config={host:path.resolve(__dirname,'../../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local'};
 const owner=new Pool({...config,user:process.env.USER});
@@ -126,8 +127,56 @@ test('Claude is the default provider; the adapter sends a Messages request and p
   try{
     const out=await new AnthropicProvider('sk-ant-test').complete({system:'sys',user:'usr',maxTokens:300});
     assert.equal(seen.url,'https://api.anthropic.com/v1/messages');assert.equal(seen.init.headers['x-api-key'],'sk-ant-test');assert.equal(seen.init.headers['anthropic-version'],'2023-06-01');
-    assert.equal(seen.body.model,'claude-haiku-5-5');assert.equal(seen.body.system,'sys');assert.deepEqual(seen.body.messages,[{role:'user',content:'usr'}]);assert.equal(seen.body.max_tokens,300);
+    assert.equal(seen.body.model,'claude-haiku-5-5');assert.equal(seen.body.system,'sys');assert.deepEqual(seen.body.messages,[{role:'user',content:'usr'}]);assert.equal(seen.body.max_tokens,4300,'room for thinking on top of the reply');assert.deepEqual(seen.body.output_config,{effort:'low'});assert.equal(seen.body.temperature,undefined,'Claude 5 models refuse temperature');
     assert.deepEqual(out,{text:'{"ok":true}',inputTokens:12,outputTokens:5});
     globalThis.fetch=(async()=>new Response('{}',{status:529})) as any;await assert.rejects(new AnthropicProvider('k').complete({system:'s',user:'u',maxTokens:10}),/529/);
+    globalThis.fetch=(async()=>new Response(JSON.stringify({content:[{type:'thinking',thinking:''}],stop_reason:'max_tokens',usage:{input_tokens:5,output_tokens:4010}}),{status:200})) as any;
+    await assert.rejects(new AnthropicProvider('k').complete({system:'s',user:'u',maxTokens:10}),/max_tokens/,'a reply cut off at the cap is not a draft');
   }finally{globalThis.fetch=realFetch;}
+});
+
+const planFacts={subject:'Mathematics',className:'Basic 5',topic:null,classAverage:62,practice:['Fractions practice sheet 1'],
+  learners:[{key:'L1',learnerId:'x',exercises:45,homework:null,tests:40,recent:38,earlier:60,trend:'dropping',missedWork:2,examGap:'exam_higher',attendance:'irregular',weakTopics:['Adds fractions with like denominators']}]};
+test('plan validation: three texts and a review in 7 to 28 days; no labels, ids or accusations; the family note carries no numbers',()=>{
+  const good={concern:'Recent Mathematics marks average 38%, down from 60% earlier; two pieces of work have no mark.',action:'Re-teach adding fractions in a small group on Tuesdays and Thursdays. Use Fractions practice sheet 1.',familyNote:'Please share an orange into equal parts with your child and add the pieces together, a few evenings a week.',reviewInDays:7};
+  assert.equal(validatePlan(JSON.stringify(good)).ok,true);
+  for(const [why,patch] of [['review too late',{reviewInDays:60}],['review not whole',{reviewInDays:10.5}],['family note percent',{familyNote:'Your child scored 38% so please help with fractions at home this week.'}],
+    ['diagnosis',{concern:'The learner may have dyslexia, which affects fraction work in class.'}],['accusation',{action:'Ask whether the learner was cheating in the exam and re-test.'}],
+    ['leaked id',{concern:'L1 has recent marks averaging 38%, down from 60% earlier in the term.'}],['far too long',{action:'Re-teach fractions now. '.repeat(60)}],['missing family note',{familyNote:''}]] as const)
+    assert.equal(validatePlan(JSON.stringify({...good,...patch})).ok,false,why);
+  const trimmed=validatePlan(JSON.stringify({...good,action:'Re-teach fractions in a small group on Tuesdays. '.repeat(11)}));
+  assert.equal(trimmed.ok,true,'a little over: cut to whole sentences');assert.ok(trimmed.draft.action.length<=500&&trimmed.draft.action.endsWith('.'));
+  assert.equal(validatePlan('nope').ok,false);
+  const t=templatePlan(planFacts);
+  assert.match(t.concern,/38%/);assert.match(t.concern,/fallen/);assert.match(t.concern,/irregular/);
+  assert.match(t.action,/Adds fractions with like denominators/);assert.match(t.action,/Fractions practice sheet 1/);assert.match(t.action,/handed in/);assert.match(t.action,/oral questions/);assert.match(t.action,/guardian/);
+  assert.doesNotMatch(t.familyNote,/\d/);assert.equal(t.reviewInDays,7);assert.equal(validatePlan(JSON.stringify(t)).ok,true,'the template passes its own checks');
+});
+
+test('a support plan draft describes learners only as L1, L2 from their own term data; failures fall back to the rule-based plan',async()=>{
+  await enable();
+  // Kwabena: weak and missing a homework; Abena: steady.
+  for(const [kind,day,a,b] of [['classwork',-20,18,9],['classwork',-14,17,8],['homework',-12,16,null],['class_test',-6,18,6]] as const){
+    const t=await ok(`/assessment/classes/${cls}/assessments`,'POST',{termId,subjectId:maths,kind,title:`Plan ${kind} ${day}`,heldOn:shift(day),maxMark:20,indicatorIds:[indicator]},teacher);
+    await ok(`/assessment/classes/${cls}/assessments/${t.id}/marks`,'POST',{marks:[{learnerId:kids[0],mark:a},...(b===null?[]:[{learnerId:kids[1],mark:b}])]},teacher);}
+  const body={classId:cls,termId,subjectId:maths,indicatorId:indicator,learnerIds:[kids[1]]};
+  const plan={concern:'Recent Mathematics marks average 38%; one homework has no mark.',action:'Re-teach adding fractions with like denominators in a small group on Tuesdays and Thursdays. Check homework is handed in.',familyNote:'Please share an orange into equal parts with your child and add the pieces together a few evenings a week.',reviewInDays:10};
+  script=async()=>({text:JSON.stringify(plan),inputTokens:300,outputTokens:120});
+  const r=await call('/ai/support-plan-draft','POST',body,teacher);assert.equal(r.status,201,JSON.stringify(r.body));
+  assert.equal(r.body.source,'ai');assert.equal(r.body.action,plan.action);assert.equal(r.body.reviewInDays,10);
+  assert.deepEqual(r.body.basis[0].weakTopics,['Adds fractions with like denominators']);assert.equal(r.body.basis[0].missedWork,1);assert.equal(r.body.basis[0].trend,'below_pass');
+  const last=prompts[prompts.length-1];
+  assert.match(last,/"id":"L1"/);assert.match(last,/"piecesOfWorkWithoutAMark":1/);assert.match(last,/Adds fractions with like denominators/);
+  assert.doesNotMatch(last,/Kwabena|Abena|Hidden Name|Private Name|Remarks Sunrise|ADHD/);
+  const run=(await owner.query("SELECT feature,source,source_refs FROM ai_runs WHERE school_id=$1 AND feature='support.plan' ORDER BY created_at DESC LIMIT 1",[school])).rows[0];
+  assert.equal(run.source,'ai');assert.deepEqual(run.source_refs.learnerIds,[kids[1]]);
+  script=async()=>({text:JSON.stringify({...plan,familyNote:'Your child got 38% in maths, please practise fractions every evening.'}),inputTokens:1,outputTokens:1});
+  const f=(await call('/ai/support-plan-draft','POST',body,teacher)).body;
+  assert.equal(f.source,'template');assert.equal(f.note,'rejected:family_note_numbers_or_labels');assert.match(f.action,/Adds fractions with like denominators/);assert.match(f.action,/handed in/);
+  const before=calls;
+  assert.equal((await call('/ai/support-plan-draft','POST',{...body,classId:cls2},teacher)).status,404);
+  assert.equal((await call('/ai/support-plan-draft','POST',{...body,learnerIds:[randomUUID()]},teacher)).status,400);
+  assert.equal((await call('/ai/support-plan-draft','POST',{...body,learnerIds:[]},teacher)).status,400);
+  assert.equal((await call('/ai/support-plan-draft','POST',body,guardian)).status,403);
+  assert.equal(calls,before);
 });

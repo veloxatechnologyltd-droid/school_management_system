@@ -1,9 +1,12 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { Dialog, Empty, Pill, Tone, todayInAccra } from '../lib/ui';
 import { PracticeDialog, PracticeList, Resource } from './Practice';
 
 type Owner = { membershipId: string; name: string; classTeacher: boolean };
+type AiPlan = { runId: string; source: 'ai' | 'template'; note: string | null; concern: string; action: string; familyNote: string; reviewInDays: number;
+  basis: { learnerId: string; recent: number | null; trend: string; missedWork: number; examGap: 'exam_higher' | 'exam_lower' | null; attendance: string; weakTopics: string[] }[] };
+const trendWord: Record<string, string> = { dropping: 'dropping', below_pass: 'below 50%', steady: 'steady', not_enough: 'few marks yet' };
 type Evidence = { before: number | null; since: number | null; change: number | null; improved: number; dropped: number; compared: number };
 export type Plan = { id: string; class_id: string; indicator_id: string | null; family_note: string | null; class_name: string; subject_name: string; indicator_code: string | null; indicator_description: string | null; concern: string; action: string;
   owner_name: string; start_date: string; review_date: string; closed: boolean; due: boolean; learners: { id: string; full_name: string }[]; evidence: Evidence };
@@ -28,13 +31,31 @@ export function SupportPlanDialog({ schoolId, csrfToken, classId, termId, draft,
   const [owners, setOwners] = useState<Owner[]>([]); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   useEffect(() => { request<{ items: Owner[] }>(`/schools/${schoolId}/support-plans/owners?classId=${classId}`).then(r => { setOwners(r.items); setForm(f => ({ ...f, ownerMembershipId: f.ownerMembershipId || r.items[0]?.membershipId || '' })); }).catch(e => setError((e as Error).message)); }, [schoolId, classId]);
   const toggle = (id: string) => setForm(f => ({ ...f, learnerIds: f.learnerIds.includes(id) ? f.learnerIds.filter(x => x !== id) : [...f.learnerIds, id] }));
+  // "Plan" drafts the plan straight away from the chosen learners' marks, missed work, exam gap and attendance (Claude when the
+  // school has AI on, otherwise simple rules). Nothing is saved until the teacher has read it and pressed Start the plan.
+  const [ai, setAi] = useState<AiPlan | null>(null); const [drafting, setDrafting] = useState(false);
+  const formRef = useRef(form); formRef.current = form;
+  const draftPlan = useCallback(async () => {
+    const f = formRef.current;
+    if (!f.learnerIds.length || !f.subjectId) return;
+    setDrafting(true); setError('');
+    try {
+      const r = await request<AiPlan>(`/schools/${schoolId}/ai/support-plan-draft`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ classId, termId, subjectId: f.subjectId, ...(f.indicatorId ? { indicatorId: f.indicatorId } : {}), learnerIds: f.learnerIds }) });
+      setAi(r); setForm(prior => ({ ...prior, concern: r.concern, action: r.action, familyNote: r.familyNote, reviewDate: addDays(prior.startDate, r.reviewInDays) }));
+    } catch (e) { setError((e as Error).message); } finally { setDrafting(false); }
+  }, [schoolId, csrfToken, classId, termId]);
+  // Once per dialog (development mode runs effects twice; each draft is a logged, counted run).
+  const drafted = useRef(false);
+  useEffect(() => { if (drafted.current) return; drafted.current = true; void draftPlan(); }, [draftPlan]);
+  const nameOf = (id: string) => roster.find(l => l.learnerId === id)?.fullName ?? 'Learner';
   const addAction = (text: string) => setForm(f => ({ ...f, action: f.action.trim() ? `${f.action.trim().replace(/\.$/, '')}. ${text}.` : `${text}.` }));
   // Learners already chosen stay at the top, so the teacher sees who is in the plan without scrolling.
   const order = useMemo(() => [...roster].sort((a, b) => Number(draft.learnerIds.includes(b.learnerId)) - Number(draft.learnerIds.includes(a.learnerId))), [roster, draft.learnerIds]);
   const save = (e: FormEvent) => { e.preventDefault(); setBusy(true); setError('');
     request<{ id: string }>(`/schools/${schoolId}/assessment/classes/${classId}/support-plans`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), termId, subjectId: form.subjectId,
       ...(form.indicatorId ? { indicatorId: form.indicatorId } : {}), learnerIds: form.learnerIds, concern: form.concern, action: form.action, ...(form.familyNote.trim() ? { familyNote: form.familyNote.trim() } : {}), ownerMembershipId: form.ownerMembershipId || undefined, startDate: form.startDate, reviewDate: form.reviewDate }) })
-      .then(r => onSaved(r.id)).catch(e => setError((e as Error).message)).finally(() => setBusy(false)); };
+      .then(r => { if (ai) void request(`/schools/${schoolId}/ai/runs/${ai.runId}/feedback`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ outcome: form.concern === ai.concern && form.action === ai.action && form.familyNote === ai.familyNote ? 'accepted' : 'edited' }) }).catch(() => undefined);
+        onSaved(r.id); }).catch(e => setError((e as Error).message)).finally(() => setBusy(false)); };
   return <Dialog title="Plan support" wide onClose={onClose}>
     <form onSubmit={save}>
       {error && <p role="alert">{error}</p>}
@@ -42,15 +63,21 @@ export function SupportPlanDialog({ schoolId, csrfToken, classId, termId, draft,
       <label>Subject<select value={form.subjectId} onChange={e => setForm({ ...form, subjectId: e.target.value, indicatorId: undefined })} required>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
       <fieldset className="indicator-picker"><legend>Learners ({form.learnerIds.length})</legend><div className="indicator-options">
         {order.map(l => <label key={l.learnerId} className="check"><input type="checkbox" checked={form.learnerIds.includes(l.learnerId)} onChange={() => toggle(l.learnerId)}/><span>{l.fullName}</span></label>)}</div></fieldset>
-      <label>What we have noticed<textarea rows={2} value={form.concern} onChange={e => setForm({ ...form, concern: e.target.value })} required minLength={3} maxLength={500}/></label>
-      <label>What we will do<textarea rows={2} value={form.action} onChange={e => setForm({ ...form, action: e.target.value })} required minLength={3} maxLength={500} placeholder="e.g. Re-teach fractions in a small group on Tuesdays and Thursdays"/></label>
+      <div className="draft-banner" role="status">{drafting ? 'Drafting a plan from the marks, missed work and attendance…'
+        : ai ? <>{ai.source === 'ai' ? 'Drafted by AI from the marks, missed work, exam and attendance.' : `Drafted from the marks by simple rules${ai.note?.startsWith('ai_disabled') ? ' (AI is off for this school)' : ''}.`} Read it and change anything before you start the plan.</>
+        : form.learnerIds.length ? 'Choose the learners, then draft the plan.' : 'Tick the learners this plan is for.'}
+        <button type="button" className="secondary small" disabled={drafting || !form.learnerIds.length} onClick={() => void draftPlan()}>{ai ? 'Draft again' : 'Draft the plan'}</button></div>
+      {ai && ai.basis.length > 0 && <details className="draft-basis"><summary>What the draft is based on</summary><ul>{ai.basis.map(b => <li key={b.learnerId}><strong>{nameOf(b.learnerId)}</strong>: recent marks {b.recent ?? '–'}%, {trendWord[b.trend] ?? b.trend}
+        {b.missedWork ? `, ${b.missedWork} piece${b.missedWork === 1 ? '' : 's'} of work without a mark` : ''}, attendance {b.attendance}{b.examGap ? `, exam far ${b.examGap === 'exam_higher' ? 'above' : 'below'} class work` : ''}{b.weakTopics.length ? `. Weakest: ${b.weakTopics.join('; ')}` : ''}</li>)}</ul></details>}
+      <label>What we have noticed<textarea rows={3} value={form.concern} onChange={e => setForm({ ...form, concern: e.target.value })} required minLength={3} maxLength={500}/></label>
+      <label>What we will do<textarea rows={4} value={form.action} onChange={e => setForm({ ...form, action: e.target.value })} required minLength={3} maxLength={500} placeholder="e.g. Re-teach fractions in a small group on Tuesdays and Thursdays"/></label>
       <div className="chip-row">{actions.map(a => <button key={a} type="button" className="chip" onClick={() => addAction(a)}>+ {a}</button>)}</div>
       <label>Message for the family (optional)<textarea rows={2} value={form.familyNote} onChange={e => setForm({ ...form, familyNote: e.target.value })} maxLength={500} placeholder="e.g. Ten minutes of reading aloud together each evening will help."/></label>
       <p className="muted field-hint">Shown to each learner's guardians when the school shares progress with families. Write it for one family: do not name other learners.</p>
       <label>Responsible<select value={form.ownerMembershipId} onChange={e => setForm({ ...form, ownerMembershipId: e.target.value })} disabled={owners.length < 2}>{owners.map(o => <option key={o.membershipId} value={o.membershipId}>{o.name}{o.classTeacher ? ' (class teacher)' : ''}</option>)}</select></label>
       <div className="field-row"><label>Starts<input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} required/></label>
         <label>Review on<input type="date" value={form.reviewDate} min={addDays(form.startDate, 1)} onChange={e => setForm({ ...form, reviewDate: e.target.value })} required/></label></div>
-      <button disabled={busy || !form.learnerIds.length}>Start the plan</button>
+      <button disabled={busy || drafting || !form.learnerIds.length}>Start the plan</button>
     </form>
   </Dialog>;
 }

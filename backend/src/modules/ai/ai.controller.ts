@@ -23,6 +23,13 @@ class RemarksDraftDto {
   @IsUUID() termId!: string;
   @IsOptional() @IsArray() @ArrayMaxSize(80) @IsUUID('4',{each:true}) learnerIds?: string[];
 }
+class PlanDraftDto {
+  @IsUUID() classId!: string;
+  @IsUUID() termId!: string;
+  @IsUUID() subjectId!: string;
+  @IsOptional() @IsUUID() indicatorId?: string;
+  @IsArray() @ArrayMaxSize(40) @IsUUID('4',{each:true}) learnerIds!: string[];
+}
 class FeedbackDto { @IsIn(['accepted','edited','discarded']) outcome!: string; }
 
 @Controller('api/v1/schools/:schoolId/ai')
@@ -48,6 +55,13 @@ export class AiController {
     const prepared = await this.access.school(req,schoolId,['headteacher','teacher'],(client,actor) => this.drafts.prepareRemarks(client,actor,body),true);
     const done = await this.drafts.completeRemarks(prepared);
     return this.access.school(req,schoolId,['headteacher','teacher'],(client,actor) => this.drafts.recordRemarks(client,actor,body,prepared,done),true);
+  }
+  // A support plan for named learners, drafted from their marks, missed work, exam gap and attendance; the teacher edits and saves it.
+  @Post('support-plan-draft')
+  async planDraft(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Body() body: PlanDraftDto) {
+    const prepared = await this.access.school(req,schoolId,['headteacher','teacher'],(client,actor) => this.drafts.preparePlan(client,actor,body),true);
+    const done = await this.drafts.completePlan(prepared);
+    return this.access.school(req,schoolId,['headteacher','teacher'],(client,actor) => this.drafts.recordPlan(client,actor,body,prepared,done),true);
   }
   // A short practice worksheet for one curriculum indicator; the teacher edits it and may save it as a practice material.
   @Post('indicators/:indicatorId/worksheet-draft')
