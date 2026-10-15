@@ -24,6 +24,22 @@ Parents pay **GH₵50 per child per term** (launch price) for learning their chi
 - [ ] **Visible results:** at term end the parent sees what changed, in numbers and plain words.
 - [ ] **Worth more than the alternative:** parents rate it above what they already pay for (extra classes, lesson teachers, past-question books). Check local prices; don't assume them.
 
+### Where we stand against the parent test (2026-10-15, honest status)
+
+Parents pay, so none of the infrastructure counts until a parent would pay for what a child gets. Built so far: home practice (free tier) and the content library with Claude drafting behind it. **No stage passes the test today.**
+
+| Criterion | Today | What closes it |
+| --- | --- | --- |
+| Enough | **Not met.** A child gets at most three weak topics, 2 sessions a topic a day, from one school-approved set of 5–8 questions per level, so a topic runs dry in days. Published platform questions: demo data only. | Phase 2 volume (60 published questions per indicator), the platform library reaching children (slice 2c), the daily plan and no-repeat window (phase 4). |
+| Right level | **Partly.** Weak topics come from the school's tagged class work, with three levels and simple up/down rules. | Mastery per indicator and spaced review (phase 4). |
+| Parent can help | **Not met.** Parent guides can be written and reviewed in the library, but no parent can see one. | Guides in the parent portal (phase 6), with audio. |
+| Visible results | **Not met.** Parents see topic, level and sessions only; no report. Whether parents may see numbers is an open decision for Evans. | End-of-term report (phase 6), after that decision. |
+| Worth more than the alternative | **Not tested.** No local prices checked, no parent asked. | Price research and the internal pilot (phases 1 and 13). |
+
+**Content volume is the real constraint (working figures, to validate).** Claude only gives a head start: every question needs a human reviewer, and the platform ships no curriculum text, so catalogue entries are written by hand too. One stage as an example: Basic 4–6 with Maths, English and Science is 9 class-subjects; at about 25 indicators each (a guess, not counted from the curriculum) that is about 225 indicators and about 13,500 reviewed questions at the 60-per-indicator target. At one minute a question that is over 200 reviewer hours for a single stage. Reviewer hours per week is already a launch metric below; Claude's yield and the reviewers' real speed should be measured on one stage before promising more.
+
+**Proposed change to the build order (not agreed, needs Evans).** Today the order builds the library across all stages first. To reach "worth paying for" sooner, make one stage good before breadth: **Upper Primary (Basic 4–6) Maths and English first**, because it builds directly on what exists (weak topics from class marks; multiple-choice and number questions need no pictures or audio), then pull forward what a parent actually sees: the platform library reaching children (2c), the daily plan, guides in the portal and the end-of-term report. Run it free with staff families at one school (phase 13, step 1) and ask parents the five questions above before any payment work (phases 7–9). Lower Primary needs audio, pictures and a player and JHS needs timed papers and passages, so both come after.
+
 ---
 
 ## Phase 1. Decisions and legal (blocks launch, not building)
