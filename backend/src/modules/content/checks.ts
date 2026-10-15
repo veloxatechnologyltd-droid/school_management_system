@@ -86,7 +86,9 @@ export function numericOption(option: string): number | null {
 }
 
 // ---- Duplicates and reading level.
-const key = (text: string) => text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+// Wording as compared for repeats: capitals, spacing and sentence punctuation do not matter, but the operation (+ − × ÷), a decimal point
+// and letters such as ɔ and ɛ do, so "12 + 7" and "12 − 7" are different questions.
+const key = (text: string) => text.toLowerCase().replace(/[−–]/g, '-').replace(/[^\p{L}\p{N}+\-*×÷/=<>%.]/gu, ' ').replace(/\.+(?=\s|$)/g, '').replace(/\s+/g, ' ').trim();
 const words = (text: string) => new Set(key(text).split(' ').filter(Boolean));
 const overlap = (a: Set<string>, b: Set<string>) => { let both = 0; for (const w of a) if (b.has(w)) both++; return both / (a.size + b.size - both || 1); };
 export const NEAR_DUPLICATE = 0.8;

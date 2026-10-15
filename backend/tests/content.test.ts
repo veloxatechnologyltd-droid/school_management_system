@@ -271,3 +271,66 @@ test('the platform administrator grants and revokes content roles; granting is n
   assert.equal((await call(`/platform/content-staff/${row.id}/revoke`,admin,'POST',{})).status,404);
   assert.equal((await call('/content/me',oldOutsider)).status,403);
 });
+
+// ---- Findings from the independent review of migration 046 (fixed in 047 and the service)
+const as=async(user:string,sql:string,params:unknown[]=[])=>{const client=await runtime.connect();try{await client.query('BEGIN');await client.query("SELECT set_config('app.user_id',$1,true)",[user]);return await client.query(sql,params);}finally{await client.query('ROLLBACK');client.release();}};
+const draft=async(who:Login,prompt:string,level=1)=>{const r=await call('/content/items',who,'POST',{kind:'question',indicatorId:indicator,level,body:question({prompt,options:['1','2','3'],correctOption:0})});assert.equal(r.status,201,JSON.stringify(r.body));return r.body as {itemId:string;versionId:string};};
+
+test('questions that differ only in the operation or in non-English letters are not duplicates',()=>{
+  const codes=(prompt:string,answer:number,others:string[])=>runChecks('question','upper_primary',checkBody('question',1,{kind:'number',prompt,answer}).body,others.map((text,i)=>({itemId:`n${i}`,text}))).findings.map((f:any)=>f.code);
+  assert.deepEqual(codes('What is 12 − 7?',5,['What is 12 + 7?','What is 12 × 7?','What is 12 ÷ 7?']),[],'a different operation is a different question');
+  assert.deepEqual(codes('What is 1.5 + 2?',3.5,['What is 15 + 2?']),[],'a decimal point matters');
+  assert.ok(!codes('Which word has the sound ɔ in it?',1,['Which word has the sound in it?']).includes('duplicate'),'letters such as ɔ and ɛ are kept, so these are not exact repeats (a near repeat only warns)');
+  assert.deepEqual(codes('What is 12 + 7?',19,['what is 12 + 7']),['duplicate'],'capitals, the question mark and spacing do not matter');
+});
+
+test('the database keeps history on every status change and ties AI authorship to a run',async()=>{
+  const one=await draft(author,'Which number is the smallest?');
+  const owner1=await as(ids.author,'SELECT id FROM content_versions WHERE id=$1',[one.versionId]);assert.equal(owner1.rowCount,1);
+  const submitSql="UPDATE content_versions SET status='in_review',checks='{\"blocking\":0,\"warnings\":0,\"machineChecked\":false,\"findings\":[]}',submitted_at=now()";
+  // A submit cannot also write a review note.
+  await assert.rejects(as(ids.author,`${submitSql},review_note='Sneaky' WHERE id=$1`,[one.versionId]),/keeps the rest/);
+  assert.equal((await call(`/content/versions/${one.versionId}/submit`,author,'POST',{})).status,201);
+  const approveSql="UPDATE content_versions SET status='published',reviewer_id=$2,reviewed_at=now(),published_at=now()";
+  // A review cannot also rewrite what the checks found or when it was submitted.
+  await assert.rejects(as(ids.reviewer,`${approveSql},checks='{}' WHERE id=$1`,[one.versionId,ids.reviewer]),/keeps the rest/);
+  await assert.rejects(as(ids.reviewer,`${approveSql},submitted_at=now()-interval '9 days' WHERE id=$1`,[one.versionId,ids.reviewer]),/keeps the rest/);
+  assert.equal((await call(`/content/versions/${one.versionId}/approve`,reviewer,'POST',{})).status,201);
+  // Taking it out of use cannot erase who reviewed it or when it went live.
+  const retireSql="UPDATE content_versions SET status='retired',retired_at=now(),retired_by=$2,retirement_reason='Taken out of use'";
+  await assert.rejects(as(ids.reviewer,`${retireSql},reviewer_id=NULL,reviewed_at=NULL,published_at=NULL WHERE id=$1`,[one.versionId,ids.reviewer]),/keeps the rest/);
+  assert.equal((await as(ids.reviewer,`${retireSql} WHERE id=$1`,[one.versionId,ids.reviewer])).rowCount,1,'a plain retire is still allowed');
+  // A rejection needs its note, and a retirement its reason, even when the application is skipped.
+  const two=await draft(author,'Which number is the largest?');await call(`/content/versions/${two.versionId}/submit`,author,'POST',{});
+  await assert.rejects(as(ids.reviewer,"UPDATE content_versions SET status='rejected',reviewer_id=$2,reviewed_at=now() WHERE id=$1",[two.versionId,ids.reviewer]),/check constraint|rejected_note/);
+  await assert.rejects(as(ids.lead,"UPDATE catalogue_indicators SET retired_at=now(),retired_by=$2 WHERE id=$1",[indicator,ids.lead]),/retired_reason|check constraint/);
+  await assert.rejects(as(ids.lead,"UPDATE catalogue_indicators SET retired_at=now(),retired_by=$2,retirement_reason='Not the lead who retires' WHERE id=$1",[indicator,ids.author]),/row-level security/);
+  // Claude drafts are not self-declared: a person cannot mark their own insert as AI-written to dodge review by someone else.
+  await assert.rejects(as(ids.lead,"INSERT INTO content_versions(id,item_id,version,body,author_id,author_kind) VALUES(gen_random_uuid(),$1,9,'{}',$2,'ai')",[one.itemId,ids.lead]),/row-level security|check constraint/);
+});
+
+test('a person who loses the author role can no longer reword or submit their own draft, even at the database',async()=>{
+  const ex=randomUUID(),salt=randomBytes(16).toString('hex');
+  await owner.query('INSERT INTO users(id,display_name,synthetic_login,password_hash) VALUES($1,$2,$3,$4)',[ex,'Former Author',`ex-${ex.slice(0,8)}@example.test`,`${salt}:${scryptSync(password,salt,64).toString('hex')}`]);
+  await owner.query("INSERT INTO content_staff(id,user_id,role,granted_by) VALUES($1,$2,'author',$3)",[randomUUID(),ex,ids.admin]);
+  const created=await owner.query("INSERT INTO content_items(id,kind,indicator_id,level,created_by) VALUES(gen_random_uuid(),'question',$1,1,$2) RETURNING id",[indicator,ex]);
+  const version=randomUUID();await owner.query("INSERT INTO content_versions(id,item_id,version,body,author_id) VALUES($1,$2,1,$3,$4)",[version,created.rows[0].id,JSON.stringify(question({prompt:'Which shape has three sides?',options:['Triangle','Square','Circle']})),ex]);
+  await owner.query("UPDATE content_staff SET revoked_at=now(),revoked_by=$2 WHERE user_id=$1",[ex,ids.admin]);
+  await owner.query("INSERT INTO content_staff(id,user_id,role,granted_by) VALUES($1,$2,'reviewer',$3)",[randomUUID(),ex,ids.admin]);
+  await assert.rejects(as(ex,"UPDATE content_versions SET body='{}' WHERE id=$1",[version]),/content author/);
+  await assert.rejects(as(ex,"UPDATE content_versions SET status='in_review',checks='{}',submitted_at=now() WHERE id=$1",[version]),/author/);
+});
+
+test('submitting or approving on a retired catalogue entry is refused, and short reasons and names are refused plainly',async()=>{
+  const entry=(await call('/content/catalogue',lead,'POST',{subject:'Science',level:'Basic 3',code:'B3.9.9',description:'Names the parts of a plant',origin:'platform',sourceNote:'Written by the platform team'})).body.id;
+  const made=await call('/content/items',author,'POST',{kind:'question',indicatorId:entry,level:1,body:question({prompt:'Which part of a plant takes in water?',options:['Root','Leaf','Flower']})});assert.equal(made.status,201);
+  assert.equal((await call(`/content/versions/${made.body.versionId}/submit`,author,'POST',{})).status,201);
+  assert.equal((await call(`/content/catalogue/${entry}/retire`,lead,'POST',{reason:'ab '})).status,400,'trimmed, too short: a plain refusal, not a database error');
+  assert.equal((await call(`/content/catalogue/${entry}/retire`,lead,'POST',{reason:'Dropped from the scheme'})).status,201);
+  assert.equal((await call(`/content/versions/${made.body.versionId}/approve`,reviewer,'POST',{})).status,409,'nothing is published on a retired entry');
+  const again=await call('/content/items',author,'POST',{kind:'question',indicatorId:indicator,level:1,body:question({prompt:'Which number comes after 4?',options:['5','6','3']})});
+  assert.equal((await call(`/content/versions/${again.body.versionId}/submit`,author,'POST',{})).status,201);
+  assert.equal((await call(`/content/versions/${again.body.versionId}/reject`,reviewer,'POST',{note:'ab '})).status,400);
+  assert.equal((await call('/content/catalogue',lead,'POST',{subject:'Science',level:'Basic 3',code:'B3.9.8',strand:'a ',description:'Names the parts of a flower',origin:'platform',sourceNote:'Written by the platform team'})).status,400);
+  assert.equal((await call('/platform/content-staff',admin,'POST',{role:'author',email:`blank-${randomUUID().slice(0,8)}@example.test`,name:'   '})).status,400,'a blank name does not create an account');
+});

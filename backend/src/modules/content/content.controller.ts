@@ -9,10 +9,12 @@ import { ContentService } from './content.service';
 // The database refuses what the rules forbid (a reviewer approving their own item, a frozen version being reworded);
 // these say so in plain words instead of a database error.
 function plain(error: unknown) {
-  const pg = error as { code?: string; message?: string; constraint?: string };
+  const pg = error as { code?: string; message?: string; constraint?: string; routine?: string };
   if (error instanceof HttpException || typeof pg.code !== 'string') return error;
-  if (pg.code === '42501') return new ForbiddenException(/row-level security/.test(pg.message ?? '') ? 'Your content role cannot do this' : pg.message);
-  if (pg.code === '23514') return new ConflictException(pg.constraint ? 'That change is not allowed by the content rules' : pg.message);
+  // Only the messages our own triggers raise (RAISE EXCEPTION) are shown; a privilege or constraint error would name tables and columns.
+  const ours = pg.routine === 'exec_stmt_raise';
+  if (pg.code === '42501') return new ForbiddenException(ours ? pg.message : 'Your content role cannot do this');
+  if (pg.code === '23514') return new ConflictException(ours ? pg.message : 'That change is not allowed by the content rules');
   if (pg.code === '23505') return new ConflictException('Someone else changed this at the same time. Reload and try again');
   return error;
 }

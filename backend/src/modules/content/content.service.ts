@@ -5,6 +5,13 @@ import { BodyDto, CatalogueQueryDto, IndicatorDto, ItemsQueryDto, LEVELS, NewIte
 import { ContentBody, ContentKind, Neighbour, bodyProblem, checkBody, runChecks, stageOf } from './checks';
 
 type Role = 'author' | 'reviewer' | 'lead';
+// Text as the database will see it (trimmed, spaces squashed), refused plainly when its length is wrong rather than failing a database check.
+const clean = (value: string | undefined | null, min: number, max: number, what: string): string => {
+  const text = (value ?? '').replace(/\s+/g, ' ').trim();
+  if (text.length < min || text.length > max) throw new BadRequestException(`${what} needs ${min} to ${max} characters`);
+  return text;
+};
+const optional = (value: string | undefined | null, min: number, max: number, what: string) => (value ?? '').trim() ? clean(value, min, max, what) : null;
 const paged = <T>(rows: (T & { total: string })[], page: { offset: number; limit: number }) => ({ items: rows.map(({ total: _total, ...row }) => row), total: rows.length ? Number(rows[0]!.total) : 0, limit: page.limit, offset: page.offset });
 const levelOrder = `array_position(ARRAY[${LEVELS.map(l => `'${l}'`).join(',')}],c.level)`;
 
@@ -47,11 +54,12 @@ export class ContentService {
   }
   async addIndicator(client: PoolClient, userId: string, dto: IndicatorDto) {
     await this.need(client, 'lead', 'Only a content lead edits the catalogue');
-    const id = randomUUID(), terms = dto.termGuidance ? [...new Set(dto.termGuidance)].sort() : null, clean = (v?: string) => v?.replace(/\s+/g, ' ').trim() || null;
+    const id = randomUUID(), terms = dto.termGuidance ? [...new Set(dto.termGuidance)].sort() : null;
+    const fields = [clean(dto.subject, 2, 60, 'The subject'), optional(dto.code, 1, 40, 'The code'), optional(dto.strand, 2, 120, 'The strand'), optional(dto.subStrand, 2, 120, 'The sub-strand'), clean(dto.description, 3, 400, 'The indicator'), clean(dto.sourceNote, 3, 300, 'The source note')];
     try {
       await client.query(
         'INSERT INTO catalogue_indicators(id,subject,level,code,strand,sub_strand,description,term_guidance,origin,source_note,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
-        [id, clean(dto.subject), dto.level, clean(dto.code), clean(dto.strand), clean(dto.subStrand), clean(dto.description), terms, dto.origin, clean(dto.sourceNote), userId]);
+        [id, fields[0], dto.level, fields[1], fields[2], fields[3], fields[4], terms, dto.origin, fields[5], userId]);
     } catch (error) {
       if ((error as { code?: string }).code === '23505') throw new ConflictException('That code is already in the catalogue for this subject and level');
       throw error;
@@ -60,7 +68,7 @@ export class ContentService {
   }
   async retireIndicator(client: PoolClient, userId: string, id: string, reason: string) {
     await this.need(client, 'lead', 'Only a content lead edits the catalogue');
-    const done = await client.query('UPDATE catalogue_indicators SET retired_at=now(),retired_by=$2,retirement_reason=$3 WHERE id=$1 AND retired_at IS NULL', [id, userId, reason.trim()]);
+    const done = await client.query('UPDATE catalogue_indicators SET retired_at=now(),retired_by=$2,retirement_reason=$3 WHERE id=$1 AND retired_at IS NULL', [id, userId, clean(reason, 3, 300, 'The reason')]);
     if (!done.rowCount) throw new NotFoundException('That catalogue entry is unavailable or already retired');
     return { retired: true };
   }
@@ -86,7 +94,7 @@ export class ContentService {
     const versions = (await client.query(`SELECT ${VERSION} FROM ${VERSION_FROM} WHERE v.item_id=$1 ORDER BY v.version DESC`, [id])).rows;
     return { ...item, stage: stageOf(item.classLevel), versions };
   }
-  private clean(kind: ContentKind, level: number | null, raw: unknown): ContentBody {
+  private body(kind: ContentKind, level: number | null, raw: unknown): ContentBody {
     const checked = checkBody(kind, level, raw);
     if (!checked.ok) throw new BadRequestException(bodyProblem(checked.reason));
     return checked.body;
@@ -99,7 +107,7 @@ export class ContentService {
     const indicator = (await client.query('SELECT retired_at FROM catalogue_indicators WHERE id=$1', [dto.indicatorId])).rows[0];
     if (!indicator) throw new NotFoundException('Catalogue entry unavailable');
     if (indicator.retired_at) throw new ConflictException('That catalogue entry is retired');
-    const body = this.clean(kind, level, dto.body), itemId = randomUUID(), versionId = randomUUID();
+    const body = this.body(kind, level, dto.body), itemId = randomUUID(), versionId = randomUUID();
     await client.query('INSERT INTO content_items(id,kind,indicator_id,level,created_by) VALUES($1,$2,$3,$4,$5)', [itemId, kind, dto.indicatorId, level, userId]);
     await client.query('INSERT INTO content_versions(id,item_id,version,body,author_id) VALUES($1,$2,1,$3,$4)', [versionId, itemId, JSON.stringify(body), userId]);
     return { itemId, versionId };
@@ -107,10 +115,10 @@ export class ContentService {
   // The version, its item and the indicator's class level, locked for the change about to be made.
   private async load(client: PoolClient, versionId: string) {
     const row = (await client.query(
-      `SELECT v.id,v.item_id,v.version,v.status,v.body,v.author_id,v.author_kind,i.kind,i.level,i.indicator_id,c.level AS class_level
+      `SELECT v.id,v.item_id,v.version,v.status,v.body,v.author_id,v.author_kind,i.kind,i.level,i.indicator_id,c.level AS class_level,c.retired_at IS NOT NULL AS indicator_retired
        FROM content_versions v JOIN content_items i ON i.id=v.item_id JOIN catalogue_indicators c ON c.id=i.indicator_id WHERE v.id=$1 FOR UPDATE OF v`, [versionId])).rows[0];
     if (!row) throw new NotFoundException('Content version unavailable');
-    return row as { id: string; item_id: string; version: number; status: string; body: ContentBody; author_id: string; author_kind: string; kind: ContentKind; level: number | null; indicator_id: string; class_level: string };
+    return row as { id: string; item_id: string; version: number; status: string; body: ContentBody; author_id: string; author_kind: string; kind: ContentKind; level: number | null; indicator_id: string; class_level: string; indicator_retired: boolean };
   }
   async newVersion(client: PoolClient, userId: string, itemId: string, dto: BodyDto) {
     await this.need(client, 'author', 'Only a content author writes items');
@@ -120,7 +128,7 @@ export class ContentService {
     // Two people adding a version at once are separated by the unique (item, version) and one-open-version indexes.
     const latest = (await client.query('SELECT version,status FROM content_versions WHERE item_id=$1 ORDER BY version DESC LIMIT 1', [itemId])).rows[0];
     if (['draft', 'in_review'].includes(latest.status)) throw new ConflictException('This item already has a version being written or reviewed');
-    const body = this.clean(item.kind, item.level, dto.body), id = randomUUID();
+    const body = this.body(item.kind, item.level, dto.body), id = randomUUID();
     await client.query('INSERT INTO content_versions(id,item_id,version,body,author_id) VALUES($1,$2,$3,$4,$5)', [id, itemId, latest.version + 1, JSON.stringify(body), userId]);
     return { versionId: id, version: latest.version + 1 };
   }
@@ -129,7 +137,7 @@ export class ContentService {
     const version = await this.load(client, versionId);
     if (version.status !== 'draft') throw new ConflictException('Only a draft can be reworded; write a new version instead');
     if (version.author_id !== userId) throw new ForbiddenException('Only the author can reword their draft');
-    await client.query('UPDATE content_versions SET body=$2 WHERE id=$1', [versionId, JSON.stringify(this.clean(version.kind, version.level, dto.body))]);
+    await client.query('UPDATE content_versions SET body=$2 WHERE id=$1', [versionId, JSON.stringify(this.body(version.kind, version.level, dto.body))]);
     return { saved: true };
   }
   async submit(client: PoolClient, userId: string, versionId: string) {
@@ -137,7 +145,8 @@ export class ContentService {
     const version = await this.load(client, versionId);
     if (version.status !== 'draft') throw new ConflictException('Only a draft can be submitted');
     if (version.author_id !== userId) throw new ForbiddenException('Only the author submits a draft for review');
-    const body = this.clean(version.kind, version.level, version.body);
+    if (version.indicator_retired) throw new ConflictException('That catalogue entry is retired');
+    const body = this.body(version.kind, version.level, version.body);
     // Wording already in review or live for this indicator, from other items.
     const neighbours = (await client.query(
       `SELECT i.id AS "itemId",CASE WHEN i.kind='question' THEN v.body->>'prompt' ELSE v.body->>'learning' END AS text
@@ -157,16 +166,22 @@ export class ContentService {
     if (version.author_kind === 'person' && version.author_id === userId) throw new ForbiddenException('You cannot review your own writing');
     return version;
   }
-  async approve(client: PoolClient, userId: string, versionId: string, note?: string) {
+  // Nothing goes live on a catalogue entry that has been retired (a rejection is still fine).
+  private async publishable(client: PoolClient, userId: string, versionId: string) {
     const version = await this.reviewable(client, userId, versionId);
+    if (version.indicator_retired) throw new ConflictException('That catalogue entry is retired');
+    return version;
+  }
+  async approve(client: PoolClient, userId: string, versionId: string, note?: string) {
+    const version = await this.publishable(client, userId, versionId);
     // The version it replaces leaves use as the new one goes live.
     await client.query("UPDATE content_versions SET status='retired',retired_at=now(),retired_by=$2,retirement_reason=$3 WHERE item_id=$1 AND status='published'", [version.item_id, userId, `Replaced by version ${version.version}`]);
-    await client.query("UPDATE content_versions SET status='published',reviewer_id=$2,reviewed_at=now(),review_note=$3,published_at=now() WHERE id=$1", [versionId, userId, note?.trim() || null]);
+    await client.query("UPDATE content_versions SET status='published',reviewer_id=$2,reviewed_at=now(),review_note=$3,published_at=now() WHERE id=$1", [versionId, userId, optional(note, 3, 500, 'The note')]);
     return { status: 'published' };
   }
   async reject(client: PoolClient, userId: string, versionId: string, note: string) {
     await this.reviewable(client, userId, versionId);
-    await client.query("UPDATE content_versions SET status='rejected',reviewer_id=$2,reviewed_at=now(),review_note=$3 WHERE id=$1", [versionId, userId, note.trim()]);
+    await client.query("UPDATE content_versions SET status='rejected',reviewer_id=$2,reviewed_at=now(),review_note=$3 WHERE id=$1", [versionId, userId, clean(note, 3, 500, 'The note')]);
     return { status: 'rejected' };
   }
   // A reviewer takes a submitted or live version out of use; an author may withdraw their own draft.
@@ -176,7 +191,7 @@ export class ContentService {
     if (!['draft', 'in_review', 'published'].includes(version.status)) throw new ConflictException('This version is already out of use');
     const ownDraft = version.status === 'draft' && version.author_id === userId;
     if (!ownDraft) await this.need(client, 'reviewer', 'Only a content reviewer takes a submitted or published version out of use');
-    await client.query("UPDATE content_versions SET status='retired',retired_at=now(),retired_by=$2,retirement_reason=$3 WHERE id=$1", [versionId, userId, reason.trim()]);
+    await client.query("UPDATE content_versions SET status='retired',retired_at=now(),retired_by=$2,retirement_reason=$3 WHERE id=$1", [versionId, userId, clean(reason, 3, 300, 'The reason')]);
     return { status: 'retired' };
   }
   private queueSql = `FROM content_versions v JOIN content_items i ON i.id=v.item_id WHERE v.status='in_review' AND (v.author_kind='ai' OR v.author_id<>$1)`;

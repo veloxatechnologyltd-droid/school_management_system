@@ -42,5 +42,5 @@ export class StaffDto {
   @IsIn(['author','reviewer','lead']) role!: string;
   // An existing account is found by its email address; a name makes a new account with a temporary password.
   @IsEmail() @MaxLength(200) email!: string;
-  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) name?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) name?: string;
 }
