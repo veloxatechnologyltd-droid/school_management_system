@@ -289,12 +289,12 @@ test('an Excel-style class list with "Admission No." headers and DD/MM/YYYY date
 test('each role lands on its own daily work; the section stays in the address across reload at phone width',async({page,browser})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewportSize({width:375,height:812});
   const links=async(p:Page)=>p.getByRole('navigation',{name:'Sections',exact:true}).locator('a .label').allTextContents();
-  await signIn(page);expect(await links(page)).toEqual(['Home','Ask','Attendance','Learners','Guardians','Pickup','Assessment','Progress','Early years','Fees','Notices','Promotion','Settings']);
+  await signIn(page);expect(await links(page)).toEqual(['Home','Ask','Attendance','Learners','Guardians','Pickup','Assessment','Progress','Topics','Early years','Fees','Notices','Promotion','Settings']);
   await expect(page.getByRole('link',{name:'Home',exact:true})).toHaveAttribute('aria-current','page');await expect(page.getByRole('region',{name:'Notices to guardians'})).toHaveCount(0);
   await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('link',{name:'Notices',exact:true}).click();await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   await page.reload();await pickSchool(page);await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  for(const [email,expected] of [['teacher@example.test',['Today','Ask','Assessment','Progress','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['My children','Fees','Notices']]] as const){
+  for(const [email,expected] of [['teacher@example.test',['Today','Ask','Assessment','Progress','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['My children','Fees','Notices']]] as const){
     const other=await browser.newPage();await other.setViewportSize({width:375,height:812});await other.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));await signIn(other,email);expect(await links(other)).toEqual(expected);
     expect(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await other.close();
   }

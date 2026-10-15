@@ -12,7 +12,7 @@ const SHOWN = 40, MARGIN = 30;
 
 export interface IndicatorFact { subject: string; classLevel: string; code: string | null; strand: string | null; subStrand: string | null; description: string; termGuidance: number[] | null }
 // Text that goes inside the <indicator> and <already_written> blocks cannot carry those tags, so it cannot close a block and speak as the instructions.
-const clip = (text: string | null, max: number) => text === null ? null : text.replace(/[\r\n]+/g, ' ').replace(/<\/?\s*(?:indicator|already_written)\b[^>]*>/gi, ' ').slice(0, max);
+export const clip = (text: string | null, max: number) => text === null ? null : text.replace(/[\r\n]+/g, ' ').replace(/<\/?\s*(?:indicator|already_written)\b[^>]*>/gi, ' ').slice(0, max);
 const DIFFICULTY: Record<number, string> = {
   1: 'Level 1 is the easiest: recall or recognise the basics, in one step.',
   2: 'Level 2: apply it in a short everyday problem.',

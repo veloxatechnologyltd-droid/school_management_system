@@ -14,7 +14,13 @@ export interface CheckReport { blocking: number; warnings: number; machineChecke
 // Another version of the same indicator and kind that is still in play, for the duplicate check.
 export interface Neighbour { itemId: string; text: string }
 
-export const stageOf = (level: string): Stage => /^Basic [1-3]$/.test(level) ? 'lower_primary' : /^Basic [4-6]$/.test(level) ? 'upper_primary' : 'jhs';
+// The reading stage follows the class name, so a school's own names work too ("Basic 3A", "Primary 2", "Basic 6 Gold"). JHS is the widest limit;
+// a name with no number and no JHS is treated as the middle stage rather than the loosest.
+export const stageOf = (level: string): Stage => {
+  if (/^\s*JHS/i.test(level)) return 'jhs';
+  const n = Number(/\d/.exec(level)?.[0]);
+  return n >= 1 && n <= 3 ? 'lower_primary' : 'upper_primary';
+};
 
 const squash = (value: string) => value.replace(/\s+/g, ' ').trim();
 const within = (value: unknown, min: number, max: number) => typeof value === 'string' && squash(value).length >= min && squash(value).length <= max;
@@ -111,6 +117,8 @@ export function runChecks(kind: ContentKind, stage: Stage, body: ContentBody, ne
   const findings: Finding[] = [];
   const add = (code: string, message: string, blocking: boolean, related?: string[]) => findings.push({ code, message, blocking, ...(related ? { related } : {}) });
   const parts = textOf(kind, body);
+  // Nothing a child or parent reads may carry a link or markup: it could send a child away from the lesson. A comparison sign alone ("5 > 3") is fine.
+  if (parts.some(p => /<\/?[a-z!][^>]*>|https?:|www\./i.test(p))) add('markup', 'Wording with a link or markup has no place in practice content', true);
   if (parts.some(p => labels.test(p))) add('labelling_language', 'Wording that labels or diagnoses a child (a learning difficulty or disorder) has no place in practice content', true);
 
   let machineChecked = false;

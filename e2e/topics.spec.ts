@@ -1,0 +1,121 @@
+import { test,expect,Page } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+const {Pool}=require('pg');const path=require('node:path');
+const school='10000000-0000-4000-8000-000000000001',headMembership='30000000-0000-4000-8000-000000000001',teacherMembership='30000000-0000-4000-8000-000000000003',guardianMembership='30000000-0000-4000-8000-000000000004';
+async function signIn(page:Page,email:string,landing:string) {
+  await page.goto('/');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('Synthetic-only-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();const picker=page.getByRole('combobox',{name:'School',exact:true});if(await picker.count())await picker.selectOption(school);
+  await expect(page.getByRole('heading',{name:'Adinkra Synthetic School',exact:true})).toBeVisible();
+  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:landing,exact:true}).click();
+}
+const noOverflow=(page:Page)=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth);
+
+// The model is a stand-in (e2e/claude-standin.mjs, started by playwright.config.ts): every layer of ours runs for real, the provider does not.
+// Its first sum in each batch is deliberately wrong, so every level comes back one question short and the screens show the top-up.
+test('the head approves a topic and Claude makes it; a teacher reads and retires; a parent reports a question on a phone; the head handles the report',async({page,browser})=>{
+  const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  await signIn(page,'head@example.test','Topics');
+  const suffix=randomUUID().slice(0,8),topic=`Fractions ${suffix}`,elsewhere=`Algebra ${suffix}`,className=`Topics class ${suffix}`,learnerName=`Topics Learner ${suffix}`,termName=`Topics term ${suffix}`,yearName=`Topics year ${suffix}`;
+  const session=await (await page.request.get('/api/v1/auth/session')).json();
+  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}),shift=(d:number)=>new Date(Date.parse(`${today}T00:00:00Z`)+d*86400000).toISOString().slice(0,10);
+  async function send(method:'POST'|'PUT',route:string,body:Record<string,unknown>,status=201){const response=await page.request.fetch(`/api/v1/schools/${school}${route}`,{method,headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
+  const year=await send('POST','/academic-years',{name:yearName,startDate:shift(-60),endDate:shift(120)}),section=await send('POST','/classes',{name:className,level:'Primary',capacity:5,academicYearId:year.id});
+  const subject=await send('POST','/assessment/subjects',{name:`Maths ${suffix}`}),term=await send('POST','/assessment/terms',{academicYearId:year.id,name:termName,startDate:shift(-55),endDate:shift(30)});
+  await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',sourceNote:'Synthetic scheme of work',items:[{description:topic}]});
+  await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',grade:`Elsewhere ${suffix}`,sourceNote:'Synthetic scheme of work',items:[{description:elsewhere}]});
+  const indicator=(await (await page.request.get(`/api/v1/schools/${school}/assessment/indicators?subjectId=${subject.id}`)).json()).items.find((i:any)=>i.description===topic).id;
+  // The class teacher has this class today; a learner in it is weak in the topic, and the school's own hand-written set exists for it.
+  await owner.query("INSERT INTO teaching_assignments(id,school_id,class_id,teacher_membership_id,teacher_display_name,start_date,end_date,grant_reason,created_by) VALUES($1,$2,$3,$4,'Kofi Sample',$5,$6,'Synthetic topics assignment',$7)",[randomUUID(),school,section.id,teacherMembership,shift(-30),shift(60),headMembership]);
+  const learner=randomUUID();
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,$4)",[learner,school,`TP-${suffix}`,learnerName]);
+  await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,$5)",[randomUUID(),school,learner,section.id,shift(-50)]);
+  await owner.query("INSERT INTO guardian_links(id,school_id,learner_id,guardian_membership_id,guardian_display_name,academic,billing,pickup,contact,verified_at,verified_by,verification_reason) VALUES($1,$2,$3,$4,'Abena Sample',true,false,false,true,now(),$5,'Synthetic access')",[randomUUID(),school,learner,guardianMembership,headMembership]);
+  const quiz=await send('POST',`/assessment/classes/${section.id}/assessments`,{termId:term.id,subjectId:subject.id,kind:'quiz',title:`Quiz ${suffix}`,heldOn:shift(-5),maxMark:10,indicatorIds:[indicator]});
+  await send('POST',`/assessment/classes/${section.id}/assessments/${quiz.id}/marks`,{marks:[{learnerId:learner,mark:2}]});
+  const choice=(level:number,n:number)=>({level,kind:'choice',prompt:`Level ${level} choice ${n}: what is ${n} + ${level}?`,options:[String(n+level),String(n+level+1),String(n+level+2)],correctOption:0,explanation:`${n} plus ${level} is ${n+level}.`});
+  const number=(level:number,n:number)=>({level,kind:'number',prompt:`Level ${level} number ${n}: a pencil costs GH₵${n}. What do ${level+1} pencils cost in cedis?`,answer:n*(level+1),explanation:`${level+1} times ${n}.`});
+  await send('POST',`/assessment/indicators/${indicator}/questions`,{questions:[1,2,3].flatMap(level=>[...[1,2,3,4].map(n=>choice(level,n)),...[5,6].map(n=>number(level,n))])});
+  const practiceBefore=await (await page.request.get(`/api/v1/schools/${school}/practice/settings`)).json();
+  if(!practiceBefore.enabled)await send('PUT','/practice/settings',{enabled:true,...(practiceBefore.version?{version:practiceBefore.version}:{})},200);
+  const ai=await (await page.request.get(`/api/v1/schools/${school}/ai/settings`)).json();
+  await send('PUT','/ai/settings',{enabled:true,monthlyRunCap:5000,acknowledgement:'Parents agreed AI drafting in the data-protection notice',...(ai.version?{version:ai.version}:{})},200);
+
+  try {
+    // ---- The headteacher approves the topic for the class and Claude makes the lesson and questions.
+    await page.reload();await expect(page.getByRole('heading',{name:'Topics',exact:true})).toBeVisible();
+    await page.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
+    await expect(page.getByRole('checkbox',{name:`Select ${elsewhere}`})).toBeVisible();
+    await page.getByRole('checkbox',{name:`Select ${topic}`}).check();
+    await page.getByRole('button',{name:/^Approve for /}).click();
+    const dialog=page.getByRole('dialog',{name:/^Approve topics for /});
+    await expect(dialog.getByText(/Nothing about any child or any member of staff is sent/)).toBeVisible();
+    await dialog.getByRole('combobox',{name:'Class these topics are for',exact:true}).selectOption(className);
+    await dialog.getByRole('button',{name:'Approve 1 topic',exact:true}).click();
+    const row=page.locator('li').filter({hasText:topic}).filter({has:page.getByRole('button',{name:'Open',exact:true})});
+    await expect(page.getByText(/1 topic approved for /)).toBeVisible();
+    await expect(page.getByText('Questions 19 · 19 · 19')).toBeVisible({timeout:20000});
+    await expect(row.getByText(/Lesson ready · questions 19 \/ 19 \/ 19 \(aim 20 each\)/)).toBeVisible();
+    // The checks left one question out of each level; making the rest tops each level up to 20.
+    await row.getByRole('button',{name:'Make lessons and questions',exact:true}).click();
+    await expect(row.getByText('Lesson and 20 questions at each level')).toBeVisible({timeout:20000});
+    expect(await noOverflow(page)).toBe(true);
+
+    // ---- Anyone can read what Claude made: the label, the lesson, every question with its answer.
+    await row.getByRole('button',{name:'Open',exact:true}).click();
+    const drawer=page.getByRole('dialog',{name:topic});
+    await expect(drawer.getByText("Made by AI from your school's topics")).toBeVisible();
+    await expect(drawer.getByText(/You will learn this:/)).toBeVisible();await expect(drawer.getByText('Worked example')).toBeVisible();
+    await expect(drawer.getByText('Level 1').first()).toBeVisible();await expect(drawer.getByText(/20 in use/).first()).toBeVisible();
+    const first=drawer.locator('.q-list > li').first();await expect(first.locator('.q-options li.right')).toHaveCount(1);
+    await first.getByRole('button',{name:'Retire',exact:true}).click();await first.getByLabel(/^Why\?/).fill('The wording is not clear');await first.getByRole('button',{name:'Retire now',exact:true}).click();
+    await expect(drawer.getByText('By a teacher: The wording is not clear')).toBeVisible();await expect(drawer.getByText(/19 in use · 1 retired/)).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // ---- The class teacher sees their class's topic and not another class level's.
+    const teacher=await browser.newPage();const teacherErrors:string[]=[];teacher.on('pageerror',error=>teacherErrors.push(error.message));
+    await signIn(teacher,'teacher@example.test','Topics');
+    await teacher.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
+    await expect(teacher.locator('li').filter({hasText:topic}).getByText('Approved',{exact:true})).toBeVisible();
+    await expect(teacher.getByRole('checkbox',{name:`Select ${elsewhere}`})).toHaveCount(0);
+    await teacher.locator('li').filter({hasText:topic}).getByRole('button',{name:'Open',exact:true}).click();
+    await expect(teacher.getByRole('dialog',{name:topic}).getByText(/19 in use · 1 retired/)).toBeVisible();
+    await teacher.keyboard.press('Escape');
+
+    // ---- A parent reports a question on a phone; it stops at once and the teacher is told.
+    const family=await browser.newPage();const familyErrors:string[]=[];family.on('pageerror',error=>familyErrors.push(error.message));
+    await signIn(family,'guardian@example.test','My children');await family.setViewportSize({width:375,height:812});
+    await family.getByRole('combobox',{name:'Linked child',exact:true}).selectOption(learner);
+    const card=family.getByRole('region',{name:'Practice at home',exact:true});
+    await expect(card.getByText(topic)).toBeVisible();await card.getByRole('button',{name:'Start',exact:true}).click();
+    const play=family.getByRole('dialog');await expect(play.getByText('Question 1 of 5')).toBeVisible();
+    await expect(play.getByText("Made by AI from your school's topics")).toHaveCount(0);
+    const prompt=await play.locator('.practice-prompt').innerText();
+    if(await play.getByRole('group',{name:'Choose an answer'}).count())await play.getByRole('group',{name:'Choose an answer'}).getByRole('button').first().click();
+    else await play.getByLabel('Type your answer (a number)').fill(String(Number(/GH₵(\d+)/.exec(prompt)![1])*Number(/do (\d+) pencils/.exec(prompt)![1])));
+    await play.getByRole('button',{name:'Check answer',exact:true}).click();
+    await expect(play.getByText('Correct!')).toBeVisible();
+    await play.getByRole('button',{name:'This looks wrong',exact:true}).click();
+    await play.getByRole('combobox',{name:'What looks wrong?',exact:true}).selectOption('wrong_answer');await play.getByLabel(/^Anything to add/).fill('I think the answer is not right');
+    expect(await noOverflow(family)).toBe(true);
+    await play.getByRole('button',{name:'Send to the teacher',exact:true}).click();
+    await expect(play.getByText('Thank you. We have told the teacher, and this question will not be shown again.')).toBeVisible();
+    await expect(play.getByRole('button',{name:'Next question',exact:true})).toBeVisible();
+    expect(await noOverflow(family)).toBe(true);
+
+    // ---- The teacher and the head see the report, without the parent's name, and handle it.
+    await teacher.reload();await teacher.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
+    const report=teacher.locator('li').filter({hasText:'Parent wrote: “I think the answer is not right”'});
+    await expect(report).toBeVisible();await expect(report.getByText(/The answer looks wrong/)).toBeVisible();await expect(teacher.getByText(/Abena/)).toHaveCount(0);
+    await page.reload();await page.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
+    const headReport=page.locator('li').filter({hasText:'Parent wrote: “I think the answer is not right”'});await expect(headReport).toBeVisible();
+    await headReport.getByRole('button',{name:'It was wrong',exact:true}).click();await expect(headReport).toHaveCount(0);
+    await expect(page.getByText(/Reported by parents \(/)).toHaveCount(0);
+    await page.setViewportSize({width:390,height:844});expect(await noOverflow(page)).toBe(true);
+    expect(errors).toEqual([]);expect(teacherErrors).toEqual([]);expect(familyErrors).toEqual([]);
+  } finally {
+    // Leave the school's settings as found.
+    if(!practiceBefore.enabled){const now=await (await page.request.get(`/api/v1/schools/${school}/practice/settings`)).json();await page.request.fetch(`/api/v1/schools/${school}/practice/settings`,{method:'PUT',headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),enabled:false,version:now.version}});}
+    await owner.end();
+  }
+});

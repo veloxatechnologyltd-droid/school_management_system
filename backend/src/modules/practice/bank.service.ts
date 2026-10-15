@@ -14,10 +14,12 @@ export class PracticeBankService {
     if (!indicator) throw new NotFoundException('Indicator unavailable');
     const sets = (await client.query(`SELECT s.id,s.source,s.approved_by_name,s.approved_at,s.approved_by=$3 AS mine,s.retired_at,s.retirement_reason,
         (SELECT count(*)::int FROM practice_questions q WHERE q.school_id=s.school_id AND q.set_id=s.id) AS questions FROM practice_sets s
-      WHERE s.school_id=$1 AND s.indicator_id=$2 ORDER BY s.approved_at DESC,s.id`,[actor.schoolId,indicatorId,actor.membershipId])).rows;
+      WHERE s.school_id=$1 AND s.indicator_id=$2 AND s.source<>'generated' ORDER BY s.approved_at DESC,s.id`,[actor.schoolId,indicatorId,actor.membershipId])).rows;
     const current = sets.find(s => !s.retired_at);
-    const questions = current ? (await client.query(`SELECT level,position,kind,prompt,options,correct_option,answer_number::float AS answer,explanation FROM practice_questions
-      WHERE school_id=$1 AND set_id=$2 ORDER BY level,position`,[actor.schoolId,current.id])).rows.map(q => ({level:q.level as number,kind:q.kind as string,prompt:q.prompt as string,options:q.options as string[] | null,correctOption:q.correct_option as number | null,answer:q.answer as number | null,explanation:q.explanation as string | null})) : [];
+    // A question a parent reported (or the checks retired) stays on the page, marked, so it is not approved again by mistake.
+    const questions = current ? (await client.query(`SELECT level,position,kind,prompt,options,correct_option,answer_number::float AS answer,explanation,retired_at,retired_cause,retirement_reason FROM practice_questions
+      WHERE school_id=$1 AND set_id=$2 ORDER BY level,position`,[actor.schoolId,current.id])).rows.map(q => ({level:q.level as number,kind:q.kind as string,prompt:q.prompt as string,options:q.options as string[] | null,correctOption:q.correct_option as number | null,answer:q.answer as number | null,explanation:q.explanation as string | null,
+      retired:q.retired_at ? {at:q.retired_at as Date,cause:q.retired_cause as string,reason:q.retirement_reason as string} : null})) : [];
     return {indicator,canRetireAny:actor.role === 'headteacher',current:current ? {...current,questions} : null,history:sets.filter(s => s.retired_at)};
   }
 
@@ -33,7 +35,7 @@ export class PracticeBankService {
         if (!run) throw new BadRequestException('That draft is unavailable');
         if (run.source === 'ai') aiRun = body.runId;
       }
-      const replaced = (await client.query("UPDATE practice_sets SET retired_at=clock_timestamp(),retired_by=$3,retirement_reason='Replaced by a newer approved set' WHERE school_id=$1 AND indicator_id=$2 AND retired_at IS NULL RETURNING id",[actor.schoolId,indicatorId,actor.membershipId])).rowCount ?? 0;
+      const replaced = (await client.query("UPDATE practice_sets SET retired_at=clock_timestamp(),retired_by=$3,retirement_reason='Replaced by a newer approved set' WHERE school_id=$1 AND indicator_id=$2 AND retired_at IS NULL AND source<>'generated' RETURNING id",[actor.schoolId,indicatorId,actor.membershipId])).rowCount ?? 0;
       const id = randomUUID();
       await client.query('INSERT INTO practice_sets(id,school_id,indicator_id,source,ai_run_id,approved_by,approved_by_name) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,actor.schoolId,indicatorId,aiRun ? 'ai' : 'teacher',aiRun,actor.membershipId,actor.displayName?.trim() || 'Staff member']);
       const positions = new Map<number,number>();
@@ -50,7 +52,7 @@ export class PracticeBankService {
   // The headteacher, or whoever approved the set, may withdraw it. Children mid-session finish the questions they were given.
   retire(client: PoolClient, actor: Actor, setId: string, body: RetireSetDto) {
     return command(client,actor,body.operationId,'practice.set.retire',{setId,...body},async () => {
-      const row = (await client.query('SELECT approved_by,retired_at FROM practice_sets WHERE school_id=$1 AND id=$2 FOR UPDATE',[actor.schoolId,setId])).rows[0];
+      const row = (await client.query("SELECT approved_by,retired_at FROM practice_sets WHERE school_id=$1 AND id=$2 AND source<>'generated' FOR UPDATE",[actor.schoolId,setId])).rows[0];
       if (!row || row.retired_at) throw new NotFoundException('Question set unavailable or already retired');
       if (actor.role !== 'headteacher' && row.approved_by !== actor.membershipId) throw new ForbiddenException('Only the headteacher or the person who approved it can retire this set');
       await client.query('UPDATE practice_sets SET retired_at=clock_timestamp(),retired_by=$3,retirement_reason=$4 WHERE school_id=$1 AND id=$2',[actor.schoolId,setId,actor.membershipId,body.reason.trim()]);

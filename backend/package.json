@@ -14,6 +14,7 @@
     "platform-admin": "tsx scripts/create-platform-admin.ts",
     "ai:eval": "tsx scripts/ai-eval.ts",
     "demo:content": "tsx scripts/demo-content.ts",
+    "demo:topics": "tsx scripts/demo-topics.ts",
     "test": "npm run build && NODE_ENV=test DATABASE_TARGET=local tsx --test --test-concurrency=1 tests/*.test.ts"
   },
   "dependencies": {

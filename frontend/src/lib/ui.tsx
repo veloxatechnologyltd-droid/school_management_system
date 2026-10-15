@@ -37,6 +37,9 @@ export function Pill({ tone = 'neutral', children }: { tone?: Tone; children: Re
 
 export const Icon = ({ name }: { name: string }) => <span className="icon" aria-hidden="true">{name}</span>;
 
+// Anything Claude made says so, wherever a teacher, parent or child reads it.
+export const AiLabel = ({ text = "Made by AI from your school's topics" }: { text?: string }) => <p className="ai-label"><Icon name="auto_awesome"/>{text}</p>;
+
 export function Tabs<T extends string>({ value, onChange, options, label }: { value: T; onChange: (value: T) => void; options: { id: T; label: string }[]; label: string }) {
   return <div className="segmented" role="tablist" aria-label={label}>
     {options.map(option => <button key={option.id} type="button" role="tab" aria-selected={option.id === value} onClick={() => onChange(option.id)}>{option.label}</button>)}

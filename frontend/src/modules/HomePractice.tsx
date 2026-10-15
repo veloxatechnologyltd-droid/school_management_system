@@ -1,12 +1,12 @@
 import React, { FormEvent, useEffect, useState } from 'react';
 import { request } from '../lib/api';
-import { Card, Dialog, Empty, Icon, Pill, todayInAccra } from '../lib/ui';
+import { AiLabel, Card, Dialog, Empty, Icon, Pill, todayInAccra } from '../lib/ui';
 
 type Topic = { indicatorId: string; subject: string; topic: string; level: number; levels: number; sessionsThisWeek: number; lastPracticedOn: string | null;
   open: { sessionId: string; answered: number; total: number } | null; availableToday: boolean };
 type Practised = { indicatorId: string; subject: string; topic: string; level: number; levels: number; done: boolean; sessionsThisWeek: number; lastPracticedOn: string };
 type Overview = { enabled: false } | { enabled: true; firstName: string; topics: Topic[]; practised: Practised[] };
-type Question = { questionId: string; position: number; kind: 'choice' | 'number'; prompt: string; options: string[] | null };
+type Question = { questionId: string; position: number; kind: 'choice' | 'number'; prompt: string; options: string[] | null; madeByAi: boolean };
 type Summary = { correct: number; total: number; outcome: 'up' | 'stay' | 'down' | 'done'; levelAfter: number };
 type View = { sessionId: string; subject: string; topic: string; level: number; total: number; answered: number; next: Question | null; summary: Summary | null };
 type Result = { correct: boolean; correctOption: number | null; correctNumber: number | null; explanation: string | null; answered: number; total: number; summary: Summary | null };
@@ -52,6 +52,24 @@ export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: strin
   </section>;
 }
 
+// A parent can say a question looks wrong. It stops being given at once and the teacher is told, without learning which parent wrote.
+const reportReasons = [['wrong_answer', 'The answer looks wrong'], ['unclear', 'The question is not clear'], ['not_taught', 'It is not what the class learned'], ['other', 'Something else']] as const;
+function ReportQuestion({ base, csrfToken, questionId }: { base: string; csrfToken: string; questionId: string }) {
+  const [open, setOpen] = useState(false); const [reason, setReason] = useState<string>('wrong_answer'); const [note, setNote] = useState('');
+  const [done, setDone] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  if (done) return <p role="status" className="report-done"><Icon name="check_circle"/>Thank you. We have told the teacher, and this question will not be shown again.</p>;
+  if (!open) return <button type="button" className="secondary report-link" onClick={() => setOpen(true)}><Icon name="flag"/>This looks wrong</button>;
+  const send = (e: FormEvent) => { e.preventDefault(); setBusy(true); setError('');
+    request(`${base}/questions/${questionId}/flag`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), reason, ...(note.trim() ? { note: note.trim() } : {}) }) })
+      .then(() => setDone(true)).catch(err => setError((err as Error).message)).finally(() => setBusy(false)); };
+  return <form className="report-form" onSubmit={send}>
+    <label>What looks wrong?<select value={reason} onChange={e => setReason(e.target.value)}>{reportReasons.map(([id, text]) => <option key={id} value={id}>{text}</option>)}</select></label>
+    <label>Anything to add? (optional)<input value={note} maxLength={300} onChange={e => setNote(e.target.value)}/></label>
+    <div className="actions"><button disabled={busy}>Send to the teacher</button><button type="button" className="secondary" onClick={() => setOpen(false)}>Cancel</button></div>
+    {error && <p role="alert">{error}</p>}
+  </form>;
+}
+
 // One session, a question at a time: choose or type, check, see the right answer and why, then on to the next.
 function PracticeSession({ base, csrfToken, firstName, start, onClose }: { base: string; csrfToken: string; firstName: string; start: View; onClose: () => void }) {
   const [view, setView] = useState<View>(start); const [result, setResult] = useState<Result | null>(null); const [chosen, setChosen] = useState<number | null>(null); const [typed, setTyped] = useState('');
@@ -68,12 +86,14 @@ function PracticeSession({ base, csrfToken, firstName, start, onClose }: { base:
     <div className="practice-session">
       <p className="practice-progress" aria-live="polite">{summary ? 'All done' : `Question ${Math.min(answeredNow + (result ? 0 : 1), view.total)} of ${view.total}`} · Level {view.level}</p>
       <div className="practice-bar" aria-hidden="true"><span style={{ width: `${Math.round(answeredNow * 100 / view.total)}%` }}/></div>
+      {q?.madeByAi && <AiLabel/>}
       {error && <p role="alert">{error}</p>}
       {result && q && <div className={`practice-feedback ${result.correct ? 'right' : 'wrong'}`} role="status">
         <strong><Icon name={result.correct ? 'check_circle' : 'info'}/>{result.correct ? 'Correct!' : 'Not quite.'}</strong>
         {!result.correct && <p>The answer is <strong>{q.kind === 'choice' ? q.options![result.correctOption!] : result.correctNumber}</strong>.</p>}
         {result.explanation && <p>{result.explanation}</p>}
       </div>}
+      {result && q && <ReportQuestion key={q.questionId} base={base} csrfToken={csrfToken} questionId={q.questionId}/>}
       {!result && q && <form onSubmit={check} className="practice-question">
         <p className="practice-prompt">{q.prompt}</p>
         {q.kind === 'choice'

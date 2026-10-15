@@ -67,7 +67,7 @@ export class HomePracticeService {
         WHERE a.school_id=$1 AND a.term_id=ANY($3::uuid[]) AND a.kind<>'mock')
       SELECT i.id AS indicator_id,s.name AS subject,i.description AS topic,ps.id AS set_id FROM latest l
       JOIN class_assessment_indicators x ON x.school_id=$1 AND x.assessment_id=l.assessment_id JOIN curriculum_indicators i ON i.school_id=x.school_id AND i.id=x.indicator_id AND i.retired_at IS NULL
-      JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id JOIN practice_sets ps ON ps.school_id=i.school_id AND ps.indicator_id=i.id AND ps.retired_at IS NULL
+      JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id JOIN practice_sets ps ON ps.school_id=i.school_id AND ps.indicator_id=i.id AND ps.retired_at IS NULL AND ps.source<>'generated'
       GROUP BY i.id,s.name,i.description,ps.id HAVING avg(l.percent)<50 ORDER BY avg(l.percent),i.description`,[schoolId,learnerId,terms])).rows
       .map(r => ({indicatorId:r.indicator_id as string,subject:r.subject as string,topic:r.topic as string,setId:r.set_id as string}));
   }
@@ -89,7 +89,12 @@ export class HomePracticeService {
     if (level !== 'Primary' && level !== 'JHS') return {enabled:false as const};
     const firstName = ((await client.query('SELECT full_name FROM learners WHERE school_id=$1 AND id=$2',[actor.schoolId,learnerId])).rows[0].full_name as string).split(' ')[0]!;
     const learned = await this.learned(client,actor.schoolId,learnerId,today), byTopic = new Map(learned.map(l => [l.indicatorId,l]));
-    const weak = await this.weakTopics(client,actor.schoolId,learnerId,today);
+    // A topic whose questions have run low (some retired) is not offered until it can fill a session at the child's level, rather than failing on Start.
+    const weak: Awaited<ReturnType<HomePracticeService['weakTopics']>> = [];
+    for (const w of await this.weakTopics(client,actor.schoolId,learnerId,today)) {
+      const live = (await client.query('SELECT count(*)::int AS n FROM practice_questions WHERE school_id=$1 AND set_id=$2 AND level=$3 AND retired_at IS NULL',[actor.schoolId,w.setId,byTopic.get(w.indicatorId)?.level ?? 1])).rows[0].n as number;
+      if (live >= SESSION_SIZE) weak.push(w);
+    }
     // A session in progress is always shown so it can be finished; the rest of the slots go to the weakest topics.
     const open = learned.filter(l => l.openSessionId).map(l => ({indicatorId:l.indicatorId,subject:l.subject,topic:l.topic}));
     const offered = [...open,...this.offer(weak,learned).filter(w => !open.some(o => o.indicatorId === w.indicatorId)).slice(0,Math.max(0,TOPICS_OFFERED - open.length))];
@@ -104,11 +109,11 @@ export class HomePracticeService {
   private async view(client: PoolClient, schoolId: string, sessionId: string) {
     const s = (await client.query(`SELECT p.id,p.level,p.completed_at,p.correct,p.outcome,p.level_after,s.name AS subject,i.description AS topic FROM practice_sessions p
       JOIN curriculum_indicators i ON i.school_id=p.school_id AND i.id=p.indicator_id JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id WHERE p.school_id=$1 AND p.id=$2`,[schoolId,sessionId])).rows[0];
-    const items = (await client.query(`SELECT it.position,it.question_id,it.answered_at,q.kind,q.prompt,q.options FROM practice_session_items it
-      JOIN practice_questions q ON q.school_id=it.school_id AND q.id=it.question_id WHERE it.school_id=$1 AND it.session_id=$2 ORDER BY it.position`,[schoolId,sessionId])).rows;
+    const items = (await client.query(`SELECT it.position,it.question_id,it.answered_at,q.kind,q.prompt,q.options,(ps.source='generated') AS made_by_ai FROM practice_session_items it
+      JOIN practice_questions q ON q.school_id=it.school_id AND q.id=it.question_id JOIN practice_sets ps ON ps.school_id=q.school_id AND ps.id=q.set_id WHERE it.school_id=$1 AND it.session_id=$2 ORDER BY it.position`,[schoolId,sessionId])).rows;
     const next = items.find(i => !i.answered_at);
     return {sessionId:s.id as string,subject:s.subject as string,topic:s.topic as string,level:s.level as number,total:items.length,answered:items.filter(i => i.answered_at).length,
-      next:next ? {questionId:next.question_id as string,position:next.position as number,kind:next.kind as string,prompt:next.prompt as string,options:next.options as string[] | null} : null,
+      next:next ? {questionId:next.question_id as string,position:next.position as number,kind:next.kind as string,prompt:next.prompt as string,options:next.options as string[] | null,madeByAi:next.made_by_ai as boolean} : null,
       summary:s.completed_at ? {correct:s.correct as number,total:items.length,outcome:s.outcome as string,levelAfter:s.level_after as number} : null};
   }
 
@@ -134,7 +139,7 @@ export class HomePracticeService {
       const level = learned?.level ?? 1;
       const pool = (await client.query(`SELECT q.id,(SELECT max(it.answered_at) FROM practice_session_items it JOIN practice_sessions p ON p.school_id=it.school_id AND p.id=it.session_id
           WHERE it.school_id=q.school_id AND it.question_id=q.id AND p.learner_id=$4) AS last_asked FROM practice_questions q
-        WHERE q.school_id=$1 AND q.set_id=$2 AND q.level=$3 ORDER BY last_asked NULLS FIRST,random() LIMIT $5`,[actor.schoolId,offered.setId,level,learnerId,SESSION_SIZE])).rows as { id: string }[];
+        WHERE q.school_id=$1 AND q.set_id=$2 AND q.level=$3 AND q.retired_at IS NULL ORDER BY last_asked NULLS FIRST,random() LIMIT $5`,[actor.schoolId,offered.setId,level,learnerId,SESSION_SIZE])).rows as { id: string }[];
       if (pool.length < SESSION_SIZE) throw new ConflictException('This topic does not have enough questions yet');
       const id = randomUUID();
       await client.query('INSERT INTO practice_sessions(id,school_id,learner_id,indicator_id,set_id,guardian_membership_id,level) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,actor.schoolId,learnerId,body.indicatorId,offered.setId,actor.membershipId,level]);
@@ -166,7 +171,9 @@ export class HomePracticeService {
         correct = sameNumber(typed,item.answer); given = String(typed).slice(0,40);
       }
       await client.query('UPDATE practice_session_items SET given=$4,correct=$5,answered_at=clock_timestamp() WHERE school_id=$1 AND session_id=$2 AND position=$3',[actor.schoolId,sessionId,item.position,given,correct]);
-      const tally = (await client.query('SELECT count(*)::int AS total,count(*) FILTER (WHERE answered_at IS NOT NULL)::int AS answered,count(*) FILTER (WHERE correct)::int AS right FROM practice_session_items WHERE school_id=$1 AND session_id=$2',[actor.schoolId,sessionId])).rows[0];
+      // A question reported or retired while the child was answering does not count against them: an answer to it is credited.
+      const tally = (await client.query(`SELECT count(*)::int AS total,count(*) FILTER (WHERE it.answered_at IS NOT NULL)::int AS answered,count(*) FILTER (WHERE it.correct OR (it.answered_at IS NOT NULL AND q.retired_at IS NOT NULL))::int AS right
+        FROM practice_session_items it JOIN practice_questions q ON q.school_id=it.school_id AND q.id=it.question_id WHERE it.school_id=$1 AND it.session_id=$2`,[actor.schoolId,sessionId])).rows[0];
       let summary: { correct: number; total: number; outcome: string; levelAfter: number } | null = null;
       if (tally.answered === tally.total) {
         const previous = (await client.query(`SELECT level,correct FROM practice_sessions WHERE school_id=$1 AND learner_id=$2 AND indicator_id=$3 AND completed_at IS NOT NULL ORDER BY completed_at DESC,id DESC LIMIT 1`,[actor.schoolId,learnerId,session.indicator_id])).rows[0] ?? null;

@@ -2,7 +2,7 @@ import React, { FormEvent, useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { Empty, Icon, Pill, when } from '../lib/ui';
 
-type Saved = { level: number; kind: 'choice' | 'number'; prompt: string; options: string[] | null; correctOption: number | null; answer: number | null; explanation: string | null };
+type Saved = { level: number; kind: 'choice' | 'number'; prompt: string; options: string[] | null; correctOption: number | null; answer: number | null; explanation: string | null; retired?: { cause: string; reason: string } | null };
 type Bank = { indicator: { retired_at: string | null }; canRetireAny: boolean;
   current: { id: string; source: string; approved_by_name: string; approved_at: string; mine: boolean; questions: Saved[] } | null;
   history: { id: string; approved_by_name: string; approved_at: string; retired_at: string; retirement_reason: string; questions: number }[] };
@@ -30,6 +30,7 @@ function QuestionView({ q }: { q: Saved }) {
     <strong className="q-prompt">{q.prompt}</strong>
     {q.kind === 'choice' ? <ul className="q-options">{q.options!.map((o, j) => <li key={j} className={j === q.correctOption ? 'right' : ''}><Icon name={j === q.correctOption ? 'check_circle' : 'radio_button_unchecked'}/><span>{o}{j === q.correctOption && <span className="sr-only"> (correct)</span>}</span></li>)}</ul> : <span className="q-number">Number answer: <strong>{q.answer}</strong></span>}
     {q.explanation && <span className="sub q-why">Why: {q.explanation}</span>}
+    {q.retired && <span><Pill tone="critical">Retired</Pill> <span className="muted">{q.retired.cause === 'flag' ? q.retired.reason : `${q.retired.cause === 'check' ? 'By the automatic checks' : 'By a teacher'}: ${q.retired.reason}`}</span></span>}
   </>;
 }
 
@@ -69,14 +70,14 @@ export function PracticeQuestions({ schoolId, csrfToken, indicatorId, onChanged 
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {!editor && <>
       {!current ? <Empty title="No approved questions for this topic" hint="Draft three levels of questions with Claude, check them and approve. Until then, no child is offered practice on this topic."/> : <>
-        <p><Pill tone="positive">Approved</Pill> <span className="muted">{current.questions.length} questions · {current.source === 'ai' ? 'drafted with Claude and checked by' : 'written by'} {current.approved_by_name}, {when(current.approved_at)}</span></p>
+        <p><Pill tone="positive">Approved</Pill> <span className="muted">{current.questions.filter(q => !q.retired).length} questions in use{current.questions.some(q => q.retired) ? ` (${current.questions.filter(q => q.retired).length} retired)` : ''} · {current.source === 'ai' ? 'drafted with Claude and checked by' : 'written by'} {current.approved_by_name}, {when(current.approved_at)}</span></p>
         {levels.map(([level, name, hint]) => <details key={level} open={level === 1}><summary><strong>{name}</strong> <span className="muted">{hint} · {current.questions.filter(q => q.level === level).length} questions</span></summary>
           <ol className="q-list">{current.questions.filter(q => q.level === level).map((q, i) => <li key={i}><QuestionView q={q}/></li>)}</ol></details>)}
       </>}
       {drafting && <p role="status">Claude is drafting three levels of questions. This takes about 20 seconds.</p>}
       {canEdit && <div className="actions">
         <button type="button" disabled={busy} onClick={draft}><Icon name="auto_awesome"/>{drafting ? 'Drafting…' : current ? 'Draft a new set' : 'Draft questions'}</button>
-        <button type="button" className="secondary" disabled={busy} onClick={() => current ? open(current.questions.map(fromSaved), null) : open(levels.flatMap(([level]) => Array.from({ length: MIN }, () => blank(level))), null, true)}>{current ? 'Edit as a new version' : 'Write questions'}</button>
+        <button type="button" className="secondary" disabled={busy} onClick={() => current ? open(current.questions.filter(q => !q.retired).map(fromSaved), null) : open(levels.flatMap(([level]) => Array.from({ length: MIN }, () => blank(level))), null, true)}>{current ? 'Edit as a new version' : 'Write questions'}</button>
         {current && (bank.canRetireAny || current.mine) && <button type="button" className="secondary" disabled={busy} onClick={retire}>Retire this set</button>}
       </div>}
       {bank.history.length > 0 && <p><button type="button" className="link-button" onClick={() => setShowHistory(!showHistory)}>{showHistory ? 'Hide' : 'Show'} {bank.history.length} earlier {bank.history.length === 1 ? 'set' : 'sets'}</button></p>}
