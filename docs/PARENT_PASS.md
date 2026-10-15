@@ -26,19 +26,21 @@ Parents pay **GH₵50 per child per term** (launch price) for learning their chi
 
 ### Where we stand against the parent test (2026-10-15, honest status)
 
-Parents pay, so none of the infrastructure counts until a parent would pay for what a child gets. Built so far: home practice (free tier) and the content library with Claude drafting behind it. **No stage passes the test today.**
+Parents pay, so none of the infrastructure counts until a parent would pay for what a child gets. Built so far: home practice (free tier), Claude drafts for teachers from a one-line indicator, and a central content library that is now parked (see phase 2). **No stage passes the test today.**
 
 | Criterion | Today | What closes it |
 | --- | --- | --- |
-| Enough | **Not met.** A child gets at most three weak topics, 2 sessions a topic a day, from one school-approved set of 5–8 questions per level, so a topic runs dry in days. Published platform questions: demo data only. | Phase 2 volume (60 published questions per indicator), the platform library reaching children (slice 2c), the daily plan and no-repeat window (phase 4). |
+| Enough | **Not met.** A child gets at most three weak topics, 2 sessions a topic a day, from one school-approved set of 5–8 questions per level, so a topic runs dry in days. | Questions drafted from the school's own term material on demand for each weak topic, enough per level that a child does not run out (phase 2), then the daily plan and no-repeat window (phase 4). |
 | Right level | **Partly.** Weak topics come from the school's tagged class work, with three levels and simple up/down rules. | Mastery per indicator and spaced review (phase 4). |
-| Parent can help | **Not met.** Parent guides can be written and reviewed in the library, but no parent can see one. | Guides in the parent portal (phase 6), with audio. |
+| Parent can help | **Not met.** No parent guide exists for a parent to read. | Guides drafted from the school's material, approved by the teacher and shown in the portal (phase 6), with audio. |
 | Visible results | **Not met.** Parents see topic, level and sessions only; no report. Whether parents may see numbers is an open decision for Evans. | End-of-term report (phase 6), after that decision. |
 | Worth more than the alternative | **Not tested.** No local prices checked, no parent asked. | Price research and the internal pilot (phases 1 and 13). |
 
-**Content volume is the real constraint (working figures, to validate).** Claude only gives a head start: every question needs a human reviewer, and the platform ships no curriculum text, so catalogue entries are written by hand too. One stage as an example: Basic 4–6 with Maths, English and Science is 9 class-subjects; at about 25 indicators each (a guess, not counted from the curriculum) that is about 225 indicators and about 13,500 reviewed questions at the 60-per-indicator target. At one minute a question that is over 200 reviewer hours for a single stage. Reviewer hours per week is already a launch metric below; Claude's yield and the reviewers' real speed should be measured on one stage before promising more.
+**Teacher time is the constraint now (working figures, to validate).** With school-grounded drafting the review work sits with the school's own teachers, one weak topic at a time, instead of a central team reviewing a whole stage. Claude drafts only from the material the school added, so a school that adds none gets nothing. In the pilot, measure how long a teacher takes to read and approve a 20-question draft, how often questions are edited or rejected, and how often the material did not cover the topic, before promising more.
 
-**Proposed change to the build order (not agreed, needs Evans).** Today the order builds the library across all stages first. To reach "worth paying for" sooner, make one stage good before breadth: **Upper Primary (Basic 4–6) Maths and English first**, because it builds directly on what exists (weak topics from class marks; multiple-choice and number questions need no pictures or audio), then pull forward what a parent actually sees: the platform library reaching children (2c), the daily plan, guides in the portal and the end-of-term report. Run it free with staff families at one school (phase 13, step 1) and ask parents the five questions above before any payment work (phases 7–9). Lower Primary needs audio, pictures and a player and JHS needs timed papers and passages, so both come after.
+**Agreed direction (Evans, 2026-10-15):** what a child learns comes from the school's own term material; no central catalogue and no central review team are needed (MEMORY.md).
+
+**Still proposed, not decided:** make one stage good before breadth: **Upper Primary (Basic 4–6) Maths and English first**, because it builds on what exists (weak topics from class marks; multiple-choice and number questions need no pictures or audio). Then pull forward what a parent sees: term material with grounded drafting and one-click Plan learning (phase 2), the daily plan, guides in the portal and the end-of-term report. Run it free with staff families at one school (phase 13, step 1) and ask parents the five questions above before any payment work (phases 7–9). Lower Primary needs audio, pictures and a player and JHS needs timed papers and passages, so both come after.
 
 ---
 
@@ -51,7 +53,8 @@ Parents pay, so none of the infrastructure counts until a parent would pay for w
 - [ ] Parent terms of service: what the pass includes, term dates, refund rules, what happens if the child changes school.
 - [ ] Privacy notice for parents in plain English: what is collected, why, who sees it, how long it is kept, no adverts, no data sales.
 - [ ] School agreement: revenue share, cost-recovery threshold, payouts, no-pressure rule, school's duties (teacher sign-off where needed), ending the agreement.
-- [ ] Content rights policy: original questions only; no WAEC papers, textbooks or publisher material without written rights; ownership of commissioned pictures and audio.
+- [ ] Content rights policy: Claude drafts original questions from the school's own material; the platform adds no WAEC papers or publisher material; the school is responsible for having the right to use what it adds; ownership of commissioned pictures and audio.
+- [ ] School material terms: material a school adds is private to that school, never shown to another school and never used to train models; Anthropic's API terms (no training on inputs, retention) confirmed in writing before real school material is sent.
 - [ ] Price, sibling discount, mid-term purchase rule (full price or pro-rata) and refund window agreed.
 - [ ] Support ownership: who answers parents, by which channel, in which hours.
 
@@ -59,38 +62,38 @@ Parents pay, so none of the infrastructure counts until a parent would pay for w
 
 ---
 
-## Phase 2. Shared content library (the product's foundation)
+## Phase 2. School-grounded content (the product's foundation)
 
-Today's question banks are per school **(exists: `practice_sets`, `practice_questions`, approved by a school teacher)**. A sellable product needs content written once, reviewed centrally and used by every school.
+**Direction (Evans, 2026-10-15): what a child learns comes from what their own school teaches this term.** The teacher puts in the term's material; Claude drafts teaching notes, questions and plans from that material, never from its general knowledge of a topic; the school's teacher reads and approves before any child sees it. There is no central catalogue and no central review team. A central library was built first (slices 2a and 2b, below); it is parked and not on this path.
 
-### Data
-- [x] Platform curriculum catalogue (no `school_id`): subject, class level (Basic 1–JHS 3), strand, sub-strand, official indicator code, description, term guidance, with origin (`official` or `platform`) and a source note on every entry; a lead adds and retires entries, wording is never edited. **Built, slice 2a (migrations 046 and 047).** Schools get a read path with the matching screen below; the platform ships no NaCCA text until redistribution rights are confirmed.
-- [ ] Matching school indicators to catalogue entries: automatic by official code where `origin = 'official'` **(field exists)**, plus a headteacher screen to match or skip the rest.
-- [ ] Platform content items: question, guide, picture, audio, passage, mock paper; each versioned and append-only, with status draft → in review → published → retired (with reason). **Questions and parent guides built (slice 2a): a draft can be reworded by its author until submitted, then the version is frozen; a fix is a new version, and publishing it retires the previous live one. Picture, audio, passage and mock paper come with media.**
-- [x] Every content item records its catalogue indicator, stage, level, author (person or AI run) and named reviewer. **Stage comes from the indicator's class level; `author_kind` and `ai_run_id` are ready for Claude drafts.**
-- [ ] School-local sets keep working **(exists)** and sit beside platform content; a school can hide a platform item for its own children with a reason.
+Why: a child taught something the school has not covered gains nothing in the end-of-term exam, parents stop paying, and a central list cannot know each school's pacing, books or scheme of work. Schools already enter their own indicators and tag class tests to them **(exists)**.
 
-### Roles and workflow
-- [x] Platform roles: content author, content reviewer, content lead (separate from school roles and from platform admin). **Granted by the platform administrator in its Content team section; a published version always has a reviewer who is not its author, enforced in the database; content roles use the second sign-in step where it is required.**
-- [x] Claude drafts in batches (20–30 questions per indicator per level) through the existing AI layer and its run records **(exists: `ai_runs`, monthly caps)**; nothing reaches children without a named human reviewer. **Built, slice 2b (migration 048): an author picks a catalogue entry, a difficulty and a count (20 unless told, 1–30); the platform keeps its own private, append-only run log (who, which entry, tokens, outcome; never prompts or text) and a monthly token budget that only the platform administrator sets (0 = nothing can be drafted); a batch reserves tokens before Claude is called and is refused if the month cannot cover it; Claude drafts exist only through a definer function that checks the run. Drafts are the requester's, start as drafts, go through the same checks, and still need a named human reviewer; a Claude draft is never reworded (a person's wording is a new version, labelled and reviewed as theirs). Wrong sums, exact repeats, labelling language and unanswerable questions are dropped one by one; near repeats and reading-level warnings are kept for the reviewer.**
-- [x] Review screen: question as the child sees it, answer, explanation, audio, picture; approve, edit as a new version, or reject with a reason. **Built for questions and guides (audio and picture when media exists).**
-- [x] Automatic checks before review: answer correct for number questions, no duplicate or near-duplicate prompts, reading level within stage limits, banned wording ("all of the above", diagnosis or ranking language), picture and audio present where the question type needs them. **Built, slice 2a: a question that is a plain sum has its answer worked out by the computer (fractions and story problems are left to the reviewer); exact repeats and labelling language block a submit, near repeats and reading level warn; limits are working figures. Picture and audio checks wait for media.**
-- [ ] Error reports from parents and teachers ("this answer looks wrong"): item is withdrawn from new sessions at once, reviewed within 48 hours, fixed as a new version.
-- [ ] Sampling QA: reviewers re-check a random 5% of published items each month.
+### Term material
+- [ ] A teacher (or the headteacher) adds the term's material per class and subject: the syllabus or scheme of work, lesson notes, textbook extracts. Pasted text first; file upload and photos of pages later. A source note is required, as for indicators **(pattern exists)**.
+- [ ] Private to the school: never shown to another school, never used to train models; a school-scoped table with row-level security **(pattern exists)**. The school confirms it may use what it adds.
+- [ ] Append-only versions with who added it and when; a newer version replaces the older one without deleting it.
+- [ ] Material can be linked to the school's indicators (optional) so a topic's drafts use the right passages.
+- [ ] Size limits, and a clear message when material is too long for one drafting call (split by section; no silent cutting).
+
+### Grounded drafting
+- [ ] Claude drafts worksheets, practice questions, parent guides and learning plans from the school's material only, through the existing AI layer **(exists: kill switch, school switch, monthly cap, run log without text)**. Each draft cites the passages it used and the teacher sees them at approval.
+- [ ] If the material does not cover a topic, the draft says so and nothing is invented; the teacher adds material or writes the questions.
+- [ ] No learner data goes to the model, only the material and the indicator **(rule exists)**.
+- [ ] Automatic checks before the teacher sees a question: number answers worked out by the computer, no repeats, labelling words, reading level for the stage, exactly one right answer **(the checks module exists, built for the central library; reuse it)**.
+- [ ] The teacher reads, edits and approves; nothing reaches a child until then **(exists for question sets)**; the same for worksheets and guides.
+- [ ] Enough questions per indicator and level that a child does not run out (working figure: 20 per level, about two weeks without repeats), drafted on demand when a teacher plans learning for a weak topic, not for the whole syllabus in advance.
+- [ ] A teacher can flag any question "not what we taught" or "the answer looks wrong": it stops being served at once and goes back to the teacher to fix as a new version.
 
 ### Media
-- [ ] Object storage with a CDN for pictures, audio and PDFs (none exists today); private buckets for child-specific PDFs, signed short-lived links.
-- [ ] Picture library: 200–300 simple SVG drawings at launch, Ghanaian context (names, foods, animals, money, transport, school things), each with tags and rights record.
-- [ ] Audio: text-to-speech generated once per published item, stored, checked by a reviewer; regenerated when the item's wording changes; recorded human audio for phonics sounds.
-- [ ] Size budgets: picture ≤ 15 KB, audio ≤ 40 KB per question, a whole 5-question session ≤ 300 KB on first load.
+- [ ] Pictures and audio arrive with the question types in phase 3 and need object storage (none exists today). Not needed for Upper Primary.
 
-### Coverage targets before each stage is sold
-- [ ] Every core indicator of the term covered for each class in the stage (Lower Primary: literacy and numeracy; Upper Primary: Maths, English, Science; JHS: Maths, English, Integrated Science, Social Studies).
-- [ ] At least 60 published questions per indicator (20 per level), enough for two weeks without repeats.
-- [ ] A parent guide for every covered indicator.
-- [ ] JHS: at least 4 mock papers per core subject per year.
+**Done when:** a teacher adds a term's material for one class, clicks Plan on a weak topic, and gets a plan plus questions that cite that material; approves them; and the child's home practice uses them. A topic the material does not cover is refused, not invented.
 
-**Done when:** a content lead can draft, review, publish, withdraw and fix items end to end; two schools on different indicator lists both receive the same platform content.
+### Built before this direction, now parked (not on the path)
+Slices 2a and 2b built a platform-owned library: content roles (author, reviewer, lead), a central curriculum catalogue, versioned platform questions and parent guides, a central review queue, and Claude batch drafting with a platform run log and token budget (migrations 046–048, on hosted, idle: the drafting budget is 0). Nothing from it reaches a school or a child. It stays in place for now; removing it needs Evans's go-ahead. Worth reusing: the automatic checks, the answer-and-options validator, the three-phase drafting pattern with its prompt-injection and unstorable-character fixes, and the budget idea (a platform-wide spend cap).
+- [x] Platform curriculum catalogue, content roles, versioned platform questions and guides, review screen, automatic checks. **Built (slice 2a), parked.**
+- [x] Claude batch drafting into the central library with a platform run log and budget. **Built (slice 2b), parked.**
+- [ ] ~~Matching school indicators to catalogue entries; schools hiding platform items; central error reports; 5% central sampling QA; central coverage targets.~~ **Dropped: no central catalogue.**
 
 ---
 
@@ -237,9 +240,9 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 
 - [ ] Teachers see paid and free practice the same way on the learner page and class view **(exist)**, without seeing who paid.
 - [ ] Teacher can set a child's focus topic from a support plan.
-- [ ] Teacher can flag a platform question as wrong or unsuitable.
-- [ ] School-local questions keep the existing approval flow **(exists)**.
-- [ ] Headteacher settings: offer the pass, school printing option, hide a platform item with a reason.
+- [ ] Teacher can flag any question "not what we taught" or wrong; it stops being served at once.
+- [ ] Questions, worksheets and guides drafted from the school's material use the approval flow **(exists for question sets)**.
+- [ ] Headteacher settings: offer the pass, school printing option, who may add term material.
 
 ---
 
@@ -250,7 +253,7 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 - [ ] Backups with a tested restore; payment and pass records included.
 - [ ] Product analytics with no personal data: sessions started and finished, plans followed, drop-off points, renewal.
 - [ ] Cost tracking per school per term: hosting, storage, SMS, AI, payment fees.
-- [ ] AI spend caps per school and platform-wide **(per-school cap exists)**; content drafting runs on the platform's own budget. *(Slice 2b: the drafting budget is built, in tokens per Ghana month, set by the platform administrator; there is no per-author limit, so one author can use the whole month's budget. A platform-wide cap for the school AI features is still open.)*
+- [ ] AI spend caps per school **(exists)** and platform-wide; drafting from a school's material counts against that school's cap. *(The central drafting budget built in slice 2b is parked with the central library.)*
 - [ ] Support inbox: parent questions, refund requests, wrong-answer reports; response targets.
 - [ ] Incident runbook: payments down, content error published, data exposure.
 - [ ] Security review before launch *(slice 2a: an independent read-only review of the content tables, roles and checks is done and its six findings are fixed in migration 047; the full launch review is still open)*: payment routes, webhooks, pass checks, school isolation of all new tables (RLS on every school table **(pattern exists)**), platform tables read-only to schools.
@@ -264,7 +267,7 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 - [ ] Browser tests per stage: buy (simulated), play each question type, daily plan, guides, report, printable pack; at 390 px and 1440 px.
 - [ ] Real-device test on a low-end Android phone over 3G.
 - [ ] Load test: 2,000 children practising in the same evening hour across schools.
-- [ ] Content QA sign-off per stage against the coverage targets.
+- [ ] Pilot measures on drafted questions (teacher approval rate, edit and reject rate, questions flagged "not what we taught") and a sign-off per stage on the parent test.
 - [ ] Sunrise demo school loaded with every feature and walked through as parent, teacher, headteacher and platform admin before each push. *(Repeats every slice. Slice 2a: demo content library loaded locally with `npm run demo:content` and walked through as lead, author, reviewer and platform admin; not run on hosted. No parent, teacher or headteacher screen exists for it yet. Slice 2b repeats it: the demo loader adds a drafting budget and one Claude batch, and the Drafting tab, draft dialog, review queue and platform budget were walked through as author, reviewer, lead and platform administrator at 1440 and 390 px against a local stand-in for Claude.)*
 - [ ] Local tests, demo, hosted deployment and school acceptance are reported separately; none stands for another. *(Repeats every slice. Slice 2a: local tests and local demo, then hosted migrations 046 and 047 applied and the slice pushed on 2026-10-15 at Evans's request; the live `/readyz` check after Render's deploy, the demo content on hosted, and school acceptance are not done. Slice 2b: local tests and local demo, then hosted migration 048 applied to Supabase on 2026-10-15 at Evans's request (previewed first: exactly 048 pending; applied; second preview all applied; `school_app` connects with TLS) and the slice pushed; the live `/readyz` check, a batch through the deployed API and the demo content on hosted are not done. One small batch (8 questions) was run against the real Claude API through the real prompt and validator, with no database; the full path against the live API and hosted has not been run.)*
 
@@ -274,19 +277,21 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 
 1. [ ] Internal pilot: staff families at one school use it free for 4 weeks; fix what they find.
 2. [ ] Paid pilot: one school, one term, all three stages (or the strongest one first), real payments with Evans's approval.
-3. [ ] Measure: share of eligible parents who buy (by stage); paying children practising at least 3 days a week; renewal next term; refunds and reasons; parent rating of practice, guides, report and pack; reviewer hours per week; cost per school.
+3. [ ] Measure: share of eligible parents who buy (by stage); paying children practising at least 3 days a week; renewal next term; refunds and reasons; parent rating of practice, guides, report and pack; teacher hours per week spent approving drafts; cost per school.
 4. [ ] Go/no-go for more schools based on renewal and margin, not sign-ups.
 5. [ ] Price review: what uptake and renewal justify moving towards GH₵100, and whether JHS should cost more than Primary.
 
 ## Build order
 
-Phases 2–6 make the product worth paying for; build them first on the demo school with hand-granted passes (Phase 7 without payments). Then Phase 8–9 once Phase 1 decisions are made, then Phase 11–12 hardening, then Phase 13. Each slice: tested, loaded into the Sunrise demo, walked through per role, pushed; STATUS.md updated and items ticked here.
+Phases 2–6 make the product worth paying for; build them first on the demo school with hand-granted passes (Phase 7 without payments). Phase 2 is school-grounded (term material, grounded drafting) with a one-click Plan learning that drafts the plan and the practice for a weak topic. Then phases 4–6 (daily plan, parent guides, end-of-term report), then phase 13 step 1 (free staff pilot; ask parents the five questions), then phases 7–9 (payments, revenue share) once the Phase 1 decisions are made, then phases 11–12 hardening. Each slice: tested, loaded into the Sunrise demo, walked through per role, pushed; STATUS.md updated and items ticked here.
 
 Approval needed from Evans before: hosted migrations, running the hosted demo loader, any payment provider or real money, contacting real schools or parents, buying or licensing content, pictures or audio.
 
 ## Progress and where to resume
 
-- **Slice 2a done, applied to hosted and pushed (2026-10-15):** content roles, catalogue, versioned questions and guides, automatic checks, review screen, Content library page. See the last paragraph of STATUS.md.
-- **Slice 2b done, applied to hosted and pushed (2026-10-15):** Claude drafts questions in batches into the library (migration 048, `content_ai_runs`, `content_ai_budget`, `content_ai_begin_run` / `content_ai_finish_run`, `backend/src/modules/content/drafting*.ts`, Drafting tab and "Draft with Claude" in the Content library, drafting budget in Platform administration). Before real use: the platform administrator gives the drafting budget a number (it is 0, so nothing can be drafted), and `AI_ENABLED` and `ANTHROPIC_API_KEY` must be set on Render (already set for the school AI). See the STATUS.md paragraph for what was checked and what is open (per-author limit, stale runs, the requester may review their own unaltered batch).
-- **Then, slice 2c:** match school indicators to the catalogue (automatic on official code, a headteacher screen for the rest), schools hide platform items with a reason, error reports withdrawing an item at once, 5% sampling QA, media storage. **Needs Evans first:** who approves what reaches families (central reviewers or the school's teacher), and whether parents may see numbers (MEMORY.md, 2026-10-15).
-- **Small open item:** the labelling-word check blocks words like "disorder" or "syndrome" even in JHS science; probably a warning for JHS. Awaiting Evans's yes.
+- **Direction decided 2026-10-15 (MEMORY.md):** school-grounded content, no central catalogue. Slices 2a and 2b (migrations 046–048) are on hosted and parked.
+- **Next, slice 2c (new):** term material (pasted, per class, subject and term, versioned, private to the school) and grounded drafting with citations, worksheet and question set first. The per-school AI switch, cap and run log already exist.
+- **Then:** Plan learning in one click (the plan, the practice for the weak topic, what the child will get at home, a printable test for children without a phone).
+- **Then:** measurement: marks before and after on the next tagged class test, the teacher's "not what we taught" flag, and an end-of-term view of practised topics beside results (wording never claims the app caused a change).
+- **Open for Evans:** whether parents may see numbers (needed before the parent report); whether the stage-first proposal above is accepted; whether the parked central library should be removed (needs his go-ahead); teacher approval of Claude's drafts stays as the current rule unless he says otherwise.
+- **Small open item:** the labelling-word check blocks words like "disorder" or "syndrome" even in JHS science; probably a warning for JHS. It matters again because the checks module is reused for school drafts.
