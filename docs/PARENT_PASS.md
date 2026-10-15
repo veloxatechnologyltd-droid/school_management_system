@@ -237,20 +237,20 @@ Exists: multiple choice and number answers, 5-question sessions, levels 1–3 **
 - [ ] AI spend caps per school and platform-wide **(per-school cap exists)**; content drafting runs on the platform's own budget.
 - [ ] Support inbox: parent questions, refund requests, wrong-answer reports; response targets.
 - [ ] Incident runbook: payments down, content error published, data exposure.
-- [ ] Security review before launch: payment routes, webhooks, pass checks, school isolation of all new tables (RLS on every school table **(pattern exists)**), platform tables read-only to schools.
+- [ ] Security review before launch *(slice 2a: a read-only review of the content tables, roles and checks was requested; the full launch review is still open)*: payment routes, webhooks, pass checks, school isolation of all new tables (RLS on every school table **(pattern exists)**), platform tables read-only to schools.
 
 ---
 
 ## Phase 12. Testing and acceptance
 
-- [ ] Unit tests: every validator, learning-engine rule, price and revenue-share calculation.
+- [ ] Unit tests: every validator, learning-engine rule, price and revenue-share calculation. *(Slice 2a: content body validators and the automatic checks are covered; learning-engine, price and revenue-share rules do not exist yet.)*
 - [ ] API tests: pass checks, payment webhooks (valid, forged, repeated, out of order), refunds, school isolation, guardian rights.
 - [ ] Browser tests per stage: buy (simulated), play each question type, daily plan, guides, report, printable pack; at 390 px and 1440 px.
 - [ ] Real-device test on a low-end Android phone over 3G.
 - [ ] Load test: 2,000 children practising in the same evening hour across schools.
 - [ ] Content QA sign-off per stage against the coverage targets.
-- [ ] Sunrise demo school loaded with every feature and walked through as parent, teacher, headteacher and platform admin before each push.
-- [ ] Local tests, demo, hosted deployment and school acceptance are reported separately; none stands for another.
+- [ ] Sunrise demo school loaded with every feature and walked through as parent, teacher, headteacher and platform admin before each push. *(Repeats every slice. Slice 2a: demo content library loaded locally with `npm run demo:content` and walked through as lead, author, reviewer and platform admin; not run on hosted. No parent, teacher or headteacher screen exists for it yet.)*
+- [ ] Local tests, demo, hosted deployment and school acceptance are reported separately; none stands for another. *(Repeats every slice. Slice 2a: local tests and local demo only; hosted migration 046, deployment and school acceptance not done.)*
 
 ---
 
