@@ -134,6 +134,32 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await expect(reported.getByText('Thank you. We have told the teacher, and this lesson will not be shown again.')).toBeVisible();expect(await noOverflow(family)).toBe(true);await family.keyboard.press('Escape');
     await expect(card.locator('li').filter({hasText:fourth}).getByRole('button',{name:'Study first',exact:true})).toHaveCount(0);await expect(card.locator('li').filter({hasText:fourth})).toHaveCount(1);
 
+    // ---- History: a practice finished and a lesson read can be looked at again on the phone, with the questions, the child's answers and the right answers; staff can open the same.
+    await card.locator('li').filter({hasText:second}).getByRole('button',{name:'Continue',exact:true}).click();
+    const finishing=family.getByRole('dialog',{name:`Practice: ${second}`});
+    for(let i=0;i<5;i++){
+      await expect(finishing.locator('.practice-prompt')).toBeVisible();
+      if(await finishing.getByRole('group',{name:'Choose an answer'}).count())await finishing.getByRole('group',{name:'Choose an answer'}).getByRole('button').first().click();
+      else await finishing.getByLabel('Type your answer (a number)').fill('1');
+      await finishing.getByRole('button',{name:'Check answer',exact:true}).click();await expect(finishing.getByText(/Correct!|Not quite\./).first()).toBeVisible();
+      if(i<4)await finishing.getByRole('button',{name:'Next question',exact:true}).click();
+    }
+    await expect(finishing.getByText(/of 5 correct/)).toBeVisible();await finishing.getByRole('button',{name:'Finish',exact:true}).click();
+    const history=family.locator('.card').filter({has:family.getByRole('heading',{name:/^What .* has learned$/})});await history.scrollIntoViewIfNeeded();
+    await expect(history.locator('li').filter({hasText:third}).getByText('Lesson read')).toBeVisible();
+    const finished=history.locator('li').filter({hasText:second});await expect(finished.getByText(/Practice · Level 1 · \d of 5 right/)).toBeVisible();
+    await finished.getByRole('button',{name:'Look again',exact:true}).click();
+    const lookBack=family.getByRole('dialog');await expect(lookBack.locator('.history-questions > li')).toHaveCount(5);
+    await expect(lookBack.getByText("Made by AI from your school's topics")).toBeVisible();await expect(lookBack.getByText(/'s answer/).first()).toBeVisible();await expect(lookBack.getByText('Right answer').first()).toBeVisible();
+    expect(await noOverflow(family)).toBe(true);await family.keyboard.press('Escape');
+    await history.locator('li').filter({hasText:third}).getByRole('button',{name:'Look again',exact:true}).click();
+    await expect(family.getByRole('dialog').getByText(/You will learn this:/)).toBeVisible();expect(await noOverflow(family)).toBe(true);await family.keyboard.press('Escape');
+    await page.goto(`/#/learner/${learner}`);await expect(page.getByText('Lessons studied')).toBeVisible();
+    await page.getByRole('button',{name:'Questions and answers',exact:true}).first().click();
+    const staffLook=page.getByRole('dialog');await expect(staffLook.locator('.history-questions > li')).toHaveCount(5);await expect(staffLook.getByText("The student's answer").first()).toBeVisible();await page.keyboard.press('Escape');
+    await page.getByRole('button',{name:'Read the lesson',exact:true}).first().click();await expect(page.getByRole('dialog').getByText(/open for/)).toBeVisible();await page.keyboard.press('Escape');
+    await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Topics',exact:true}).click();await expect(page.getByRole('heading',{name:'Topics',exact:true})).toBeVisible();
+
     // ---- The teacher and the head see the report, without the parent's name, and handle it.
     await teacher.reload();await teacher.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
     const report=teacher.locator('li').filter({hasText:'Parent wrote: “I think the answer is not right”'});

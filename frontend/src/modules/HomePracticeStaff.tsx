@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Empty, Pill, Stat } from '../lib/ui';
 import { Dots, ago, times } from './HomePractice';
+import { HistoryDialog } from './LearningHistory';
 
 type Topic = { subject: string; topic: string; level: number; levels: number; done: boolean; sessions: number; sessionsThisWeek: number; lastPracticedOn: string };
-type Study = { on: string; subject: string; topic: string; minutes: number; check: { correct: number; total: number } | null };
-type LearnerView = { enabled: boolean; studies: Study[]; topics: Topic[]; recent: { on: string; subject: string; topic: string; level: number; correct: number; total: number; outcome: string; levelAfter: number }[]; unfinished: number };
+type Study = { id: string; on: string; subject: string; topic: string; minutes: number; check: { correct: number; total: number } | null };
+type LearnerView = { enabled: boolean; studies: Study[]; topics: Topic[]; recent: { id: string; on: string; subject: string; topic: string; level: number; correct: number; total: number; outcome: string; levelAfter: number }[]; unfinished: number };
 type ClassView = { enabled: boolean; weekStart: string; practisingThisWeek: number; practisedThisTerm: number; total: number;
   learners: { learnerId: string; fullName: string; sessionsThisWeek: number; sessionsTerm: number; lastPracticedOn: string | null; topics: Topic[] }[] };
 const outcomeWords: Record<string, string> = { up: 'moved up', stay: 'stayed', down: 'moved down', done: 'finished the topic' };
@@ -14,7 +15,7 @@ const level = (t: Topic, extra?: string) => <span className="practice-meta">{t.d
 
 // What this child has practised at home. Evidence beside class work: it is never part of CA or report scores.
 export function LearnerHomePractice({ schoolId, learnerId }: { schoolId: string; learnerId: string }) {
-  const [data, setData] = useState<LearnerView | null>(null); const [error, setError] = useState('');
+  const [data, setData] = useState<LearnerView | null>(null); const [error, setError] = useState(''); const [open, setOpen] = useState<{ kind: 'practice' | 'study'; id: string } | null>(null);
   useEffect(() => { let live = true; setData(null); setError(''); request<LearnerView>(`/schools/${schoolId}/learners/${learnerId}/practice`).then(r => { if (live) setData(r); }).catch(e => { if (live) setError((e as Error).message); }); return () => { live = false; }; }, [schoolId, learnerId]);
   if (error) return <Card title="Home practice"><p role="alert">{error}</p></Card>;
   if (!data) return null;
@@ -22,13 +23,16 @@ export function LearnerHomePractice({ schoolId, learnerId }: { schoolId: string;
   return <Card title="Home practice" hint="Lessons read and questions answered on a parent's phone. Evidence beside class work, never part of CA or report scores.">
     {!data.topics.length && !studies.length ? <p className="muted">{data.enabled ? 'Has not practised at home yet.' : 'Home practice is switched off for this school, and nothing has been practised.'}</p>
       : <>{studies.length > 0 && <><h4>Lessons studied</h4><ul className="plain-list">{studies.map((x, i) => <li key={i}>{shortDate(x.on)} · {x.topic} <span className="muted">{x.subject}</span>
-          <span className="sub">{x.minutes < 1 ? 'Under a minute' : `${x.minutes} minute${x.minutes === 1 ? '' : 's'}`} reading · {x.check ? `check: ${x.check.correct} of ${x.check.total} right` : 'no check taken'}</span></li>)}</ul></>}
+          <span className="sub">{x.minutes < 1 ? 'Under a minute' : `${x.minutes} minute${x.minutes === 1 ? '' : 's'}`} reading · {x.check ? `check: ${x.check.correct} of ${x.check.total} right` : 'no check taken'}</span>
+          <button type="button" className="link-button small-link" onClick={() => setOpen({ kind: 'study', id: x.id })}>Read the lesson</button></li>)}</ul></>}
         {data.topics.length > 0 && <><h4>Practised</h4><ul className="plain-list">{data.topics.map((t, i) => <li key={i}><strong>{t.topic}</strong> <span className="muted">{t.subject}</span>
         <span className="sub">{level(t, `${times(t.sessions)} · last practised ${ago(t.lastPracticedOn)}`)}</span></li>)}</ul></>}
         {data.recent.length > 0 && <h4>Recent sessions</h4>}
-        <ul className="plain-list">{data.recent.map((r, i) => <li key={i}>{shortDate(r.on)} · {r.topic} <span className="sub">Level {r.level}: {r.correct} of {r.total} right, {outcomeWords[r.outcome]}{r.outcome === 'up' || r.outcome === 'down' ? ` to Level ${r.levelAfter}` : ''}</span></li>)}</ul>
+        <ul className="plain-list">{data.recent.map((r, i) => <li key={i}>{shortDate(r.on)} · {r.topic} <span className="sub">Level {r.level}: {r.correct} of {r.total} right, {outcomeWords[r.outcome]}{r.outcome === 'up' || r.outcome === 'down' ? ` to Level ${r.levelAfter}` : ''}</span>
+          <button type="button" className="link-button small-link" onClick={() => setOpen({ kind: 'practice', id: r.id })}>Questions and answers</button></li>)}</ul>
         {data.unfinished > 0 && <p className="muted">{data.unfinished === 1 ? '1 session was started and not finished.' : `${data.unfinished} sessions were started and not finished.`}</p>}
         {!data.enabled && <p className="muted">Home practice is switched off for this school now.</p>}</>}
+    {open && <HistoryDialog base={`/schools/${schoolId}/learners/${learnerId}/practice/history`} start={open} who="The student" onClose={() => setOpen(null)}/>}
   </Card>;
 }
 

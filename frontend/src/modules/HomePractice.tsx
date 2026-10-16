@@ -1,6 +1,7 @@
 import React, { FormEvent, useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { AiLabel, Card, Dialog, Empty, Icon, Pill, todayInAccra } from '../lib/ui';
+import { FamilyHistory } from './LearningHistory';
 
 type Topic = { indicatorId: string; subject: string; topic: string; hasLesson: boolean; level: number; levels: number; sessionsThisWeek: number; lastPracticedOn: string | null;
   open: { sessionId: string; answered: number; total: number } | null; availableToday: boolean };
@@ -21,7 +22,7 @@ export const Dots = ({ level, levels }: { level: number; levels: number }) => <s
 // Practice at home: short sessions for a child on the topics class work shows are hardest, from questions a teacher approved.
 // Families see the topic, the level reached and sessions this week. Never marks, percentages, ranks or other children.
 export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: string; csrfToken: string; childId: string }) {
-  const [data, setData] = useState<Overview | null>(null); const [error, setError] = useState(''); const [session, setSession] = useState<{ topic: Topic; view: View } | null>(null); const [busy, setBusy] = useState('');
+  const [data, setData] = useState<Overview | null>(null); const [error, setError] = useState(''); const [session, setSession] = useState<{ topic: Topic; view: View } | null>(null); const [busy, setBusy] = useState(''); const [rev, setRev] = useState(0);
   const base = `/schools/${schoolId}/guardian/children/${childId}/practice`;
   const load = () => request<Overview>(base).then(setData).catch(e => setError((e as Error).message));
   useEffect(() => { let live = true; setData(null); setError(''); request<Overview>(base).then(r => { if (live) setData(r); }).catch(e => { if (live) setError((e as Error).message); }); return () => { live = false; }; }, [schoolId, childId]);
@@ -62,9 +63,10 @@ export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: strin
           <span className="practice-meta">{p.done ? <Pill tone="positive">Finished all levels</Pill> : <><Dots level={p.level} levels={p.levels}/> Level {p.level} of {p.levels}</>} · {times(p.sessionsThisWeek)} this week · last practised {ago(p.lastPracticedOn)}</span></div>
       </li>)}</ul>
     </Card>}
-    {study && <StudyLesson studyBase={studyBase} csrfToken={csrfToken} firstName={firstName} topic={study.topic} study={study.lesson} onClose={() => { setStudy(null); void load(); }}
+    {study && <StudyLesson studyBase={studyBase} csrfToken={csrfToken} firstName={firstName} topic={study.topic} study={study.lesson} onClose={() => { setStudy(null); setRev(n => n + 1); void load(); }}
       onCheck={(studySessionId) => begin(study.topic,studySessionId).then(() => setStudy(null))}/>}
-    {session && <PracticeSession base={base} csrfToken={csrfToken} firstName={firstName} start={session.view} onClose={() => { setSession(null); void load(); }}/>}
+    {session && <PracticeSession base={base} csrfToken={csrfToken} firstName={firstName} start={session.view} onClose={() => { setSession(null); setRev(n => n + 1); void load(); }}/>}
+    <FamilyHistory schoolId={schoolId} childId={childId} firstName={firstName} version={rev}/>
   </section>;
 }
 

@@ -357,3 +357,11 @@ progress.meter{display:block;width:100%;max-width:420px;height:10px;margin:4px 0
 .topic-subject{margin:14px 0 2px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}.topic-subject:first-child{margin-top:0}
 .study{gap:10px}.study-goal{font-size:18px;font-weight:600;line-height:1.45;margin:6px 0}.study-step{min-height:200px}.study-step h4{font-size:19px;margin:8px 0}.study-step p,.study-step li{font-size:17px;line-height:1.55}
 .study-block{border:0;padding:0;margin:14px 0;background:none;box-shadow:none}.study-block h4{margin:0 0 4px}.study-block p{margin:4px 0;line-height:1.6}
+
+/* Learning history: lessons and practice a child can look at again (Home Learning Pass) */
+.history-list{list-style:none;margin:0;padding:0;display:grid}.history-list>li{display:flex;align-items:center;justify-content:space-between;gap:12px 14px;flex-wrap:wrap;padding:14px 0;border-top:1px solid var(--line)}.history-list>li:first-child{border-top:0}.history-list>li>div{min-width:0;flex:1 1 220px}.history-list .sub{display:block}.history-list .practice-meta .icon{font-size:18px;width:18px;height:18px}
+.history-entry{display:grid;gap:12px}.history-questions{list-style:decimal;margin:0;padding-left:24px;display:grid;gap:22px}.history-questions>li{padding-left:4px}.history-prompt{font-size:18px;font-weight:600;line-height:1.4;margin:0 0 10px}
+.history-options{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}.history-options>li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;padding:10px 14px;border:2px solid var(--line-strong);border-radius:12px;background:var(--surface);font-size:16px}
+.history-options>li.mine{border-color:var(--accent);background:var(--accent-soft)}.history-options>li.right{border-color:var(--positive-line);background:var(--positive-soft)}.history-options>li.mine.right{border-color:var(--positive-line)}
+.history-tag{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700;color:var(--ink-2)}.history-tag .icon{font-size:18px;width:18px;height:18px;color:var(--positive)}
+.history-verdict{margin:0;padding:10px 14px;border-radius:12px}.history-verdict.right{background:var(--positive-soft);color:var(--ink)}.history-verdict.wrong{background:var(--caution-soft);color:var(--ink)}

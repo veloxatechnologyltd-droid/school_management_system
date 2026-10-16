@@ -8,6 +8,7 @@ import { ProgressService, mondayOf } from '../assessment/progress.service';
 import { stageOf } from '../content/checks';
 import { AI_LABEL } from '../learning/topics.service';
 import { gradeMatches } from '../learning/scope';
+import { historyEntry, historyList } from './history';
 import { AnswerDto, HomePracticeSettingsDto, StartSessionDto, StartStudyDto } from './practice.dto';
 import { LEVEL_COUNT } from './questions';
 import { SESSIONS_PER_TOPIC_PER_DAY, SESSION_SIZE, TOPICS_OFFERED, afterSession, parseNumber, sameNumber } from './rules';
@@ -314,19 +315,39 @@ export class HomePracticeService {
     await this.progress.learnerFor(client,actor,learnerId);
     const today = await accraToday(client);
     const topics = (await this.evidence(client,actor.schoolId,[learnerId],today,'1900-01-01','9999-12-31')).map(({learnerId: _, ...t}) => t);
-    const recent = (await client.query(`SELECT (p.completed_at AT TIME ZONE 'Africa/Accra')::date::text AS on,s.name AS subject,i.description AS topic,p.level,p.correct,p.outcome,p.level_after FROM practice_sessions p
+    const recent = (await client.query(`SELECT p.id,(p.completed_at AT TIME ZONE 'Africa/Accra')::date::text AS on,s.name AS subject,i.description AS topic,p.level,p.correct,p.outcome,p.level_after FROM practice_sessions p
       JOIN curriculum_indicators i ON i.school_id=p.school_id AND i.id=p.indicator_id JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
       WHERE p.school_id=$1 AND p.learner_id=$2 AND p.completed_at IS NOT NULL ORDER BY p.completed_at DESC,p.id LIMIT 8`,[actor.schoolId,learnerId])).rows
-      .map(r => ({on:r.on as string,subject:r.subject as string,topic:r.topic as string,level:r.level as number,correct:r.correct as number,total:SESSION_SIZE,outcome:r.outcome as string,levelAfter:r.level_after as number}));
+      .map(r => ({id:r.id as string,on:r.on as string,subject:r.subject as string,topic:r.topic as string,level:r.level as number,correct:r.correct as number,total:SESSION_SIZE,outcome:r.outcome as string,levelAfter:r.level_after as number}));
     const unfinished = (await client.query('SELECT count(*)::int AS n FROM practice_sessions WHERE school_id=$1 AND learner_id=$2 AND completed_at IS NULL',[actor.schoolId,learnerId])).rows[0].n as number;
     // Lessons the child finished, with the check that followed, if any. Minutes are capped at half an hour: a page left open is not that long a study.
-    const studies = (await client.query(`SELECT (st.finished_at AT TIME ZONE 'Africa/Accra')::date::text AS on,s.name AS subject,i.description AS topic,
+    const studies = (await client.query(`SELECT st.id,(st.finished_at AT TIME ZONE 'Africa/Accra')::date::text AS on,s.name AS subject,i.description AS topic,
         LEAST(30,round(extract(epoch FROM (st.finished_at-st.started_at))/60))::int AS minutes,c.correct FROM study_sessions st
       JOIN curriculum_indicators i ON i.school_id=st.school_id AND i.id=st.indicator_id JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
       LEFT JOIN LATERAL (SELECT p.correct FROM practice_sessions p WHERE p.school_id=st.school_id AND p.study_session_id=st.id AND p.completed_at IS NOT NULL ORDER BY p.completed_at DESC LIMIT 1) c ON true
       WHERE st.school_id=$1 AND st.learner_id=$2 AND st.finished_at IS NOT NULL ORDER BY st.finished_at DESC,st.id LIMIT 8`,[actor.schoolId,learnerId])).rows
-      .map(r => ({on:r.on as string,subject:r.subject as string,topic:r.topic as string,minutes:r.minutes as number,check:r.correct === null ? null : {correct:r.correct as number,total:SESSION_SIZE}}));
+      .map(r => ({id:r.id as string,on:r.on as string,subject:r.subject as string,topic:r.topic as string,minutes:r.minutes as number,check:r.correct === null ? null : {correct:r.correct as number,total:SESSION_SIZE}}));
     return {enabled:(await this.settings(client,actor.schoolId)).enabled,topics,recent,unfinished,studies};
+  }
+
+  // What a child has learned, to revisit: for the verified guardian (nothing while the school has home practice switched off) and for staff who teach the child today.
+  async familyHistory(client: PoolClient, actor: Actor, learnerId: string) {
+    await this.guardianOf(client,actor,learnerId);
+    if (!(await this.settings(client,actor.schoolId)).enabled) return {enabled:false as const,items:[]};
+    return {enabled:true as const,items:await historyList(client,actor.schoolId,learnerId,false)};
+  }
+  async familyHistoryEntry(client: PoolClient, actor: Actor, learnerId: string, kind: string, id: string) {
+    await this.guardianOf(client,actor,learnerId);
+    if (!(await this.settings(client,actor.schoolId)).enabled) throw new ConflictException('Home practice is not switched on for this school');
+    return historyEntry(client,actor.schoolId,learnerId,kind,id,false);
+  }
+  async staffHistory(client: PoolClient, actor: Actor, learnerId: string) {
+    await this.progress.learnerFor(client,actor,learnerId);
+    return {enabled:(await this.settings(client,actor.schoolId)).enabled,items:await historyList(client,actor.schoolId,learnerId,true)};
+  }
+  async staffHistoryEntry(client: PoolClient, actor: Actor, learnerId: string, kind: string, id: string) {
+    await this.progress.learnerFor(client,actor,learnerId);
+    return historyEntry(client,actor.schoolId,learnerId,kind,id,true);
   }
 
   // A class's home practice for the term: who has practised, on what, at which level, and how recently.
