@@ -154,3 +154,27 @@ Computing and RME each come up for two of the three learners who need support, s
 
 One missed day doesn't explain this learner's very low marks, so the one-to-one help I suggested earlier is still the most useful step.` },
 ];
+
+// "Learn on my own": the lesson Claude made for Basic 6, Reading tables and graphs, on the demo school (16 Oct 2026),
+// from a topic the headteacher approved. Then five Level 1 questions from the same topic's bank.
+export const lesson = {
+  subject: 'Mathematics',
+  topic: 'Reading tables and graphs',
+  goal: 'You will learn how to read tables and simple graphs to find information.',
+  steps: [
+    { heading: 'What is a table?', text: 'A table shows information in rows and columns. Rows go across. Columns go down. Each box holds one piece of information. Read the heading first to know what the table is about.' },
+    { heading: 'Find a value in a table', text: 'To find a value, pick the row and the column that match what you need. Follow the row across and the column down. Where they meet is your answer.' },
+    { heading: 'What is a bar graph?', text: 'A bar graph uses bars to show amounts. A taller bar means a bigger amount. The title tells you what the graph shows. The labels at the bottom tell you the items.' },
+    { heading: 'Read a bar graph carefully', text: 'Look at the top of a bar. Then read the number on the scale beside it. Check the scale counts by ones, twos, or fives. Do not guess the value.' },
+    { heading: 'Compare and find the difference', text: 'To compare two bars, read both values. Then subtract the smaller value from the bigger one. The answer is how much more one amount is.' },
+  ],
+  example: { problem: "A table shows sales at Ama's kiosk. Monday: 12 cedis. Tuesday: 18 cedis. How many cedis more did she sell on Tuesday than Monday?", working: 'Read the two values from the table: Tuesday is 18 and Monday is 12. Subtract: 18 - 12 = 6. Ama sold 6 cedis more on Tuesday.' },
+  recap: ['Rows go across and columns go down in a table.', 'Taller bars on a bar graph show bigger amounts.', 'To find how much more, subtract the smaller value from the bigger one.'],
+};
+export const lessonCheck: Question[] = [
+  { prompt: 'A bar graph shows Kofi sold 6 oranges on Monday. What does the height of that bar show?', options: ['Day of the week', 'Name of the fruit', 'Number of oranges sold', 'Price in cedis'], correct: 2, why: 'Bar height shows how many items were counted, here 6 oranges.' },
+  { prompt: 'Ama sold 15 bowls of kenkey on Monday and 12 bowls on Tuesday. How many bowls did she sell in total?', answer: 27, why: '15 + 12 = 27 bowls.' },
+  { prompt: 'A line graph goes up from Monday to Wednesday. What does this line show?', options: ['No sales were made', 'Sales increased', 'Sales stayed the same', 'Sales fell'], correct: 1, why: 'A line going up means the number rose over those days.' },
+  { prompt: 'On a bar graph, which bar is the tallest? It shows the item with the ___ count.', options: ['Most', 'Missing', 'Least', 'Average'], correct: 0, why: 'The tallest bar is the largest number, so it shows the most.' },
+  { prompt: "Kofi's list shows 20 eggs sold in week 1 and 35 eggs in week 2. How many more eggs were sold in week 2?", answer: 15, why: '35 - 20 = 15 more eggs.' },
+];

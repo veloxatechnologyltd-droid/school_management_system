@@ -184,6 +184,7 @@
 .lp-note.staff{background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:6px}
 .lp-note.family{justify-self:end;background:var(--accent);color:#fff;border-bottom-right-radius:6px}.lp-note.family small{color:#d6e3fb}
 .lp-kwame-phone{position:sticky;top:96px}
+@media (max-width:1000px){.lp-proof{grid-template-columns:1fr}}
 .lp-phone{background:var(--night);color:var(--on-night);border-radius:40px;padding:22px 20px 24px;border:6px solid #23335a;box-shadow:var(--e3);max-width:380px;margin:0 auto;min-height:540px;display:flex;flex-direction:column}
 .lp-phone-top{display:flex;justify-content:space-between;align-items:center;font-weight:600;margin:4px 4px 12px}
 .lp-phone .ui-dots i{width:10px;height:10px}
@@ -212,6 +213,33 @@
 @keyframes lp-ring{from{transform:scale(.6) rotate(-30deg);opacity:0}}
 .lp-phone-note{font-size:14px;line-height:1.5;color:var(--ink-soft);max-width:380px;margin:18px auto 0}
 .lp-demo-note{font-size:13px;color:var(--ink-soft);margin-top:56px}
+
+/* Families: the parent's case, the evening phone, then the proof. */
+.lp-sub{font-family:'Google Sans Flex','Google Sans',sans-serif;font-size:clamp(22px,2.2vw,30px);font-weight:700;line-height:1.2;letter-spacing:-.02em;color:var(--accent);margin:-6px 0 22px;max-width:24ch}
+.lp-why-list{list-style:none;padding:0;margin:26px 0 0;display:grid;gap:14px}
+.lp-why-list li{padding-left:22px;position:relative;line-height:1.55;color:var(--ink-soft);font-size:16px}
+.lp-why-list li::before{content:'';position:absolute;left:0;top:9px;width:9px;height:9px;border-radius:50%;background:var(--accent)}
+.lp-why-list b{color:var(--ink)}
+.lp-price-tag{display:flex;align-items:center;gap:16px;margin:30px 0 0;padding:16px 20px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--e1);max-width:520px}
+.lp-price-tag strong{font-family:'Google Sans Flex','Google Sans',sans-serif;font-size:40px;font-weight:900;letter-spacing:-.03em;color:var(--accent)}
+.lp-price-tag span{color:var(--ink-soft);line-height:1.45}
+.lp-proof{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:clamp(32px,6vw,88px);align-items:end;margin-top:clamp(80px,10vw,140px)}
+.lp-proof h3{font-family:'Google Sans Flex','Google Sans',sans-serif;font-size:clamp(28px,3vw,40px);font-weight:800;letter-spacing:-.03em;margin:0 0 12px}
+.lp-proof .lp-chart.big{margin-bottom:0}
+.lp-group{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-night-soft);margin:16px 0 8px}
+.lp .lp-topic{white-space:normal;display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:62px;padding:10px 14px;margin:0 0 8px;border-radius:14px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:var(--on-night);font:inherit;text-align:left;cursor:pointer;box-shadow:none;height:auto;transition:border-color .15s,background-color .15s}
+.lp .lp-topic:hover{border-color:var(--accent-night);background:rgba(143,180,255,.1)}
+.lp-topic>span:first-child{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;min-width:0;flex:1}.lp-topic b{font-size:16px;font-weight:600}.lp-topic small{font-size:12px;color:var(--on-night-soft)}
+.lp-topic>i{font-style:normal;font-size:13px;font-weight:700;color:var(--night);background:var(--accent-night);padding:6px 12px;border-radius:999px;flex:none}
+.lp-topic.static{cursor:default;opacity:.6}
+.lp .lp-back{width:32px;height:32px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:none;color:var(--on-night);font-size:20px;line-height:1;cursor:pointer;box-shadow:none;flex:none}
+.lp-phone-top{gap:10px}.lp-phone-top>span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-step-title{font-size:22px;font-weight:700;margin:0 0 12px;color:#fff}
+.lp-lesson{font-size:18px;line-height:1.55;margin:0}
+.lp-example{background:rgba(255,255,255,.06);border-radius:14px;padding:4px 16px;font-size:16px;line-height:1.5}
+.lp-example p:last-child{color:#a8e3bb}
+.lp-recap{margin:0;padding-left:20px;font-size:17px;line-height:1.55}.lp-recap li{margin:0 0 8px}
+.lp-phone-act.two{display:flex;gap:10px}.lp-phone-act.two .lp-btn{flex:1}
 
 /* Pricing */
 .lp .lp-pricing{padding:clamp(96px,12vw,150px) 0;background:var(--sunk)}

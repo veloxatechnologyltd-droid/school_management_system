@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import './landing.css';
-import { ask, basic6, basic6Weeks, fees, fractions, kwame, notice, school, SNAPSHOT_DATE, type Question } from './data';
+import { ask, basic6, basic6Weeks, fees, fractions, kwame, lesson, lessonCheck, notice, school, SNAPSHOT_DATE, type Question } from './data';
 
 const cedi = (n: number) => 'GH₵' + Math.round(n).toLocaleString('en-GB');
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -70,10 +70,10 @@ function Hero() {
       <div className="lp-hero-copy">
         <p className="lp-kicker">For Ghanaian basic schools, KG to JHS</p>
         <h1>Run the whole school.<br/><span>Lift every child.</span></h1>
-        <p className="lp-lede">Registers, fees, report cards and an assistant that reads your records, in one place your staff can use from a phone. Families see progress they understand, and practise at home with questions your teachers approve.</p>
+        <p className="lp-lede">Registers, fees, report cards and an assistant that reads your records, in one place your staff can use from a phone. And every child gets a teacher at home in the evening: lessons and practice built on what their own school is teaching this term.</p>
         <div className="lp-cta-row">
           <a className="lp-btn" href={START}>Set up your school free</a>
-          <a className="lp-btn ghost" href="#try">Try it on this page</a>
+          <a className="lp-btn ghost" href="#families">I'm a parent</a>
         </div>
         <p className="lp-fine">Free setup. No card. Your school's data stays your school's.</p>
       </div>
@@ -321,35 +321,95 @@ function Chart({ labels, series, extra, ends }: { labels: string[]; series: { na
   </figure>;
 }
 
-/* ---------- The peak: Kwame's term, then the visitor takes his practice. Their score joins his line. */
-function Kwame() {
-  const [ref, seen] = useInView<HTMLElement>(0.15);
+/* ---------- Families, the reason parents pay: a teacher at home every evening, built on the school's own term.
+   The phone is the signature move: the visitor is Kwame for one evening, studies a real lesson, practises,
+   and their score lands on his progress chart. */
+const SHARE = 'https://wa.me/?text=' + encodeURIComponent('Our school could use this: registers, fees, report cards, and lessons and practice for our children at home, built on what the school teaches. ' + location.origin);
+
+function Families() {
+  const [ref, seen] = useInView<HTMLElement>(0.1);
   const [you, setYou] = useState<number | null>(null);
   return <section className={`lp-kwame ${seen ? 'in' : ''}`} id="families" ref={ref}>
     <div className="lp-wrap lp-kwame-grid">
       <div className="lp-kwame-story">
-        <p className="lp-kicker">What a family sees</p>
-        <h2>In April, Kwame scored 32% in Maths. In October, 66%.</h2>
-        <p className="lp-lede">His teacher spotted fractions as the gap and sent the family something to do at home. His mother replied. The school, the family and Kwame were looking at the same thing.</p>
+        <p className="lp-kicker">For parents</p>
+        <h2>A teacher at home, every evening.</h2>
+        <p className="lp-sub">Built on what your child's own school is teaching this term.</p>
+        <p className="lp-lede">Your child picks a topic from this term's work. A short lesson explains it step by step, the way a good teacher would, with an example and a recap. Then they practise and move up a level when they are ready. You don't need to know the subject to help.</p>
+        <ul className="lp-why-list">
+          <li><b>It follows your child's own school.</b> Lessons and questions come from the topics their teachers approved for this term, not a generic course.</li>
+          <li><b>It starts where your child is weak.</b> "Improve from my class work" goes straight to the topics where their marks are low.</li>
+          <li><b>It works at night, on your phone.</b> No extra trip, no waiting for a lesson teacher. Ten minutes most evenings is enough.</li>
+          <li><b>You see it working.</b> The topics practised, the level reached and the school's notes, with no rankings and no comparisons.</li>
+        </ul>
+        <div className="lp-price-tag"><strong>GH₵50</strong><span>for the whole term, per child. Compare that with a term of extra classes.</span></div>
+        <div className="lp-cta-row"><a className="lp-btn" href={SHARE} target="_blank" rel="noopener noreferrer">Share with your child's school</a></div>
+        <p className="lp-fine">The pass comes through your child's school. Reports, fees, notices and basic practice stay free for every family.</p>
+      </div>
+      <div className="lp-kwame-phone">
+        <HomePhone onPractised={setYou} />
+        <p className="lp-phone-note">Be Kwame for one evening. The lesson and questions are real: made by Claude from topics the headteacher approved for Basic 6 at our demo school.</p>
+      </div>
+    </div>
+    <div className="lp-wrap lp-proof">
+      <div>
+        <h3>And you can see it working.</h3>
+        <p className="lp-lede">In April, Kwame scored 33% in Maths. In October, 66%. His teacher named fractions as the gap and sent the family something to do at home. His mother replied.</p>
         <div className="lp-chart big">
           <Chart labels={kwame.maths.labels} series={[{ name: 'Mathematics', values: kwame.maths.values }]} extra={you === null ? null : { label: 'You', value: you }} ends />
         </div>
-        <div className="lp-notes">
-          <Reveal className="lp-note staff"><small>{kwame.teacherTip.teacher}, Mathematics · {kwame.teacherTip.topic}</small>{kwame.teacherTip.body}</Reveal>
-          <Reveal className="lp-note staff"><small>{kwame.headNote.author}</small>{kwame.headNote.body}</Reveal>
-          <Reveal className="lp-note family"><small>{kwame.familyNote.author}</small>{kwame.familyNote.body}</Reveal>
-        </div>
       </div>
-      <div className="lp-kwame-phone">
-        <Practice onDone={score => setYou(score)} />
-        <p className="lp-phone-note">These are the real Fractions questions Kwame's class practises: drafted by Claude, approved by the headteacher. Get 4 of 5 to move up a level, exactly as a child does. Your score lands on his chart.</p>
+      <div className="lp-notes">
+        <Reveal className="lp-note staff"><small>{kwame.teacherTip.teacher}, Mathematics · {kwame.teacherTip.topic}</small>{kwame.teacherTip.body}</Reveal>
+        <Reveal className="lp-note staff"><small>{kwame.headNote.author}</small>{kwame.headNote.body}</Reveal>
+        <Reveal className="lp-note family"><small>{kwame.familyNote.author}</small>{kwame.familyNote.body}</Reveal>
       </div>
     </div>
-    <p className="lp-demo-note lp-wrap">Kwame is a sample learner in our demo school, Sunrise International School. The screens, rules and questions are the live platform.</p>
+    <p className="lp-demo-note lp-wrap">Kwame is a sample learner in our demo school, Sunrise International School. The screens, rules, lesson and questions are the live platform.</p>
   </section>;
 }
 
-function Practice({ onDone }: { onDone: (score: number) => void }) {
+type Screen = 'home' | 'study' | 'check' | 'practice';
+function HomePhone({ onPractised }: { onPractised: (score: number) => void }) {
+  const [screen, setScreen] = useState<Screen>('home');
+  const [page, setPage] = useState(0);
+  const pages = [
+    { title: 'What you will learn', body: <p className="lp-q">{lesson.goal}</p> },
+    ...lesson.steps.map(s => ({ title: s.heading, body: <p className="lp-lesson">{s.text}</p> })),
+    { title: 'A worked example', body: <div className="lp-example"><p>{lesson.example.problem}</p><p>{lesson.example.working}</p></div> },
+    { title: 'Remember', body: <ul className="lp-recap">{lesson.recap.map(r => <li key={r}>{r}</li>)}</ul> },
+  ];
+  const home = () => { setScreen('home'); setPage(0); };
+  return <div className="lp-phone">
+    {screen === 'home' && <div className="lp-phone-body" key="home">
+      <p className="lp-q-count">Good evening, Kwame</p>
+      <p className="lp-q">What would you like to learn tonight?</p>
+      <p className="lp-group">Improve from my class work</p>
+      <button className="lp-topic" onClick={() => setScreen('practice')}><span><b>Fractions</b><small>Mathematics · your marks are low here</small></span><i>Practise</i></button>
+      <div className="lp-topic static"><span><b>Map reading</b><small>Social Studies · Level 2 of 3</small></span><LevelDots level={2} /></div>
+      <p className="lp-group">Learn on my own</p>
+      <button className="lp-topic" onClick={() => setScreen('study')}><span><b>{lesson.topic}</b><small>{lesson.subject} · short lesson, then 5 questions</small></span><i>Study</i></button>
+      <div className="lp-topic static"><span><b>Energy and its forms</b><small>Science · Level 1 of 3</small></span><LevelDots level={1} /></div>
+    </div>}
+    {screen === 'study' && <div className="lp-phone-body" key={`study-${page}`}>
+      <div className="lp-phone-top"><button className="lp-back" onClick={home} aria-label="Back to topics">‹</button><span>Study · {lesson.topic}</span></div>
+      <div className="lp-phone-progress"><i style={{ transform: `scaleX(${(page + 1) / pages.length})` }} /></div>
+      <p className="lp-q-count">Step {page + 1} of {pages.length}</p>
+      <h4 className="lp-step-title">{pages[page].title}</h4>
+      {pages[page].body}
+      <div className="lp-phone-act two">
+        {page > 0 && <button className="lp-btn ghost light" onClick={() => setPage(page - 1)}>Back</button>}
+        {page < pages.length - 1
+          ? <button className="lp-btn" onClick={() => setPage(page + 1)}>Next</button>
+          : <button className="lp-btn" onClick={() => setScreen('check')}>Check what you learned</button>}
+      </div>
+    </div>}
+    {screen === 'check' && <Practice key="check" title={`Check · ${lesson.topic}`} levels={[lessonCheck]} onExit={home} onDone={() => undefined} />}
+    {screen === 'practice' && <Practice key="practice" title="Fractions" levels={fractions} onExit={home} onDone={onPractised} />}
+  </div>;
+}
+
+function Practice({ title, levels, onDone, onExit }: { title: string; levels: Question[][]; onDone: (score: number) => void; onExit: () => void }) {
   const [level, setLevel] = useState(0);
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState<number | null>(null);
@@ -357,23 +417,24 @@ function Practice({ onDone }: { onDone: (score: number) => void }) {
   const [checked, setChecked] = useState<boolean | null>(null);
   const [right, setRight] = useState(0);
   const [finished, setFinished] = useState(false);
-  const q: Question = fractions[level][i];
+  const q: Question = levels[level][i];
   const isNumber = q.answer !== undefined;
+  const last = levels.length - 1;
   function check() {
     const ok = isNumber ? Math.abs(Number(typed.replace(',', '.')) - q.answer!) < 1e-9 : picked === q.correct;
     setChecked(ok); if (ok) setRight(r => r + 1);
   }
   function next() {
-    if (i === 4) { setFinished(true); onDone(Math.round(((right) / 5) * 100)); return; }
+    if (i === levels[level].length - 1) { setFinished(true); onDone(Math.round((right / levels[level].length) * 100)); return; }
     setI(i + 1); setPicked(null); setTyped(''); setChecked(null);
   }
   function restart(nextLevel: number) { setLevel(nextLevel); setI(0); setPicked(null); setTyped(''); setChecked(null); setRight(0); setFinished(false); }
   const up = right >= 4;
-  return <div className="lp-phone">
-    <div className="lp-phone-top"><span>Fractions</span><LevelDots level={level + 1} /></div>
+  return <>
+    <div className="lp-phone-top"><button className="lp-back" onClick={onExit} aria-label="Back to topics">‹</button><span>{title}</span>{levels.length > 1 && <LevelDots level={level + 1} of={levels.length} />}</div>
     <div className="lp-phone-progress"><i style={{ transform: `scaleX(${(finished ? 5 : i + (checked === null ? 0 : 1)) / 5})` }} /></div>
     {!finished ? <div className="lp-phone-body" key={`${level}-${i}`}>
-      <p className="lp-q-count">Level {level + 1} · Question {i + 1} of 5</p>
+      <p className="lp-q-count">{levels.length > 1 ? `Level ${level + 1} · ` : ''}Question {i + 1} of 5</p>
       <p className="lp-q">{q.prompt}</p>
       {isNumber
         ? <input className="lp-input" inputMode="decimal" aria-label="Your answer" value={typed} disabled={checked !== null} onChange={e => setTyped(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && typed && checked === null) check(); }} placeholder="Type a number" />
@@ -387,13 +448,15 @@ function Practice({ onDone }: { onDone: (score: number) => void }) {
       </div>
     </div> : <div className="lp-phone-body lp-result">
       <div className={`lp-ring ${up ? 'up' : ''}`}><strong>{right}/5</strong></div>
-      <p className="lp-q">{up ? (level < 2 ? `Level ${level + 2} unlocked.` : 'Fractions done. Every level cleared.') : 'Stay on this level and try again.'}</p>
-      <p className="lp-q-count">{up ? 'The family sees the topic and the level reached. No percentages, no ranking.' : 'Two weak sessions in a row move a child down a level, never below Level 1.'}</p>
+      <p className="lp-q">{levels.length === 1 ? (up ? 'Well done. You learned it tonight.' : 'Good try. Read the lesson again tomorrow.') : up ? (level < last ? `Level ${level + 2} unlocked.` : 'Every level cleared.') : 'Stay on this level and try again.'}</p>
+      <p className="lp-q-count">{up ? 'Your family sees the topic and the level reached. No percentages, no ranking.' : 'Two weak sessions in a row move a child down a level, never below Level 1.'}</p>
       <div className="lp-phone-act">
-        {up && level < 2 ? <button className="lp-btn" onClick={() => restart(level + 1)}>Try Level {level + 2}</button> : <button className="lp-btn" onClick={() => restart(up ? 0 : level)}>Practise again</button>}
+        {levels.length > 1 && up && level < last
+          ? <button className="lp-btn" onClick={() => restart(level + 1)}>Try Level {level + 2}</button>
+          : <button className="lp-btn" onClick={onExit}>Choose another topic</button>}
       </div>
     </div>}
-  </div>;
+  </>;
 }
 
 /* ---------- Pricing: free for the school; families choose the pass; the school earns from every pass. */
@@ -488,7 +551,7 @@ export default function Landing() {
   return <div className="lp" onClick={jump}>
     <nav className={`lp-nav ${solid ? 'solid' : ''}`} aria-label="Main">
       <a className="lp-brand" href="#"><span className="logo" aria-hidden="true">V</span>Veloxa SmartSchool</a>
-      <div className="lp-links"><a href="#schools">Schools</a><a href="#families">Families</a><a href="#pricing">Pricing</a></div>
+      <div className="lp-links"><a href="#schools">Schools</a><a href="#families">Parents</a><a href="#pricing">Pricing</a></div>
       <div className="lp-nav-cta"><a className="lp-signin" href="#/signin">Sign in</a><a className="lp-btn small" href={START}>Start free</a></div>
     </nav>
     <main>
@@ -496,7 +559,7 @@ export default function Landing() {
       <Fees />
       <Ask />
       <Day />
-      <Kwame />
+      <Families />
       <Pricing />
       <Trust />
       <Close />
