@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, when } from '../lib/ui';
-import { dayLabel, lastDayBefore } from '../lib/dates';
 
 type Role = 'headteacher' | 'guardian' | string;
 type GuardianCandidate = { id: string; display_name: string };
@@ -9,20 +8,12 @@ type GuardianLink = { id: string; learner_id: string; learner_name: string; guar
 type GuardianLinkPage = { items: GuardianLink[]; total: number; offset: number; limit: number };
 type LearnerChoice = { id: string; full_name: string; admission_number: string };
 type LearnerPage = { items: LearnerChoice[]; total: number };
-type Child = { id: string; full_name: string; admission_number: string; academic: boolean; billing: boolean; pickup: boolean; contact: boolean };
-type ChildDetail = Child & { date_of_birth?: string | null; enrolments?: { class_name: string; start_date: string; end_date?: string | null }[] };
-type Props = { schoolId: string; csrfToken: string; role: Role; onChildChange?: (childId: string) => void };
+type Props = { schoolId: string; csrfToken: string; role: Role };
 type Rights = Pick<GuardianLink, 'academic' | 'billing' | 'pickup' | 'contact'>;
 
 const rightNames: [keyof Rights, string][] = [['academic', 'Academic records'], ['billing', 'Billing information'], ['pickup', 'Collection and pickup'], ['contact', 'School contact']];
-const enrolmentStatus = (startDate: string, endDate?: string | null) => {
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
-  if (startDate > today) return 'Scheduled';
-  if (endDate && endDate <= today) return 'Ended';
-  return 'Active today';
-};
-
-export function Guardians({ schoolId, csrfToken, role, onChildChange }: Props) {
+// The headteacher's guardian rights page. Families use the family area (Family.tsx).
+export function Guardians({ schoolId, csrfToken, role }: Props) {
   const isHeadteacher = role === 'headteacher';
   const [candidates, setCandidates] = useState<GuardianCandidate[]>([]);
   const [links, setLinks] = useState<GuardianLink[]>([]);
@@ -39,10 +30,6 @@ export function Guardians({ schoolId, csrfToken, role, onChildChange }: Props) {
   const [selectedLearnerChoice, setSelectedLearnerChoice] = useState<LearnerChoice | null>(null);
   const [selectedGuardian, setSelectedGuardian] = useState('');
   const [rights, setRights] = useState<Rights>({ academic: false, billing: false, pickup: false, contact: false });
-  const [children, setChildren] = useState<Child[]>([]);
-  const [selectedChild, setSelectedChild] = useState('');
-  const [childDetail, setChildDetail] = useState<ChildDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [reasons, setReasons] = useState<Record<string, { verify: string; revoke: string }>>({});
   const [baseLoading, setBaseLoading] = useState(true);
   const [linksLoading, setLinksLoading] = useState(true);
@@ -55,8 +42,6 @@ export function Guardians({ schoolId, csrfToken, role, onChildChange }: Props) {
   const alive = useRef(true);
   const baseEpoch = useRef(0);
   const linksEpoch = useRef(0);
-  const detailEpoch = useRef(0);
-  const selectedChildRef = useRef('');
 
   const operationId = (key: string, payload: unknown) => {
     const serialized = JSON.stringify(payload);
@@ -81,10 +66,6 @@ export function Guardians({ schoolId, csrfToken, role, onChildChange }: Props) {
         ]);
         if (!alive.current || baseEpoch.current !== epoch) return;
         setCandidates(candidateRows); setLearnerRows(learnerPage.items); setLearnerTotal(learnerPage.total);
-      } else {
-        const childRows = await request<Child[]>(`/schools/${schoolId}/guardian/children`);
-        if (!alive.current || baseEpoch.current !== epoch) return;
-        setChildren(childRows); setSelectedChild(prior => prior || childRows[0]?.id || '');
       }
     } catch (e) { if (alive.current && baseEpoch.current === epoch) setError((e as Error).message); }
     finally { if (alive.current && baseEpoch.current === epoch && initial) setBaseLoading(false); }
@@ -108,7 +89,7 @@ export function Guardians({ schoolId, csrfToken, role, onChildChange }: Props) {
 
   useEffect(() => {
     alive.current = true;
-    return () => { alive.current = false; baseEpoch.current++; linksEpoch.current++; detailEpoch.current++; };
+    return () => { alive.current = false; baseEpoch.current++; linksEpoch.current++; };
   }, []);
 
   useEffect(() => {
@@ -119,32 +100,8 @@ export function Guardians({ schoolId, csrfToken, role, onChildChange }: Props) {
     if (isHeadteacher) void loadLinks(true);
   }, [isHeadteacher, loadLinks]);
 
-  useEffect(() => { onChildChange?.(selectedChild); }, [onChildChange, selectedChild]);
-
-  useEffect(() => {
-    selectedChildRef.current = selectedChild;
-    const epoch = ++detailEpoch.current;
-    setChildDetail(null);
-    if (!selectedChild) { setDetailLoading(false); return; }
-    setDetailLoading(true);
-    setError('');
-    void request<ChildDetail>(`/schools/${schoolId}/guardian/children/${selectedChild}`).then(row => {
-      if (alive.current && detailEpoch.current === epoch && selectedChildRef.current === selectedChild) { setChildDetail(row); setDetailLoading(false); }
-    }).catch(e => {
-      if (alive.current && detailEpoch.current === epoch && selectedChildRef.current === selectedChild) {
-        setChildDetail(null); setSelectedChild(''); selectedChildRef.current = ''; setDetailLoading(false);
-        setError(`Child access could not be refreshed: ${(e as Error).message}`);
-      }
-    });
-  }, [children, schoolId, selectedChild]);
-
   async function refresh() {
-    if (!isHeadteacher) { setSelectedChild(''); selectedChildRef.current = ''; setChildDetail(null); setDetailLoading(false); detailEpoch.current++; }
     if (isHeadteacher) await Promise.all([loadBase(true), loadLinks(true)]);
-    else {
-      await loadBase(true);
-      window.dispatchEvent(new Event('guardian-records-refreshed'));
-    }
   }
 
   async function mutate(key: string, payload: Record<string, unknown>, path: string, successMessage: string) {
@@ -186,32 +143,7 @@ export function Guardians({ schoolId, csrfToken, role, onChildChange }: Props) {
   const messages = <>{error && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}</>;
   const reviewed = links.find(link => link.id === reviewing);
 
-  if (!isHeadteacher) {
-    const child = children.find(row => row.id === selectedChild);
-    const current = childDetail?.enrolments?.find(row => enrolmentStatus(row.start_date, row.end_date) === 'Active today');
-    return <section aria-label="Guardian portal" className="page">
-      <PageHeader id="guardians-title" eyebrow="My family" title="Guardian portal" blurb="School records and reports for the children linked to your account."
-        actions={<>{children.length > 0 && <label className="inline-field">Linked child<select value={selectedChild} onChange={event => { if (event.target.value === selectedChild) return; detailEpoch.current++; selectedChildRef.current = event.target.value; setChildDetail(null); setDetailLoading(Boolean(event.target.value)); setSelectedChild(event.target.value); }}><option value="">Choose a child</option>{children.map(row => <option key={row.id} value={row.id}>{row.full_name} · {row.admission_number}</option>)}</select></label>}
-          <button type="button" className="secondary" disabled={busy || loading} onClick={() => void refresh()}><Icon name="refresh"/>Refresh guardian records</button></>}/>
-      {messages}
-      {loading ? <p role="status">Loading guardian records…</p> : !children.length ? <Card><Empty title="No children linked yet" hint="Once the school verifies your link to a child, their records appear here."/></Card> : !child ? <Card><Empty title="Choose a child" hint="Pick a child above to see their records."/></Card> : <>
-        <div className="profile-card">
-          <span className="avatar large" aria-hidden="true">{child.full_name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()}</span>
-          <div><h3>{child.full_name}</h3><p className="muted">Admission number {child.admission_number}{current ? ` · ${current.class_name}` : ''}</p></div>
-        </div>
-        {detailLoading ? <p role="status">Checking current guardian access…</p> : childDetail && <div className="columns">
-          {childDetail.academic ? <Card title="Academic information">
-            <p>Date of birth: {childDetail.date_of_birth ? dayLabel(childDetail.date_of_birth) : 'Not recorded'}</p>
-            <h4>Enrolment history</h4>
-            {childDetail.enrolments?.length ? <ul className="history">{childDetail.enrolments.map((row, index) => <li key={`${row.class_name}-${row.start_date}-${index}`}><strong>{row.class_name}</strong><span>{enrolmentStatus(row.start_date, row.end_date)} · {row.end_date ? `${dayLabel(row.start_date)} to ${dayLabel(lastDayBefore(row.end_date))}` : `from ${dayLabel(row.start_date)}`}</span></li>)}</ul> : <p>No enrolment history is available.</p>}
-          </Card> : <Card><Empty title="Academic records are not shared with you" hint="Ask the school if you should have academic access for this child."/></Card>}
-          <Card title="Your verified access" hint="What the school has confirmed you may see and do.">
-            <ul className="rights">{rightNames.map(([key, name]) => <li key={key}>{childDetail[key] ? <Pill tone="positive"><Icon name="check"/>{name}</Pill> : <Pill tone="neutral">{name}: not granted</Pill>}</li>)}</ul>
-          </Card>
-        </div>}
-      </>}
-    </section>;
-  }
+  if (!isHeadteacher) return null;
 
   return <section aria-label="Guardians" className="page">
     <PageHeader id="guardians-title" eyebrow="People" title="Guardians" blurb="Who may see each child’s records, pay fees, collect them and receive notices."

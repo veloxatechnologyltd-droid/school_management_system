@@ -26,17 +26,14 @@ const Assessment=lazyModule(()=>import('./modules/Assessment'),'Assessment');
 const Progress=lazyModule(()=>import('./modules/Progress'),'Progress');
 const Curriculum=lazyModule(()=>import('./modules/Curriculum'),'Curriculum');
 const Topics=lazyModule(()=>import('./modules/Topics'),'Topics');
-const FamilyProgress=lazyModule(()=>import('./modules/FamilyProgress'),'FamilyProgress');
-const HomePractice=lazyModule(()=>import('./modules/HomePractice'),'HomePractice');
+const Family=lazyModule(()=>import('./modules/Family'),'Family');
 const SupportDue=lazy(()=>import('./modules/Support').then(m=>({default:m.SupportDue})));
-const GuardianTerminalReports=lazyModule(()=>import('./modules/Assessment'),'GuardianTerminalReports');
 const Finance=lazyModule(()=>import('./modules/Finance'),'Finance');
 const GuardianStatement=lazyModule(()=>import('./modules/Finance'),'GuardianStatement');
 const Promotion=lazyModule(()=>import('./modules/Promotion'),'Promotion');
 const AiSettings=lazyModule(()=>import('./modules/AiSettings'),'AiSettings');
 const Assistant=lazyModule(()=>import('./modules/Assistant'),'Assistant');
 const LearnerPage=lazyModule(()=>import('./modules/LearnerPage'),'LearnerPage');
-const FamilyNotes=lazyModule(()=>import('./modules/LearnerNotes'),'FamilyNotes');
 const Accounts=lazyModule(()=>import('./modules/Accounts'),'Accounts');
 const ContentLibrary=lazyModule(()=>import('./modules/ContentLibrary'),'ContentLibrary');
 const GettingStarted=lazyModule(()=>import('./modules/GettingStarted'),'GettingStarted');
@@ -53,7 +50,9 @@ const navByRole:Record<string,NavGroup[]>={
   teacher:[{group:'My work',items:[nav('today','Today','today'),nav('ask','Ask','forum'),nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]}],
   accountant:[{group:'Money',items:[nav('fees','Fees','receipt_long')]}],
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
-  guardian:[{group:'My family',items:[nav('children','My children','child_care'),nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]}]
+  guardian:[
+    {group:'My child',items:[nav('children','Home','home'),nav('practice','Learn at home','menu_book'),nav('my-progress','Progress','insights'),nav('reports','Report cards','description'),nav('notes','Notes','forum')]},
+    {group:'The school',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]}]
 };
 // Page headers for modules that do not draw their own (the other pages do).
 const pageMeta:Record<string,{eyebrow:string;title:string;blurb:string}>={
@@ -67,11 +66,6 @@ function PageTitle({title}:{title:string}) {
   return null;
 }
 type ModuleProps={schoolId:string;csrfToken:string;role:string};
-// Guardian portal: the child chosen at the top drives the report cards below it.
-function MyChildren({schoolId,csrfToken,role}:ModuleProps) {
-  const [childId,setChildId]=useState('');
-  return <><Guardians schoolId={schoolId} csrfToken={csrfToken} role={role} onChildChange={setChildId}/>{childId&&<><FamilyProgress key={`family:${childId}`} schoolId={schoolId} childId={childId}/><HomePractice key={`practice:${childId}`} schoolId={schoolId} csrfToken={csrfToken} childId={childId}/><FamilyNotes key={`notes:${childId}`} schoolId={schoolId} csrfToken={csrfToken} childId={childId}/><EarlyYearsReports schoolId={schoolId} csrfToken={csrfToken} role={role} childId={childId}/><GuardianTerminalReports schoolId={schoolId} childId={childId}/></>}</>;
-}
 // Early years: observations and progress reports on tabs; headteachers open on the reports they review.
 function EarlyYearsWork({schoolId,csrfToken,role}:ModuleProps) {
   const [tab,setTab]=useState<'observations'|'reports'>(role==='headteacher'?'reports':'observations');
@@ -206,7 +200,12 @@ function App() {
     'early-years':()=><EarlyYearsWork key={`early-years:${sid}:${role}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     fees:()=>role==='guardian'?<GuardianStatement key={`statement:${sid}`} schoolId={sid}/>:<Finance key={`finance:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
     notices:()=>role==='guardian'?<GuardianNotices key={`gnotices:${sid}`} schoolId={sid}/>:<Notices key={`notices:${sid}`} schoolId={sid} csrfToken={csrf}/>,
-    children:()=><MyChildren key={`children:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
+    // The family area keeps one key, so the child a parent picked stays picked as they move between its pages.
+    children:()=><Family key={`family:${sid}`} schoolId={sid} csrfToken={csrf} section="children"/>,
+    practice:()=><Family key={`family:${sid}`} schoolId={sid} csrfToken={csrf} section="practice"/>,
+    'my-progress':()=><Family key={`family:${sid}`} schoolId={sid} csrfToken={csrf} section="my-progress"/>,
+    reports:()=><Family key={`family:${sid}`} schoolId={sid} csrfToken={csrf} section="reports"/>,
+    notes:()=><Family key={`family:${sid}`} schoolId={sid} csrfToken={csrf} section="notes"/>,
     settings:()=><div className="settings"><nav className="setting-steps" aria-label="Settings">{settingsSteps.map((step,index)=><a key={step.id} href={`#/settings/${step.id}`} aria-current={step.id===setting.id?'page':undefined}><b aria-hidden="true">{index+1}</b>{step.label}</a>)}</nav><div className="setting-body">{setting.render()}</div></div>,
   };
   // A learner's own page (#/learner/<id>) for heads and teachers sits under Learners (head) or Progress (teacher) in the menu.

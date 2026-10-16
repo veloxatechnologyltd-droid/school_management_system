@@ -1,6 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
-import { Card, Dialog, Empty, Icon, Pill, currentTerm } from '../lib/ui';
+import { Card, Dialog, Empty, Icon, Pill, Tabs, currentTerm } from '../lib/ui';
 import { caPartLabels } from '../lib/caParts';
 
 type Page<T> = { items: T[] };
@@ -238,16 +238,21 @@ export function GuardianTerminalReports({ schoolId, childId: chosenChild }: { sc
   const [childId, setChildId] = useState('');
   const [reports, setReports] = useState<{ id: string; snapshot: Snapshot; published_at: string }[]>([]);
   const [error, setError] = useState('');
+  const [which, setWhich] = useState('');
   useEffect(() => { request<{ id: string; full_name: string; academic: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(rows => { const academic = rows.filter(r => r.academic); setChildren(academic); setChildId(prior => prior || academic[0]?.id || ''); }).catch(e => setError((e as Error).message)); }, [schoolId, chosenChild]);
   // In the guardian portal the page's child picker chooses the child; only children with academic access have reports.
   const reportChild = chosenChild === undefined ? childId : children.some(c => c.id === chosenChild) ? chosenChild : '';
-  useEffect(() => { setReports([]); if (!reportChild) return; request<{ items: typeof reports }>(`/schools/${schoolId}/guardian/children/${reportChild}/terminal-reports`).then(r => setReports(r.items)).catch(e => setError((e as Error).message)); }, [schoolId, reportChild]);
+  useEffect(() => { setReports([]); setWhich(''); if (!reportChild) return; request<{ items: typeof reports }>(`/schools/${schoolId}/guardian/children/${reportChild}/terminal-reports`).then(r => setReports([...r.items].sort((a, b) => b.published_at.localeCompare(a.published_at)))).catch(e => setError((e as Error).message)); }, [schoolId, reportChild]);
   if (chosenChild !== undefined && !reportChild && !error) return null;
+  // With several terms published, a parent reads one report at a time (the newest first) instead of scrolling past them all.
+  const termLabel = (r: { snapshot: Snapshot }) => `${r.snapshot.term.name}${r.snapshot.yearName ? ` · ${r.snapshot.yearName}` : ''}`;
+  const shown = reports.find(r => r.id === which) ?? reports[0];
   return <section aria-label="Terminal reports" className="page">
     <Card title="Terminal reports" hint="Published at the end of each term." action={chosenChild === undefined ? <label className="inline-field">Child<select value={childId} onChange={e => setChildId(e.target.value)}><option value="">Choose a child</option>{children.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label> : undefined} flush>
       {error && <p role="alert">{error}</p>}
       {reportChild && !reports.length && <Empty title="No terminal reports yet" hint="They appear here once the school publishes them."/>}
-      {reports.map(r => <ReportCard key={r.id} snapshot={r.snapshot}/>)}
+      {reports.length > 1 && <div className="card-body"><Tabs label="Term" value={shown!.id} onChange={setWhich} options={reports.map(r => ({ id: r.id, label: termLabel(r) }))}/></div>}
+      {shown && <ReportCard key={shown.id} snapshot={shown.snapshot}/>}
     </Card>
   </section>;
 }

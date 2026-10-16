@@ -1,6 +1,6 @@
 import React, { FormEvent, useEffect, useState } from 'react';
 import { request } from '../lib/api';
-import { AiLabel, Card, Dialog, Empty, Icon, Pill, todayInAccra } from '../lib/ui';
+import { AiLabel, Card, Dialog, Empty, Icon, Pill, Tabs, todayInAccra } from '../lib/ui';
 import { FamilyHistory } from './LearningHistory';
 
 type Topic = { indicatorId: string; subject: string; topic: string; hasLesson: boolean; level: number; levels: number; sessionsThisWeek: number; lastPracticedOn: string | null;
@@ -22,7 +22,7 @@ export const Dots = ({ level, levels }: { level: number; levels: number }) => <s
 // Practice at home: short sessions for a child on the topics class work shows are hardest, from questions a teacher approved.
 // Families see the topic, the level reached and sessions this week. Never marks, percentages, ranks or other children.
 export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: string; csrfToken: string; childId: string }) {
-  const [data, setData] = useState<Overview | null>(null); const [error, setError] = useState(''); const [session, setSession] = useState<{ topic: Topic; view: View } | null>(null); const [busy, setBusy] = useState(''); const [rev, setRev] = useState(0);
+  const [data, setData] = useState<Overview | null>(null); const [error, setError] = useState(''); const [session, setSession] = useState<{ topic: Topic; view: View } | null>(null); const [busy, setBusy] = useState(''); const [rev, setRev] = useState(0); const [tab, setTab] = useState<'practise' | 'back'>('practise');
   const base = `/schools/${schoolId}/guardian/children/${childId}/practice`;
   const load = () => request<Overview>(base).then(setData).catch(e => setError((e as Error).message));
   useEffect(() => { let live = true; setData(null); setError(''); request<Overview>(base).then(r => { if (live) setData(r); }).catch(e => { if (live) setError((e as Error).message); }); return () => { live = false; }; }, [schoolId, childId]);
@@ -34,7 +34,9 @@ export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: strin
   const study_ = (topic: Topic) => { setBusy(topic.indicatorId); setError('');
     request<Study>(`${studyBase}/sessions`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), indicatorId: topic.indicatorId }) })
       .then(lesson => setStudy({ topic, lesson })).catch(e => { setError((e as Error).message); void load(); }).finally(() => setBusy('')); };
-  if (!data || !data.enabled) return error && data ? <p role="alert">{error}</p> : null;
+  if (error && !data) return <p role="alert">{error}</p>;
+  if (!data) return <p role="status">Loading…</p>;
+  if (!data.enabled) return <Card><Empty title="Practice at home is not switched on" hint="Your school has not turned on home practice yet. Ask the school if you would like it."/></Card>;
   const { firstName, topics, explore } = data;
   // Topics on offer already show their level and sessions; this list is for the ones finished or no longer on the list.
   const practised = data.practised.filter(p => !topics.some(t => t.indicatorId === p.indicatorId));
@@ -49,24 +51,29 @@ export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: strin
   // The child's own choices, grouped by subject.
   const subjects = [...new Set(explore.map(t => t.subject))];
   return <section aria-label="Practice at home" className="page">
-    <Card title="Practice at home" hint={`Short practice for ${firstName}, five questions at a time, starting with the topics to try first. The questions come from the school's own topics; the ones written by AI say so.`}>
-      {error && <p role="alert">{error}</p>}
-      {!topics.length ? <Empty title="Nothing to practise right now" hint={`When the school has approved the term's topics, the ones to try first will appear here.`}/>
-        : <ul className="practice-topics">{topics.map(row)}</ul>}
-    </Card>
-    {explore.length > 0 && <Card title="Choose a topic" hint={`The topics ${firstName}'s class is learning this term. Pick any one to practise: five questions at a time, at ${firstName}'s own level. This never changes class marks.`}>
-      {subjects.map(subject => <div key={subject}><h4 className="topic-subject">{subject}</h4><ul className="practice-topics">{explore.filter(t => t.subject === subject).map(row)}</ul></div>)}
-    </Card>}
-    {practised.length > 0 && <Card title="Earlier practice">
-      <ul className="practice-topics">{practised.map(p => <li key={p.indicatorId}>
-        <div><strong>{p.topic}</strong><span className="sub">{p.subject}</span>
-          <span className="practice-meta">{p.done ? <Pill tone="positive">Finished all levels</Pill> : <><Dots level={p.level} levels={p.levels}/> Level {p.level} of {p.levels}</>} · {times(p.sessionsThisWeek)} this week · last practised {ago(p.lastPracticedOn)}</span></div>
-      </li>)}</ul>
-    </Card>}
+    <div className="actions"><Tabs label="Learn at home" value={tab} onChange={setTab} options={[{ id: 'practise', label: 'Practise' }, { id: 'back', label: 'Looking back' }]}/></div>
+    {error && <p role="alert">{error}</p>}
+    {tab === 'practise' && <>
+      <Card title="Practice at home" hint={`Short practice for ${firstName}, five questions at a time, starting with the topics to try first. The questions come from the school's own topics; the ones written by AI say so.`}>
+        {!topics.length ? <Empty title="Nothing to practise right now" hint={`When the school has approved the term's topics, the ones to try first will appear here.`}/>
+          : <ul className="practice-topics">{topics.map(row)}</ul>}
+      </Card>
+      {explore.length > 0 && <Card title="Choose a topic" hint={`The topics ${firstName}'s class is learning this term. Pick any one to practise: five questions at a time, at ${firstName}'s own level. This never changes class marks.`}>
+        {subjects.map(subject => <div key={subject}><h4 className="topic-subject">{subject}</h4><ul className="practice-topics">{explore.filter(t => t.subject === subject).map(row)}</ul></div>)}
+      </Card>}
+    </>}
+    {tab === 'back' && <>
+      <FamilyHistory schoolId={schoolId} childId={childId} firstName={firstName} version={rev}/>
+      {practised.length > 0 && <Card title="Earlier practice">
+        <ul className="practice-topics">{practised.map(p => <li key={p.indicatorId}>
+          <div><strong>{p.topic}</strong><span className="sub">{p.subject}</span>
+            <span className="practice-meta">{p.done ? <Pill tone="positive">Finished all levels</Pill> : <><Dots level={p.level} levels={p.levels}/> Level {p.level} of {p.levels}</>} · {times(p.sessionsThisWeek)} this week · last practised {ago(p.lastPracticedOn)}</span></div>
+        </li>)}</ul>
+      </Card>}
+    </>}
     {study && <StudyLesson studyBase={studyBase} csrfToken={csrfToken} firstName={firstName} topic={study.topic} study={study.lesson} onClose={() => { setStudy(null); setRev(n => n + 1); void load(); }}
       onCheck={(studySessionId) => begin(study.topic,studySessionId).then(() => setStudy(null))}/>}
     {session && <PracticeSession base={base} csrfToken={csrfToken} firstName={firstName} start={session.view} onClose={() => { setSession(null); setRev(n => n + 1); void load(); }}/>}
-    <FamilyHistory schoolId={schoolId} childId={childId} firstName={firstName} version={rev}/>
   </section>;
 }
 

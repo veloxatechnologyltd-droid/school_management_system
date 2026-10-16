@@ -1,5 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
+import { recallChild, rememberChild } from '../lib/familyChild';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, currentTerm } from '../lib/ui';
 
 type Term = { id: string; name: string; year_name: string; start_date?: string; end_date?: string };
@@ -165,12 +166,12 @@ type Statement = { id: string; term_name: string; year_name: string; total_pesew
 export function GuardianStatement({ schoolId }: { schoolId: string }) {
   const [children, setChildren] = useState<{ id: string; full_name: string; billing: boolean }[]>([]);
   const [childId, setChildId] = useState(''); const [rows, setRows] = useState<Statement[]>([]); const [error, setError] = useState(''); const [loaded, setLoaded] = useState(false);
-  useEffect(() => { request<{ id: string; full_name: string; billing: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(r => { const billing = r.filter(c => c.billing); setChildren(billing); setChildId(prior => prior || billing[0]?.id || ''); }).catch(e => setError((e as Error).message)).finally(() => setLoaded(true)); }, [schoolId]);
+  useEffect(() => { request<{ id: string; full_name: string; billing: boolean }[]>(`/schools/${schoolId}/guardian/children`).then(r => { const billing = r.filter(c => c.billing); setChildren(billing); setChildId(prior => prior || billing.find(c => c.id === recallChild(schoolId))?.id || billing[0]?.id || ''); }).catch(e => setError((e as Error).message)).finally(() => setLoaded(true)); }, [schoolId]);
   useEffect(() => { setRows([]); if (childId) request<{ items: Statement[] }>(`/schools/${schoolId}/guardian/children/${childId}/statement`).then(r => setRows(r.items)).catch(e => setError((e as Error).message)); }, [schoolId, childId]);
   const totals = rows.reduce((sum, r) => ({ billed: sum.billed + r.total_pesewas, paid: sum.paid + r.paid_pesewas, balance: sum.balance + r.balance_pesewas }), { billed: 0, paid: 0, balance: 0 });
   return <section aria-label="School fees statement" className="page">
     <PageHeader eyebrow="My family" title="Fees" blurb="What the school has billed for each term and what has been paid."
-      actions={children.length > 0 && <label className="inline-field">Child<select value={childId} onChange={e => setChildId(e.target.value)}><option value="">Choose a child</option>{children.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label>}/>
+      actions={children.length > 0 && <label className="inline-field">Child<select value={childId} onChange={e => { setChildId(e.target.value); if (e.target.value) rememberChild(schoolId, e.target.value); }}><option value="">Choose a child</option>{children.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label>}/>
     {error && <p role="alert">{error}</p>}
     {!children.length ? (loaded && <Card><Empty title="No fee statements" hint="Statements appear for children whose fees the school has linked to your account."/></Card>) : !childId ? <Card><Empty title="Choose a child"/></Card> : <>
       <div className="stats">

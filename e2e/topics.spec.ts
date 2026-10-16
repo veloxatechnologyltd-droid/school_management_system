@@ -8,6 +8,11 @@ async function signIn(page:Page,email:string,landing:string) {
   await expect(page.getByRole('heading',{name:'Adinkra Synthetic School',exact:true})).toBeVisible();
   await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:landing,exact:true}).click();
 }
+// A parent with one child has no child picker; with several, the test picks. Wait for the children to load first.
+async function chooseChild(page:Page,id:string) {
+  await expect(page.locator('.page-eyebrow').first()).not.toHaveText('My family');
+  const picker=page.getByRole('combobox',{name:'Linked child',exact:true});if(await picker.count())await picker.selectOption(id);
+}
 const noOverflow=(page:Page)=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth);
 
 // The model is a stand-in (e2e/claude-standin.mjs, started by playwright.config.ts): every layer of ours runs for real, the provider does not.
@@ -86,8 +91,8 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
 
     // ---- A parent reports a question on a phone; it stops at once and the teacher is told.
     const family=await browser.newPage();const familyErrors:string[]=[];family.on('pageerror',error=>familyErrors.push(error.message));
-    await signIn(family,'guardian@example.test','My children');await family.setViewportSize({width:375,height:812});
-    await family.getByRole('combobox',{name:'Linked child',exact:true}).selectOption(learner);
+    await signIn(family,'guardian@example.test','Learn at home');await family.setViewportSize({width:375,height:812});
+    await chooseChild(family,learner);
     const card=family.getByRole('region',{name:'Practice at home',exact:true});
     await expect(card.getByText(topic)).toBeVisible();await card.locator('li').filter({hasText:topic}).getByRole('button',{name:'Start practice',exact:true}).click();
     const play=family.getByRole('dialog');await expect(play.getByText('Question 1 of 5')).toBeVisible();
@@ -145,6 +150,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
       if(i<4)await finishing.getByRole('button',{name:'Next question',exact:true}).click();
     }
     await expect(finishing.getByText(/of 5 correct/)).toBeVisible();await finishing.getByRole('button',{name:'Finish',exact:true}).click();
+    await family.getByRole('tab',{name:'Looking back',exact:true}).click();
     const history=family.locator('.card').filter({has:family.getByRole('heading',{name:/^What .* has learned$/})});await history.scrollIntoViewIfNeeded();
     await expect(history.locator('li').filter({hasText:third}).getByText('Lesson read')).toBeVisible();
     const finished=history.locator('li').filter({hasText:second});await expect(finished.getByText(/Practice · Level 1 · \d of 5 right/)).toBeVisible();
@@ -184,7 +190,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await how.fill(text);await notes.getByLabel(/Topic to put first/).selectOption({label:`Maths ${suffix}: ${second}`});await expect(notes.getByLabel(/Keep it first until/)).toBeVisible();await add.click();
     await expect(notes.getByRole('status')).toContainText('Note saved for staff.');await expect(notes.locator('li').filter({hasText:text})).toContainText(`First: ${second}`);
     // The family never sees it, on the practice screen or in the notes with the school.
-    await family.reload();await family.getByRole('combobox',{name:'Linked child',exact:true}).selectOption(learner);
+    await family.reload();await chooseChild(family,learner);
     await expect(card.getByText(topic)).toBeVisible();await expect(family.getByText(text)).toHaveCount(0);await expect(family.getByText(/Learning notes|put first/i)).toHaveCount(0);
     expect(await noOverflow(family)).toBe(true);
     await notes.locator('li').filter({hasText:text}).getByRole('button',{name:'Withdraw',exact:true}).click();
