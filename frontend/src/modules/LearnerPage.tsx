@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Empty, Icon, PageHeader, Pill, Stat, Tone } from '../lib/ui';
 import { caPartLabels } from '../lib/caParts';
+import { LearningNotes } from './LearningNotes';
 import { Note, NotesCard } from './LearnerNotes';
 import { SupportPlanDialog } from './Support';
 import { LearnerHomePractice } from './HomePracticeStaff';
@@ -88,6 +89,7 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
     <div className="columns">
       <div className="stack">
         <NotesCard schoolId={schoolId} csrfToken={csrfToken} learnerId={l.id} notes={data.notes} onChanged={() => void load()}/>
+        <LearningNotes key={`learning-notes:${l.id}`} schoolId={schoolId} csrfToken={csrfToken} learnerId={l.id}/>
         <Card title="Term by term" hint="Term result (CA and exam) where recorded; otherwise the class work average for that term." flush>
           {!data.history.buckets.length ? <Empty title="No earlier terms yet"/>
             : <div className="table-wrap"><table className="trend-table"><thead><tr><th>Subject</th>{data.history.buckets.map(b => <th key={b.key}>{b.label}</th>)}</tr></thead><tbody>

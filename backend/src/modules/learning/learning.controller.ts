@@ -2,13 +2,27 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@
 import { Request } from 'express';
 import { Access } from '../../core/access';
 import { GenerationService } from './generation.service';
-import { ApproveTopicsDto, ContentQueryDto, FlagQuestionDto, HandleFlagDto, ReasonDto, TopicsQueryDto } from './learning.dto';
+import { ApproveTopicsDto, ContentQueryDto, FlagQuestionDto, HandleFlagDto, ReasonDto, TopicsQueryDto, WriteLearningNoteDto } from './learning.dto';
+import { LearningNotesService } from './notes.service';
 import { TopicsService } from './topics.service';
 
 const staff = ['headteacher','teacher'], guardian = ['guardian'];
 @Controller('api/v1/schools/:schoolId')
 export class LearningController {
-  constructor(private readonly access: Access, private readonly topics: TopicsService, private readonly generation: GenerationService) {}
+  constructor(private readonly access: Access, private readonly topics: TopicsService, private readonly generation: GenerationService, private readonly notes: LearningNotesService) {}
+  // A teacher's learning notes for one student: staff only, never shown to a family.
+  @Get('learners/:learnerId/learning-notes')
+  notesOf(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('learnerId',new ParseUUIDPipe()) learnerId: string) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.notes.list(client,actor,learnerId));
+  }
+  @Post('learners/:learnerId/learning-notes')
+  writeNote(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('learnerId',new ParseUUIDPipe()) learnerId: string,@Body() body: WriteLearningNoteDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.notes.write(client,actor,learnerId,body),true);
+  }
+  @Post('learning-notes/:noteId/withdraw')
+  withdrawNote(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('noteId',new ParseUUIDPipe()) noteId: string,@Body() body: ReasonDto) {
+    return this.access.school(req,schoolId,staff,(client,actor) => this.notes.withdraw(client,actor,noteId,body),true);
+  }
   @Get('learning/topics')
   list(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Query() query: TopicsQueryDto) {
     return this.access.school(req,schoolId,staff,(client,actor) => this.topics.topics(client,actor,query.termId));

@@ -50,6 +50,22 @@ async function main() {
     for (const [description, grade] of wanted) { const t = find(after, description, grade)!, a = t.approvals.find(x => x.grade.toLowerCase() === (grade ?? className).toLowerCase())!; approved.push({ who, id: a.id, label: `${description} (${a.grade})` }); }
   }
 
+  // A few learning notes, staff only: a topic named in a note comes first on that student's list on the parent's phone.
+  const roster = async (name: string) => ((await head.call('GET', `/schools/${school}/collection/learners?search=${encodeURIComponent(name)}`)).items as { id: string; full_name: string }[]).find(l => l.full_name === name)?.id;
+  const topicId = async (description: string, grade: string | null) => { const t = find((await head.call('GET', `${base}/topics?termId=${overview.term.id}`)).topics as Topic[], description, grade); if (!t) throw new Error(`Topic not found: ${description}`); return t.indicatorId; };
+  const notes: [Person, string, string, [string, string | null] | null][] = [
+    [teacher, 'Kwame Asante', 'Give one worked example first, then exam-style questions', ['Solving linear equations', 'JHS 3']],
+    [head, 'Akosua Asante', 'Short instructions, one step at a time', null],
+    [head, 'Akosua Asante', 'Extra practice on this topic this month', ['Addition and subtraction', null]],
+  ];
+  for (const [who, name, text, topic] of notes) {
+    const learnerId = await roster(name); if (!learnerId) throw new Error(`Learner not found: ${name}`);
+    const existing = (await who.call('GET', `/schools/${school}/learners/${learnerId}/learning-notes`)).items as { note: string; withdrawn: unknown }[];
+    if (existing.some(n => n.note === text && !n.withdrawn)) { console.log(`  note for ${name}: already there`); continue; }
+    await who.call('POST', `/schools/${school}/learners/${learnerId}/learning-notes`, { note: text, ...(topic ? { indicatorId: await topicId(topic[0], topic[1]) } : {}) });
+    console.log(`  note for ${name}: written${topic ? ` (${topic[0]} first)` : ''}`);
+  }
+
   const ai = await head.call('GET', `/schools/${school}/ai/settings`);
   if (!(ai.enabled && ai.platformEnabled && ai.providerConfigured)) { console.log('AI is not switched on for this API and school, so the topics are approved and nothing was made.'); return; }
   let next = 0;

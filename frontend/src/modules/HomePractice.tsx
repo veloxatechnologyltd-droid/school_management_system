@@ -48,9 +48,9 @@ export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: strin
   // The child's own choices, grouped by subject.
   const subjects = [...new Set(explore.map(t => t.subject))];
   return <section aria-label="Practice at home" className="page">
-    <Card title="Practice at home" hint={`Short practice for ${firstName} on the topics class work shows are hardest, five questions at a time. The questions come from the school's own topics; the ones written by AI say so.`}>
+    <Card title="Practice at home" hint={`Short practice for ${firstName}, five questions at a time, starting with the topics to try first. The questions come from the school's own topics; the ones written by AI say so.`}>
       {error && <p role="alert">{error}</p>}
-      {!topics.length ? <Empty title="Nothing to practise right now" hint={`When ${firstName}'s class work shows a topic is hard and the school has approved the term's topics, it will appear here.`}/>
+      {!topics.length ? <Empty title="Nothing to practise right now" hint={`When the school has approved the term's topics, the ones to try first will appear here.`}/>
         : <ul className="practice-topics">{topics.map(row)}</ul>}
     </Card>
     {explore.length > 0 && <Card title="Choose a topic" hint={`The topics ${firstName}'s class is learning this term. Pick any one to practise: five questions at a time, at ${firstName}'s own level. This never changes class marks.`}>

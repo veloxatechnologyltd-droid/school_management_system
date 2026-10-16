@@ -113,10 +113,18 @@ export class HomePracticeService {
       approved: present(approvedRows.sort((x,y) => (x.subject as string).localeCompare(y.subject) || (x.topic as string).localeCompare(y.topic)).map(r => pick(r.indicator_id,r.subject,r.topic))) };
   }
 
-  // The weakest topics with approved questions that the child has not finished, weakest first.
-  private offer<T extends { indicatorId: string }>(weak: T[], learned: Learned[]) {
-    const done = new Set(learned.filter(l => l.done).map(l => l.indicatorId));
-    return weak.filter(w => !done.has(w.indicatorId)).slice(0,TOPICS_OFFERED);
+  // The topics a teacher's learning notes put first for this student (newest note first), while the note is live and its end date has not passed.
+  private async pinned(client: PoolClient, schoolId: string, learnerId: string, today: string) {
+    return (await client.query(`SELECT indicator_id FROM learning_notes WHERE school_id=$1 AND learner_id=$2 AND indicator_id IS NOT NULL AND withdrawn_at IS NULL
+      AND (focus_until IS NULL OR focus_until>=$3::date) ORDER BY created_at DESC,id`,[schoolId,learnerId,today])).rows.map(r => r.indicator_id as string);
+  }
+
+  // The topics offered to the child: those a teacher's note puts first, then the weakest, that have questions to practise and are not finished; three at most.
+  // The family sees only the order, never why.
+  private offered(picks: { weak: Pick[]; approved: Pick[] }, learned: Learned[], pinned: string[]) {
+    // A note's topic leads only while it is approved this term for the child's class, so a pin cannot lift a topic whose approval has been retired.
+    const done = new Set(learned.filter(l => l.done).map(l => l.indicatorId)), approved = new Map(picks.approved.map(p => [p.indicatorId,p])), seen = new Set<string>();
+    return [...pinned.flatMap(id => approved.get(id) ?? []),...picks.weak].filter(p => !done.has(p.indicatorId) && !seen.has(p.indicatorId) && !!seen.add(p.indicatorId)).slice(0,TOPICS_OFFERED);
   }
 
   private async classOf(client: PoolClient, schoolId: string, learnerId: string, today: string) {
@@ -136,9 +144,10 @@ export class HomePracticeService {
     const firstName = ((await client.query('SELECT full_name FROM learners WHERE school_id=$1 AND id=$2',[actor.schoolId,learnerId])).rows[0].full_name as string).split(' ')[0]!;
     const learned = await this.learned(client,actor.schoolId,learnerId,today), byTopic = new Map(learned.map(l => [l.indicatorId,l]));
     const picks = await this.available(client,actor.schoolId,learnerId,today,klass.name,id => byTopic.get(id)?.level ?? 1);
+    const pinned = await this.pinned(client,actor.schoolId,learnerId,today);
     // A session in progress is always shown so it can be finished; the rest of the slots go to the weakest topics.
     const open = learned.filter(l => l.openSessionId).map(l => ({indicatorId:l.indicatorId,subject:l.subject,topic:l.topic}));
-    const offered = [...open,...this.offer(picks.weak,learned).filter(w => !open.some(o => o.indicatorId === w.indicatorId)).slice(0,Math.max(0,TOPICS_OFFERED - open.length))];
+    const offered = [...open,...this.offered(picks,learned,pinned).filter(w => !open.some(o => o.indicatorId === w.indicatorId)).slice(0,Math.max(0,TOPICS_OFFERED - open.length))];
     const lessonIds = new Map([...picks.weak,...picks.approved].map(p => [p.indicatorId,p.lessonId]));
     const card = (o: { indicatorId: string; subject: string; topic: string }) => { const l = byTopic.get(o.indicatorId);
       return {indicatorId:o.indicatorId,subject:o.subject,topic:o.topic,hasLesson:!!lessonIds.get(o.indicatorId),level:l?.level ?? 1,levels:LEVEL_COUNT,sessionsThisWeek:l?.sessionsThisWeek ?? 0,lastPracticedOn:l?.lastPracticedOn ?? null,
@@ -192,7 +201,7 @@ export class HomePracticeService {
       const picks = await this.available(client,actor.schoolId,learnerId,today,klass.name,id => everything.find(l => l.indicatorId === id)?.level ?? 1);
       const finished = new Set(everything.filter(l => l.done).map(l => l.indicatorId));
       // Either one of the weakest topics on offer, or any other topic approved for the child's class this term.
-      const offered = [...this.offer(picks.weak,everything),...picks.approved.filter(a => !finished.has(a.indicatorId))].find(w => w.indicatorId === body.indicatorId);
+      const offered = [...this.offered(picks,everything,await this.pinned(client,actor.schoolId,learnerId,today)),...picks.approved.filter(a => !finished.has(a.indicatorId))].find(w => w.indicatorId === body.indicatorId);
       if (!offered) throw new NotFoundException('This topic is not offered right now');
       if ((learned?.sessionsToday ?? 0) >= SESSIONS_PER_TOPIC_PER_DAY) throw new ConflictException('That is enough practice on this topic for today. Come back tomorrow');
       const level = learned?.level ?? 1;

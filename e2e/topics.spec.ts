@@ -146,6 +146,25 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await expect(lessonReport).toBeVisible();await lessonReport.getByRole('button',{name:'It was fine',exact:true}).click();await expect(lessonReport).toHaveCount(0);
     await expect(page.getByText(/Reported by parents \(/)).toHaveCount(0);
     await page.setViewportSize({width:390,height:844});expect(await noOverflow(page)).toBe(true);
+
+    // ---- A teacher's learning note is for staff only: refused if it names the student, kept and withdrawn with a reason, and never on a family's screen.
+    await teacher.goto(`/#/learner/${learner}`);
+    const notes=teacher.locator('.card').filter({has:teacher.getByRole('heading',{name:'Learning notes',exact:true})});await expect(notes).toBeVisible();
+    await expect(notes.getByText(/parents never see these/)).toBeVisible();
+    const how=notes.getByLabel('How to help this student'),add=notes.getByRole('button',{name:'Add learning note',exact:true});
+    await how.fill(`Learner ${suffix} needs a front seat`);await add.click();await expect(notes.getByRole('alert')).toContainText("Leave the student's name");
+    await how.fill('Feels unwell often so go gently');await add.click();await expect(notes.getByRole('alert')).toContainText('Health, family and home matters');
+    const text='Short instructions and one example first';
+    await how.fill(text);await notes.getByLabel(/Topic to put first/).selectOption({label:`Maths ${suffix}: ${second}`});await expect(notes.getByLabel(/Keep it first until/)).toBeVisible();await add.click();
+    await expect(notes.getByRole('status')).toContainText('Note saved for staff.');await expect(notes.locator('li').filter({hasText:text})).toContainText(`First: ${second}`);
+    // The family never sees it, on the practice screen or in the notes with the school.
+    await family.reload();await family.getByRole('combobox',{name:'Linked child',exact:true}).selectOption(learner);
+    await expect(card.getByText(topic)).toBeVisible();await expect(family.getByText(text)).toHaveCount(0);await expect(family.getByText(/Learning notes|put first/i)).toHaveCount(0);
+    expect(await noOverflow(family)).toBe(true);
+    await notes.locator('li').filter({hasText:text}).getByRole('button',{name:'Withdraw',exact:true}).click();
+    await notes.getByLabel(/^Why\?/).fill('No longer needed');await notes.getByRole('button',{name:'Withdraw note',exact:true}).click();
+    await expect(notes.getByRole('status')).toContainText('Note withdrawn');await notes.getByRole('button',{name:/Show 1 withdrawn note/}).click();
+    await expect(notes.locator('li').filter({hasText:text})).toContainText('No longer needed');
     expect(errors).toEqual([]);expect(teacherErrors).toEqual([]);expect(familyErrors).toEqual([]);
   } finally {
     // Leave the school's settings as found.
