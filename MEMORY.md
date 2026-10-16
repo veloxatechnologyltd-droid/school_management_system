@@ -344,3 +344,8 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **Known and accepted:** one parent's report retires a class-level lesson for everyone until a teacher or the head makes a new one (each new lesson is an AI run against the school's monthly cap); the JHS whole-page screen has no browser test of its own (walked through by hand and covered by the stage test).
 **Still needing Evans:** approval to apply hosted migration 050 and push slice 3 (nothing of slice 3 is on hosted); the reading-level decision for generated questions (blocking vs a warning nobody sees) is still open.
 
+## 2026-10-16, Hosted migration 050 applied; slice 3 pushed
+**What was decided:** At Evans's instruction in the session ("run them", after I asked whether to apply 050 and push), 050 was previewed (only 050 pending), applied to Supabase, verified (second preview all applied; `school_app` connects with TLS), and slice 3 pushed to main (`9393411`). Render `/readyz` reports database and migrations ok; the Study start route answers 401 with a valid body and 404 for a route that does not exist, so the new build is live. The hosted Sunrise demo still has no approved topics, so nothing visible changes there until its loader step is run with Evans's approval.
+**Why:** Render deploys main and refuses to start on an outdated ledger, so the apply came first.
+**What was rejected:** Pushing before the apply; deciding the reading-level question for him (it is still open).
+
