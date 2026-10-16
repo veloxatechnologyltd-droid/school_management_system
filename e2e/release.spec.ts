@@ -10,7 +10,7 @@ async function pickSchool(p:Page) {
 }
 async function openSetting(page:Page,name:string){await page.getByRole('navigation',{name:'Settings',exact:true}).getByRole('link',{name,exact:true}).click();}
 async function signIn(page:Page,email='head@example.test',tab='') {
-  await page.goto('/');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('Synthetic-only-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.goto('/#/signin');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('Synthetic-only-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await pickSchool(page);
   await expect(page.getByRole('heading',{name:'Adinkra Synthetic School',exact:true})).toBeVisible();
   if(tab){await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:tab,exact:true}).click();}
@@ -239,7 +239,7 @@ test('platform administrator creates a school; its headteacher signs in with the
     const adminId=randomUUID();
     await owner.query('INSERT INTO users(id,display_name,synthetic_login,password_hash) VALUES($1,$2,$3,$4)',[adminId,'Platform Admin',adminEmail,`${salt}:${scryptSync('Platform-admin-2026!',salt,64).toString('hex')}`]);
     await owner.query('INSERT INTO platform_admins(user_id) VALUES($1)',[adminId]);
-    await page.goto('/');await page.getByLabel('Email or phone number',{exact:true}).fill(adminEmail);await page.getByLabel('Password',{exact:true}).fill('Platform-admin-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
+    await page.goto('/#/signin');await page.getByLabel('Email or phone number',{exact:true}).fill(adminEmail);await page.getByLabel('Password',{exact:true}).fill('Platform-admin-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
     const panel=page.getByRole('region',{name:'Platform administration'});await expect(panel).toBeVisible();
     await panel.getByLabel('School name',{exact:true}).fill(schoolName);await panel.getByLabel('Headteacher name',{exact:true}).fill('Efua Mensah');await panel.getByLabel('Headteacher email',{exact:true}).fill(headEmail);
     await panel.getByRole('button',{name:'Create school',exact:true}).click();
@@ -248,7 +248,7 @@ test('platform administrator creates a school; its headteacher signs in with the
     await expect(panel.locator('li').filter({hasText:schoolName})).toContainText('1 headteacher');
     const context=await browser.newContext(),headPage=await context.newPage();
     try {
-      await headPage.goto('/');await headPage.getByLabel('Email or phone number',{exact:true}).fill(headEmail);await headPage.getByLabel('Password',{exact:true}).fill(temporary);await headPage.getByRole('button',{name:'Sign in',exact:true}).click();
+      await headPage.goto('/#/signin');await headPage.getByLabel('Email or phone number',{exact:true}).fill(headEmail);await headPage.getByLabel('Password',{exact:true}).fill(temporary);await headPage.getByRole('button',{name:'Sign in',exact:true}).click();
       await expect(headPage.getByRole('heading',{name:'Choose a new password'})).toBeVisible();
       await headPage.getByLabel('Temporary password',{exact:true}).fill(temporary);await headPage.getByLabel('New password',{exact:true}).fill('Brand-new-passphrase-77');await headPage.getByRole('button',{name:'Save new password'}).click();
       await expect(headPage.getByRole('heading',{name:schoolName,exact:true})).toBeVisible();await expect(headPage.getByRole('region',{name:'Platform administration'})).toHaveCount(0);
@@ -312,7 +312,7 @@ test('each role lands on its own daily work; the section stays in the address ac
 test('a new sign-up sees a setup guide instead of empty daily screens, and daily work appears once a class exists',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewportSize({width:375,height:812});
   const suffix=randomUUID().slice(0,8),schoolName=`Signup School ${suffix}`;
-  await page.goto('/');await page.getByRole('button',{name:'Create an account',exact:true}).click();
+  await page.goto('/#/signin');await page.getByRole('button',{name:'Create an account',exact:true}).click();
   await page.getByLabel('Your full name',{exact:true}).fill('Esi Owusu');await page.getByLabel('School name',{exact:true}).fill(schoolName);await page.getByLabel('Email',{exact:true}).fill(`signup-${suffix}@example.test`);await page.getByLabel('Password (at least 12 characters)',{exact:true}).fill('Signup-passphrase-2026');
   await page.getByRole('button',{name:'Create account',exact:true}).click();
   const guide=page.getByRole('region',{name:`Let's get ${schoolName} ready`});await expect(guide).toBeVisible();await expect(guide).toContainText('0 of 5 done');
@@ -369,7 +369,7 @@ test('the headteacher’s morning view lists missing registers, this week’s fe
   const {Pool}=require('pg');const path=require('node:path');
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewportSize({width:375,height:812});
-  const suffix=randomUUID().slice(0,8);await page.goto('/');
+  const suffix=randomUUID().slice(0,8);await page.goto('/#/signin');
   expect((await page.request.post('/api/v1/auth/register',{data:{name:'Yaw Morning',schoolName:`Morning School ${suffix}`,email:`morning-${suffix}@example.test`,password:'Morning-passphrase-2026'}})).status()).toBe(201);
   const sid=(await (await page.request.get('/api/v1/auth/session')).json()).schools[0].id;
   // The API dates the view by the server's Ghana date, so the data is placed around that day.
@@ -401,7 +401,7 @@ test('the headteacher selects several bills and records one discount on each, wi
   const {Pool}=require('pg');const path=require('node:path');
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
-  const suffix=randomUUID().slice(0,8);await page.goto('/');
+  const suffix=randomUUID().slice(0,8);await page.goto('/#/signin');
   expect((await page.request.post('/api/v1/auth/register',{data:{name:'Ama Bulk',schoolName:`Bulk School ${suffix}`,email:`bulk-${suffix}@example.test`,password:'Bulk-passphrase-2026'}})).status()).toBe(201);
   const sid=(await (await page.request.get('/api/v1/auth/session')).json()).schools[0].id;
   const head=(await owner.query("SELECT id FROM memberships WHERE school_id=$1 AND role='headteacher'",[sid])).rows[0].id;
@@ -430,7 +430,7 @@ test('the headteacher previews learner corrections from a CSV, applies them with
   const {Pool}=require('pg');const path=require('node:path');
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
-  const suffix=randomUUID().slice(0,8);await page.goto('/');
+  const suffix=randomUUID().slice(0,8);await page.goto('/#/signin');
   expect((await page.request.post('/api/v1/auth/register',{data:{name:'Kofi Update',schoolName:`Update School ${suffix}`,email:`update-${suffix}@example.test`,password:'Update-passphrase-2026'}})).status()).toBe(201);
   const sid=(await (await page.request.get('/api/v1/auth/session')).json()).schools[0].id;
   const [year,section,learner]=[randomUUID(),randomUUID(),randomUUID()];

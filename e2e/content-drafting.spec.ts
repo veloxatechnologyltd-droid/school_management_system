@@ -10,7 +10,7 @@ async function account(db:any,name:string,email:string,roles:string[],admin?:str
   return id;
 }
 async function signIn(page:Page,email:string,landing:string) {
-  await page.goto('/');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.goto('/#/signin');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await expect(page.getByRole('heading',{name:landing,exact:true})).toBeVisible();
 }
 const noOverflow=(page:Page)=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth);

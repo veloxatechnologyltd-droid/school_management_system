@@ -10,7 +10,7 @@ async function account(db:any,name:string,email:string,roles:string[],admin?:str
   return id;
 }
 async function signIn(page:Page,email:string) {
-  await page.goto('/');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.goto('/#/signin');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Content library',exact:true})).toBeVisible();
 }
 const noOverflow=(page:Page)=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth);
@@ -75,7 +75,7 @@ test('the platform administrator gives and removes a content role, and a school 
     await account(db,`New Reviewer ${suffix}`,staffEmail,[]);
     const context=await browser.newContext(),page=await context.newPage();
     try {
-      await page.goto('/');await page.getByLabel('Email or phone number',{exact:true}).fill(adminEmail);await page.getByLabel('Password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign in',exact:true}).click();
+      await page.goto('/#/signin');await page.getByLabel('Email or phone number',{exact:true}).fill(adminEmail);await page.getByLabel('Password',{exact:true}).fill(password);await page.getByRole('button',{name:'Sign in',exact:true}).click();
       const panel=page.getByRole('region',{name:'Platform administration'});await expect(panel).toBeVisible();
       // Being the administrator is not a content role: the library is not offered.
       await expect(page.getByRole('link',{name:'Content library'})).toHaveCount(0);

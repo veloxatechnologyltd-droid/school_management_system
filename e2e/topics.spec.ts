@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 const {Pool}=require('pg');const path=require('node:path');
 const school='10000000-0000-4000-8000-000000000001',headMembership='30000000-0000-4000-8000-000000000001',teacherMembership='30000000-0000-4000-8000-000000000003',guardianMembership='30000000-0000-4000-8000-000000000004';
 async function signIn(page:Page,email:string,landing:string) {
-  await page.goto('/');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('Synthetic-only-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await page.goto('/#/signin');await page.getByLabel('Email or phone number',{exact:true}).fill(email);await page.getByLabel('Password',{exact:true}).fill('Synthetic-only-2026!');await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await expect(page.getByRole('button',{name:'Sign out',exact:true})).toBeVisible();const picker=page.getByRole('combobox',{name:'School',exact:true});if(await picker.count())await picker.selectOption(school);
   await expect(page.getByRole('heading',{name:'Adinkra Synthetic School',exact:true})).toBeVisible();
   await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:landing,exact:true}).click();
