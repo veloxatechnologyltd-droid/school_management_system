@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
-import { Empty, Icon } from '../lib/ui';
+import { Card, Dialog, Empty, Icon, PageHeader, Pager, Pill } from '../lib/ui';
+import { dayLabel } from '../lib/dates';
 
 type Role = 'headteacher' | 'teacher' | string;
 type Props = { schoolId: string; csrfToken: string; role: Role; onAccessRefresh?: () => void };
@@ -52,6 +53,8 @@ export function Teaching({ schoolId, csrfToken, role, onAccessRefresh }: Props) 
   const [teacherClassLoading, setTeacherClassLoading] = useState(true);
   const [rosterLoading, setRosterLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [revoking, setRevoking] = useState<Assignment | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const operations = useRef(new Map<string, { payload: string; id: string }>());
@@ -194,7 +197,7 @@ export function Teaching({ schoolId, csrfToken, role, onAccessRefresh }: Props) 
     const payload = { classId: selectedClass, teacherMembershipId, startDate: assignmentDates.startDate, endDate: assignmentDates.endDate, reason: assignmentDates.reason.trim() };
     if (!selectedClass || !teacherMembershipId || !payload.startDate || !payload.endDate || !payload.reason) return;
     if (await mutate('teaching-assignment:create', payload, `/schools/${schoolId}/teaching/assignments`, 'Teaching assignment created. Its reason authorizes whole-class roster access.')) {
-      setAssignmentDates({ startDate: '', endDate: '', reason: '' }); setTeacherMembershipId(''); setSelectedClass(''); setSelectedClassOption(null);
+      setAssignmentDates({ startDate: '', endDate: '', reason: '' }); setTeacherMembershipId(''); setSelectedClass(''); setSelectedClassOption(null); setAssigning(false);
     }
   }
 
@@ -202,65 +205,76 @@ export function Teaching({ schoolId, csrfToken, role, onAccessRefresh }: Props) 
     const reason = revokeReasons[row.id]?.trim() ?? '';
     const payload = { version: row.version, reason };
     if (await mutate(`teaching-assignment:${row.id}:revoke`, payload, `/schools/${schoolId}/teaching/assignments/${row.id}/revoke`, `Assignment revoked for ${row.teacher_display_name}.`)) {
-      setRevokeReasons(previous => ({ ...previous, [row.id]: '' }));
+      setRevokeReasons(previous => ({ ...previous, [row.id]: '' })); setRevoking(null);
     }
   }
 
   const headLoadingNow = headLoading || assignmentLoading;
+  const messages = <>{error && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}</>;
 
-  if (!isHeadteacher) return <section aria-labelledby="teaching-title" className="card my-classes">
-    <div className="card-head"><div><h2 id="teaching-title">My classes</h2><p className="card-hint">Learners in the classes your headteacher assigned to you.</p></div><button type="button" className="secondary" disabled={busy || teacherClassLoading} onClick={() => void refresh()}><Icon name="refresh"/>Refresh class access</button></div>
-    {(error || notice) && <div className="card-body">{error && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}</div>}
-<>
+  // A teacher's own page: the learners in each class they are assigned to.
+  if (!isHeadteacher) return <section aria-labelledby="teaching-title" className="page my-classes">
+    <PageHeader id="teaching-title" eyebrow="My classes" title="My classes" blurb="Learners in the classes your headteacher assigned to you. Open a name to see their page."
+      actions={<button type="button" className="secondary" disabled={busy || teacherClassLoading} onClick={() => void refresh()}><Icon name="refresh"/>Refresh class access</button>}/>
+    {messages}
+    <Card flush>
       <div className="toolbar teacher-toolbar">
+        {(teacherClassRows.length > 0 || selectedClass) && <label>Class<select aria-label="Select an assigned class" value={selectedClass} onChange={event => { const id = event.target.value; selectedClassRef.current = id; setSelectedClass(id); setSelectedClassOption(teacherClassRows.find(row => row.id === id) ?? null); setRosterOffset(0); setRosterSearch(''); setRosterSearchInput(''); }}><option value="">Choose a class</option>{selectedClassOption && !teacherClassRows.some(row => row.id === selectedClass) && <option value={selectedClassOption.id}>{selectedClassOption.name} · {selectedClassOption.level} · {selectedClassOption.year_name} (selected)</option>}{teacherClassRows.map(row => <option key={row.id} value={row.id}>{row.name} · {row.level} · {row.year_name}</option>)}</select></label>}
         <form onSubmit={event => { event.preventDefault(); setSelectedClass(''); selectedClassRef.current = ''; setSelectedClassOption(null); setRoster([]); setRosterTotal(0); setRosterOffset(0); setRosterSearch(''); setRosterSearchInput(''); setTeacherClassOffset(0); setTeacherDate(teacherDateInput); setTeacherRefresh(value => value + 1); }}>
           <label>Class date<input type="date" value={teacherDateInput} onChange={event => setTeacherDateInput(event.target.value)} required/></label>
           <button type="submit" className="secondary" disabled={rosterLoading || teacherClassLoading}>Show classes for date</button>
         </form>
-        {(teacherClassRows.length > 0 || selectedClass) && <label>Select an assigned class<select value={selectedClass} onChange={event => { const id = event.target.value; selectedClassRef.current = id; setSelectedClass(id); setSelectedClassOption(teacherClassRows.find(row => row.id === id) ?? null); setRosterOffset(0); setRosterSearch(''); setRosterSearchInput(''); }}><option value="">Choose a class</option>{selectedClassOption && !teacherClassRows.some(row => row.id === selectedClass) && <option value={selectedClassOption.id}>{selectedClassOption.name} · {selectedClassOption.level} · {selectedClassOption.year_name} (selected)</option>}{teacherClassRows.map(row => <option key={row.id} value={row.id}>{row.name} · {row.level} · {row.year_name}</option>)}</select></label>}
+        {(teacherClassTotal > 8 || teacherClassSearch) && <form onSubmit={event => { event.preventDefault(); setTeacherClassOffset(0); setTeacherClassSearch(teacherClassSearchInput.trim()); }}><label className="search"><span className="sr-only">Search my classes</span><Icon name="search"/><input type="search" aria-label="Search my classes" maxLength={120} value={teacherClassSearchInput} onChange={event => setTeacherClassSearchInput(event.target.value)} placeholder="Search my classes"/></label><button type="submit" className="secondary" disabled={teacherClassLoading}>Search classes</button></form>}
       </div>
-      <div className="toolbar">
-        <form onSubmit={event => { event.preventDefault(); setTeacherClassOffset(0); setTeacherClassSearch(teacherClassSearchInput.trim()); }}><label className="search"><span className="sr-only">Search my classes</span><Icon name="search"/><input type="search" aria-label="Search my classes" maxLength={120} value={teacherClassSearchInput} onChange={event => setTeacherClassSearchInput(event.target.value)} placeholder="Search my classes"/></label><button type="submit" className="secondary" disabled={teacherClassLoading}>Search classes</button></form>
-        {teacherClassTotal > 25 && <div className="actions" aria-label="Assigned class pages"><button type="button" className="secondary" disabled={teacherClassOffset === 0} onClick={() => setTeacherClassOffset(Math.max(0, teacherClassOffset - 25))}>Previous classes</button><span className="muted">{`Showing ${teacherClassOffset + 1}–${Math.min(teacherClassOffset + teacherClassRows.length, teacherClassTotal)} of ${teacherClassTotal}`}</span><button type="button" className="secondary" disabled={teacherClassOffset + teacherClassRows.length >= teacherClassTotal} onClick={() => setTeacherClassOffset(teacherClassOffset + 25)}>Next classes</button></div>}
-      </div>
+      {teacherClassTotal > 25 && <Pager offset={teacherClassOffset} shown={teacherClassRows.length} total={teacherClassTotal} noun="classes" onMove={setTeacherClassOffset}/>}
       {teacherClassLoading && !selectedClass ? <p role="status">Loading assigned classes…</p> : !teacherClassRows.length && !selectedClass ? <Empty title={teacherClassSearch ? 'No assigned classes match this search' : 'No classes assigned for this date'} hint={teacherClassSearch ? undefined : 'Your headteacher assigns classes. Ask them if one is missing.'}/> : null}
       {selectedClass && <div className="class-roster">
         <div className="roster-head"><div><h3>{rosterClassName || selectedClassOption?.name || 'Class roster'}</h3><p className="card-hint">{rosterDate ? `Roster on ${rosterDate} · ` : ''}{rosterTotal} learner{rosterTotal === 1 ? '' : 's'}</p></div>
           <form onSubmit={event => { event.preventDefault(); setRosterOffset(0); setRosterSearch(rosterSearchInput.trim()); }}><label className="search"><span className="sr-only">Search this roster</span><Icon name="search"/><input type="search" aria-label="Search this roster" maxLength={120} value={rosterSearchInput} onChange={event => setRosterSearchInput(event.target.value)} placeholder="Learner name or admission number"/></label><button type="submit" className="secondary" disabled={rosterLoading}>Search roster</button></form></div>
         {rosterLoading ? <p role="status">Checking assignment and loading the current roster…</p> : roster.length ? <ul className="roster-grid">{roster.map(row => <li key={row.enrolment_id}><span className="avatar" aria-hidden="true">{row.full_name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}</span><span><strong><a className="learner-link" href={`#/learner/${row.id}`}>{row.full_name}</a></strong><span className="sub">{row.admission_number}</span></span></li>)}</ul> : <Empty title="No learners match this roster search"/>}
-        {rosterTotal > 25 && <div className="pager" aria-label="Roster pages"><span>{`Showing ${rosterOffset + 1}–${Math.min(rosterOffset + roster.length, rosterTotal)} of ${rosterTotal}`}</span><div><button type="button" className="secondary" disabled={rosterLoading || rosterOffset === 0} onClick={() => setRosterOffset(Math.max(0, rosterOffset - 25))}>Previous learners</button><button type="button" className="secondary" disabled={rosterLoading || rosterOffset + roster.length >= rosterTotal} onClick={() => setRosterOffset(rosterOffset + 25)}>Next learners</button></div></div>}
+        {rosterTotal > 25 && <Pager offset={rosterOffset} shown={roster.length} total={rosterTotal} noun="learners" busy={rosterLoading} onMove={setRosterOffset}/>}
       </div>}
-    </>
+    </Card>
   </section>;
 
-  return <section aria-labelledby="teaching-title">
-    <p className="eyebrow">Teaching access</p>
-    <h2 id="teaching-title">{isHeadteacher ? 'Teacher assignments' : 'My classes'}</h2>
-    <p className="muted">{isHeadteacher ? 'Grant dated whole-class roster access with a clear reason and revoke it with a reviewed reason.' : 'Open a class roster for a selected date. Access is rechecked by the school service.'}</p>
-    <div className="actions"><button type="button" className="secondary" disabled={busy || (isHeadteacher ? headLoadingNow : teacherClassLoading)} onClick={() => void refresh()}>{isHeadteacher ? 'Refresh assignments' : 'Refresh class access'}</button></div>
-    {error && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}
-    {isHeadteacher ? headLoadingNow ? <p role="status">Loading teacher assignment records…</p> : <>
-      <h3>Assignment history</h3>
-      <form className="actions" onSubmit={event => { event.preventDefault(); setAssignmentOffset(0); setAssignmentSearch(assignmentSearchInput.trim()); }}><label>Search assignments<input type="search" maxLength={120} value={assignmentSearchInput} onChange={event => setAssignmentSearchInput(event.target.value)} placeholder="Class or teacher name"/></label><button type="submit" disabled={busy}>Search assignments</button></form>
-      {assignments.length ? <ul className="history">{assignments.map(row => <li key={row.id}>
-        <strong>{row.class_name} · {row.teacher_display_name}</strong>
-        <span>{row.revoked_at ? `Revoked ${row.revoked_at}` : 'Not revoked'} · {row.start_date} to {row.end_date} (end exclusive)</span>
-        <span>Grant reason: {row.grant_reason}</span>{row.revocation_reason && <span>Revocation reason: {row.revocation_reason}</span>}
-        {!row.revoked_at && <form onSubmit={event => { event.preventDefault(); void revokeAssignment(row); }}><label>Revocation reason<input required minLength={3} maxLength={500} value={revokeReasons[row.id] ?? ''} onChange={event => setRevokeReasons(previous => ({ ...previous, [row.id]: event.target.value }))}/></label><button className="secondary" disabled={busy}>Revoke assignment</button></form>}
-      </li>)}</ul> : <p>{assignmentSearch ? 'No assignments match this search.' : 'No teaching assignments recorded.'}</p>}
-      <div className="actions" aria-label="Assignment history pages"><button type="button" className="secondary" disabled={busy || assignmentLoading || assignmentOffset === 0} onClick={() => setAssignmentOffset(Math.max(0, assignmentOffset - 25))}>Previous assignments</button><span className="muted">{assignmentTotal === 0 ? '0 assignments' : `Showing ${assignmentOffset + 1}–${Math.min(assignmentOffset + assignments.length, assignmentTotal)} of ${assignmentTotal}`}</span><button type="button" className="secondary" disabled={busy || assignmentLoading || assignmentOffset + assignments.length >= assignmentTotal} onClick={() => setAssignmentOffset(assignmentOffset + 25)}>Next assignments</button></div>
-
-      <h3>Assign a teacher</h3>
-      <form onSubmit={createAssignment}>
-        <label>Search classes<input type="search" maxLength={120} value={classSearchInput} onChange={event => setClassSearchInput(event.target.value)} placeholder="Class name or level"/></label>
-        <div className="actions"><button type="button" className="secondary" disabled={busy} onClick={() => { setClassOffset(0); setClassSearch(classSearchInput.trim()); }}>Search classes</button><span className="muted">{classTotal === 0 ? '0 classes' : `Showing ${classOffset + 1}–${Math.min(classOffset + classOptions.length, classTotal)} of ${classTotal}`}</span><button type="button" className="secondary" disabled={busy || classOffset === 0} onClick={() => setClassOffset(Math.max(0, classOffset - 25))}>Previous classes</button><button type="button" className="secondary" disabled={busy || classOffset + classOptions.length >= classTotal} onClick={() => setClassOffset(classOffset + 25)}>Next classes</button></div>
+  // The headteacher's view (Settings): who teaches which class, from when to when.
+  const closeAssign = () => setAssigning(false);
+  return <section aria-label="Teacher assignments" className="page">
+    {!assigning && !revoking && messages}
+    {headLoadingNow ? <p role="status">Loading teacher assignment records…</p> : <Card title="Teacher assignments" hint="A teacher sees only the classes assigned to them, from the first date until the start of the last date." flush
+      action={<div className="actions"><button type="button" className="secondary" disabled={busy || headLoadingNow} onClick={() => void refresh()}><Icon name="refresh"/>Refresh assignments</button><button type="button" disabled={busy} onClick={() => { setError(''); setNotice(''); setAssigning(true); }}><Icon name="add"/>Assign a teacher</button></div>}>
+      <div className="toolbar">
+        <form onSubmit={event => { event.preventDefault(); setAssignmentOffset(0); setAssignmentSearch(assignmentSearchInput.trim()); }}><label className="search"><span className="sr-only">Search assignments</span><Icon name="search"/><input type="search" aria-label="Search assignments" maxLength={120} value={assignmentSearchInput} onChange={event => setAssignmentSearchInput(event.target.value)} placeholder="Class or teacher name"/></label><button type="submit" className="secondary" disabled={busy}>Search</button></form>
+        <span className="count">{assignmentTotal} assignment{assignmentTotal === 1 ? '' : 's'}</span>
+      </div>
+      {assignments.length ? <div className="table-wrap"><table><thead><tr><th>Class</th><th>Teacher</th><th className="hide-sm">Dates</th><th>Status</th></tr></thead><tbody>{assignments.map(row => <tr key={row.id}>
+        <td>{row.class_name}<span className="sub hide-sm">{row.grant_reason}</span></td>
+        <td>{row.teacher_display_name}</td>
+        <td className="hide-sm">{dayLabel(row.start_date)} to {dayLabel(row.end_date)}</td>
+        <td><div className="cell-stack">{row.revoked_at ? <><Pill tone="neutral">Revoked</Pill>{row.revocation_reason && <span className="sub">{row.revocation_reason}</span>}</> : <><Pill tone="positive">Active</Pill><button type="button" className="secondary" disabled={busy} aria-label={`Revoke ${row.class_name} for ${row.teacher_display_name}`} onClick={() => { setError(''); setNotice(''); setRevoking(row); }}>Revoke</button></>}</div></td>
+      </tr>)}</tbody></table></div> : <Empty title={assignmentSearch ? 'No assignments match this search' : 'No teaching assignments yet'} hint={assignmentSearch ? undefined : 'Use Assign a teacher to give a teacher a class.'}/>}
+      <Pager offset={assignmentOffset} shown={assignments.length} total={assignmentTotal} noun="assignments" busy={busy || assignmentLoading} onMove={setAssignmentOffset}/>
+    </Card>}
+    {assigning && <Dialog title="Assign a teacher" onClose={closeAssign}>
+      {messages}
+      <form onSubmit={async event => { await createAssignment(event); }}>
+        {(classTotal > 8 || classSearch) && <div className="actions"><label>Find a class<input type="search" maxLength={120} value={classSearchInput} onChange={event => setClassSearchInput(event.target.value)} placeholder="Class name or level"/></label><button type="button" className="secondary" disabled={busy} onClick={() => { setClassOffset(0); setClassSearch(classSearchInput.trim()); }}>Search classes</button></div>}
+        {classTotal > 25 && <Pager offset={classOffset} shown={classOptions.length} total={classTotal} noun="classes" busy={busy} onMove={setClassOffset}/>}
         <label>Class<select value={selectedClass} onChange={event => { const id = event.target.value; setSelectedClass(id); setSelectedClassOption(classOptions.find(row => row.id === id) ?? null); }} required><option value="">Choose a class</option>{selectedClassOption && !classOptions.some(row => row.id === selectedClass) && <option value={selectedClassOption.id}>{selectedClassOption.name} · {selectedClassOption.level} · {selectedClassOption.year_name} (selected)</option>}{classOptions.map(row => <option key={row.id} value={row.id}>{row.name} · {row.level} · {row.year_name}</option>)}</select></label>
         <label>Teacher<select value={teacherMembershipId} onChange={event => setTeacherMembershipId(event.target.value)} required><option value="">Choose a teacher account</option>{candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.display_name}</option>)}</select></label>
-        <label>Assignment start date (inclusive)<input type="date" value={assignmentDates.startDate} onChange={event => setAssignmentDates({ ...assignmentDates, startDate: event.target.value })} required/></label>
-        <label>Assignment end date (exclusive)<input type="date" value={assignmentDates.endDate} onChange={event => setAssignmentDates({ ...assignmentDates, endDate: event.target.value })} required/></label>
-        <label>Reason authorizing whole-class roster access<input value={assignmentDates.reason} onChange={event => setAssignmentDates({ ...assignmentDates, reason: event.target.value })} minLength={3} maxLength={500} required/></label>
-        <button disabled={busy || !classOptions.length || !candidates.length}>Create teacher assignment</button>
+        <div className="grid"><label>Assignment start date (inclusive)<input type="date" value={assignmentDates.startDate} onChange={event => setAssignmentDates({ ...assignmentDates, startDate: event.target.value })} required/></label>
+          <label>Assignment end date (exclusive)<input type="date" value={assignmentDates.endDate} onChange={event => setAssignmentDates({ ...assignmentDates, endDate: event.target.value })} required/></label></div>
+        <label>Reason authorizing whole-class roster access<input value={assignmentDates.reason} onChange={event => setAssignmentDates({ ...assignmentDates, reason: event.target.value })} minLength={3} maxLength={500} required placeholder="e.g. Class teacher for JHS 2, agreed at the staff meeting"/></label>
+        <div className="actions"><button disabled={busy || !classOptions.length || !candidates.length}>Create teacher assignment</button><button type="button" className="secondary" onClick={closeAssign}>Cancel</button></div>
       </form>
-    </> : null}
+    </Dialog>}
+    {revoking && <Dialog title={`Revoke ${revoking.class_name} for ${revoking.teacher_display_name}`} onClose={() => setRevoking(null)}>
+      {messages}
+      <p className="muted">{revoking.teacher_display_name} will no longer see {revoking.class_name}. The assignment stays in the history with your reason.</p>
+      <form onSubmit={async event => { event.preventDefault(); await revokeAssignment(revoking); }}>
+        <label>Revocation reason<input required minLength={3} maxLength={500} value={revokeReasons[revoking.id] ?? ''} onChange={event => setRevokeReasons(previous => ({ ...previous, [revoking.id]: event.target.value }))}/></label>
+        <div className="actions"><button disabled={busy}>Revoke assignment</button><button type="button" className="secondary" onClick={() => setRevoking(null)}>Cancel</button></div>
+      </form>
+    </Dialog>}
   </section>;
 }

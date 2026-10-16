@@ -5,7 +5,7 @@ import { Card, Empty, PageHeader, Stat } from '../lib/ui';
 type SchoolClass = { id: string; name: string; year_name: string; start_date: string; end_date: string };
 type Learner = { id: string; full_name: string; admission_number: string };
 
-export function Promotion({ schoolId, csrfToken }: { schoolId: string; csrfToken: string }) {
+export function Promotion({ schoolId, csrfToken, embedded = false }: { schoolId: string; csrfToken: string; embedded?: boolean }) {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [source, setSource] = useState(''); const [effective, setEffective] = useState('');
   const [roster, setRoster] = useState<Learner[]>([]); const [choice, setChoice] = useState<Record<string, string>>({});
@@ -36,7 +36,7 @@ export function Promotion({ schoolId, csrfToken }: { schoolId: string; csrfToken
   const targets = classes.filter(c => c.id !== source);
   const decided = roster.filter(l => choice[l.id]).length;
   return <section aria-label="Year-end promotion" className="page">
-    <PageHeader eyebrow="End of year" title="Promotion" blurb="Move each class into next year: promote, repeat or record that a learner left. Past enrolments stay in each learner's history."/>
+    {embedded ? <p className="muted">Move each class into next year: promote, repeat or record that a learner left. Past enrolments stay in each learner's history.</p> : <PageHeader eyebrow="End of year" title="Promotion" blurb="Move each class into next year: promote, repeat or record that a learner left. Past enrolments stay in each learner's history."/>}
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <Card flush>
       <div className="toolbar">

@@ -1,7 +1,7 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { recallChild, rememberChild } from '../lib/familyChild';
-import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, currentTerm } from '../lib/ui';
+import { Card, Dialog, Empty, Icon, PageHeader, Pager, Pill, Stat, Tabs, currentTerm } from '../lib/ui';
 
 type Term = { id: string; name: string; year_name: string; start_date?: string; end_date?: string };
 type ClassOption = { id: string; name: string; level: string; year_name: string };
@@ -31,9 +31,13 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [adjust, setAdjust] = useState<{ invoiceIds: string[]; kind: 'discount' | 'charge'; label: string; amount: string; reason: string } | null>(null);
   const [owingOnly, setOwingOnly] = useState(false);
+  // The page opens on the school's collection by class; bills (one page at a time) and fee items are one tab away.
+  const [tab, setTab] = useState<'classes' | 'bills' | 'items' | ''>('');
+  const [offset, setOffset] = useState(0); const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState(''); const [search, setSearch] = useState('');
   // Empty states are only true once the first answer is in; before that the page says it is loading.
   const [termsReady, setTermsReady] = useState(false); const [loadedKey, setLoadedKey] = useState('');
-  const dataKey = `${termId}|${classId}|${owingOnly}`;
+  const dataKey = `${termId}|${classId}|${owingOnly}|${offset}|${search}`;
   const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
 
@@ -42,19 +46,19 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
       .then(([t, c]) => { setTerms(t.items); setClasses(c.items); const term = currentTerm(t.items); if (term) setTermId(prior => prior || term.id); }).catch(e => setError((e as Error).message)).finally(() => setTermsReady(true));
   }, [schoolId]);
   const load = useCallback(async () => {
-    if (!termId) { setItems([]); setInvoices([]); setSummary(null); setByClass([]); return; }
+    if (!termId) { setItems([]); setInvoices([]); setTotal(0); setSummary(null); setByClass([]); return; }
     try {
       const [i, inv, s, bc] = await Promise.all([
         request<{ items: FeeItem[] }>(`/schools/${schoolId}/finance/fee-items?termId=${termId}`),
-        request<{ items: Invoice[] }>(`/schools/${schoolId}/finance/invoices?termId=${termId}&limit=100${classId ? `&classId=${classId}` : ''}${owingOnly ? '&outstandingOnly=true' : ''}`),
+        request<{ items: Invoice[]; total: number }>(`/schools/${schoolId}/finance/invoices?termId=${termId}&limit=25&offset=${offset}${classId ? `&classId=${classId}` : ''}${owingOnly ? '&outstandingOnly=true' : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
         request<Summary>(`/schools/${schoolId}/finance/summary?termId=${termId}`),
         request<{ items: ClassSummary[] }>(`/schools/${schoolId}/finance/summary-by-class?termId=${termId}`),
       ]);
-      setItems(i.items); setInvoices(inv.items); setSummary(s); setByClass(bc.items); setLoadedKey(`${termId}|${classId}|${owingOnly}`);
+      setItems(i.items); setInvoices(inv.items); setTotal(inv.total); setSummary(s); setByClass(bc.items); setLoadedKey(`${termId}|${classId}|${owingOnly}|${offset}|${search}`);
     } catch (e) { setError((e as Error).message); }
-  }, [schoolId, termId, classId, owingOnly]);
+  }, [schoolId, termId, classId, owingOnly, offset, search]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { setSelected(new Map()); }, [termId]);
+  useEffect(() => { setSelected(new Map()); setOffset(0); }, [termId]);
   const toggle = (rows: Invoice[], on: boolean) => setSelected(prior => { const next = new Map(prior); for (const r of rows) { if (on) next.set(r.id, r.full_name); else next.delete(r.id); } return next; });
   const startAdjust = (invoiceIds: string[]) => { setError(''); setMessage(''); setAdjust({ invoiceIds, kind: role === 'headteacher' ? 'discount' : 'charge', label: '', amount: '', reason: '' }); };
 
@@ -92,6 +96,9 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
     </Card>
   </section>;
 
+  const view3 = tab || (!loadedKey ? '' : byClass.length > 1 ? 'classes' : 'bills');
+  const rowActions = (inv: Invoice) => <>{inv.balance_pesewas > 0 && <button type="button" className="secondary" onClick={() => { setError(''); setMessage(''); setPay({ invoiceId: inv.id, amount: '', method: 'cash', reference: '', receivedOn: today }); }}>Record payment</button>}<button type="button" className="secondary" onClick={() => startAdjust([inv.id])}>Adjust</button></>;
+  const openClass = (id: string) => { setClassId(id); setOffset(0); setTab('bills'); };
   const paidShare = summary && summary.billedPesewas ? Math.round(summary.collectedPesewas / summary.billedPesewas * 100) : 0;
   const payingFor = pay && invoices.find(inv => inv.id === pay.invoiceId);
   return <section aria-label="Fees and receipts" className="page">
@@ -103,36 +110,36 @@ export function Finance({ schoolId, csrfToken, role, view }: { schoolId: string;
         <Stat label="Collected" value={cedis(summary.collectedPesewas)} caption={`${paidShare}% of what was billed`} tone="positive" icon="payments"/>
         <Stat label="Outstanding" value={cedis(summary.outstandingPesewas)} caption="Still owed this term" tone={summary.outstandingPesewas ? 'critical' : 'neutral'} icon="pending_actions"/>
       </div>}
-      {byClass.length > 1 && <Card flush>
+      <div className="actions"><Tabs label="Fees sections" value={view3} onChange={setTab} options={[{ id: 'classes', label: 'By class' }, { id: 'bills', label: `Bills${summary ? ` (${summary.invoices})` : ''}` }, { id: 'items', label: 'Fee items' }]}/></div>
+      {!view3 && <p role="status" className="muted">Loading…</p>}
+      {view3 === 'classes' && <Card flush>
         <div className="toolbar"><strong>Collection by class</strong><span className="count">Lowest collection first · choose a class to see its bills</span></div>
-        <div className="table-wrap"><table><thead><tr><th>Class</th><th className="num">Billed</th><th className="num">Collected</th><th className="num">Share collected</th><th className="num">Outstanding</th></tr></thead><tbody>
+        {byClass.length ? <div className="table-wrap"><table><thead><tr><th>Class</th><th className="num hide-sm">Billed</th><th className="num hide-sm">Collected</th><th className="num">Share collected</th><th className="num">Outstanding</th></tr></thead><tbody>
           {[...byClass].sort((a, b) => (a.billedPesewas ? a.collectedPesewas / a.billedPesewas : 1) - (b.billedPesewas ? b.collectedPesewas / b.billedPesewas : 1)).map(c => <tr key={c.classId}>
-            <td><button type="button" className="secondary" onClick={() => setClassId(c.classId)}>{c.className}</button><span className="sub">{c.invoices} learners</span></td>
-            <td className="num">{cedis(c.billedPesewas)}</td><td className="num">{cedis(c.collectedPesewas)}</td>
+            <td><button type="button" className="secondary" onClick={() => openClass(c.classId)}>{c.className}</button><span className="sub">{c.invoices} learners</span></td>
+            <td className="num hide-sm">{cedis(c.billedPesewas)}</td><td className="num hide-sm">{cedis(c.collectedPesewas)}</td>
             <td className="num">{c.billedPesewas ? Math.round(c.collectedPesewas / c.billedPesewas * 100) : 0}%</td><td className="num">{cedis(c.outstandingPesewas)}</td></tr>)}
-        </tbody></table></div>
+        </tbody></table></div> : <Empty title="No bills yet this term" hint="Open Bills, choose a class and generate its invoices."/>}
       </Card>}
-      <div>
-        <Card flush>
-          <div className="toolbar">
-            <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
-            <button className="secondary" disabled={busy || !classId} onClick={generate}>Generate invoices for this class</button>
-            <label><input type="checkbox" checked={owingOnly} onChange={e => setOwingOnly(e.target.checked)}/>Owing only</label>
-            {selected.size > 0 && <><button type="button" disabled={busy} onClick={() => startAdjust([...selected.keys()])}>Adjust {selected.size} selected</button><button type="button" className="secondary" onClick={() => setSelected(new Map())}>Clear selection</button></>}
-            <span className="count">{invoices.length === 100 ? 'First 100 invoices · choose a class to see all' : `${invoices.length} invoices`}</span>
-          </div>
-          {invoices.length ? <div className="table-wrap"><table><thead><tr><th><input type="checkbox" aria-label="Select all bills shown" checked={invoices.every(i => selected.has(i.id))} onChange={e => toggle(invoices, e.target.checked)}/></th><th>Learner</th><th className="num">Billed</th><th className="num">Paid</th><th className="num">Balance</th><th></th></tr></thead><tbody>{invoices.map(inv => <tr key={inv.id}>
-            <td><input type="checkbox" aria-label={`Select ${inv.full_name}`} checked={selected.has(inv.id)} onChange={e => toggle([inv], e.target.checked)}/></td>
-            <td>{inv.full_name}<span className="sub">{inv.admission_number} · {inv.class_name}</span></td>
-            <td className="num">{cedis(inv.due_pesewas)}{inv.adjustments.map(a => <span key={a.id} className="sub">{a.kind === 'discount' ? '−' : '+'}{cedis(a.amountPesewas)} {a.label}</span>)}</td><td className="num">{cedis(inv.paid_pesewas)}</td>
-            <td className="num">{inv.balance_pesewas > 0 ? <strong className="tone-critical">{cedis(inv.balance_pesewas)}</strong> : inv.balance_pesewas < 0 ? <Pill tone="info">Credit {cedis(-inv.balance_pesewas)}</Pill> : <Pill tone="positive">Settled</Pill>}{inv.arrears_pesewas > 0 ? <span className="sub tone-critical">+ {cedis(inv.arrears_pesewas)} from earlier terms</span> : inv.arrears_pesewas < 0 && <span className="sub">{cedis(-inv.arrears_pesewas)} credit from earlier terms</span>}</td>
-            <td className="num"><div className="row-actions">{inv.balance_pesewas > 0 && <button type="button" className="secondary" onClick={() => { setError(''); setMessage(''); setPay({ invoiceId: inv.id, amount: '', method: 'cash', reference: '', receivedOn: today }); }}>Record payment</button>}
-              <button type="button" className="secondary" onClick={() => startAdjust([inv.id])}>Adjust</button></div></td>
-          </tr>)}</tbody></table></div> : loadedKey !== dataKey ? <p role="status" className="card-body muted">Loading invoices…</p> : <Empty title="No invoices yet" hint={classId ? 'Generate this class’s invoices from the fee items.' : 'Choose a class, then generate its invoices.'}/>}
-        </Card>
-        <Card title="Fee items" hint="Set by the headteacher in Settings." flush>{itemList}</Card>
+      {view3 === 'bills' && <Card flush>
+        <div className="toolbar">
+          <label>Class<select value={classId} onChange={e => { setClassId(e.target.value); setOffset(0); }}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
+          <form onSubmit={e => { e.preventDefault(); setOffset(0); setSearch(searchInput.trim()); }}><label className="search"><span className="sr-only">Search bills</span><Icon name="search"/><input type="search" aria-label="Search bills" maxLength={120} value={searchInput} onChange={e => setSearchInput(e.target.value)} placeholder="Learner name or admission number"/></label><button type="submit" className="secondary">Search</button></form>
+          <label><input type="checkbox" checked={owingOnly} onChange={e => { setOwingOnly(e.target.checked); setOffset(0); }}/>Owing only</label>
+          <button className="secondary" disabled={busy || !classId} onClick={generate} title={classId ? undefined : 'Choose a class first'}>Generate invoices for this class</button>
+          {selected.size > 0 && <><button type="button" disabled={busy} onClick={() => startAdjust([...selected.keys()])}>Adjust {selected.size} selected</button><button type="button" className="secondary" onClick={() => setSelected(new Map())}>Clear selection</button></>}
+        </div>
+        {invoices.length ? <div className="table-wrap"><table><thead><tr><th><input type="checkbox" aria-label="Select all bills shown" checked={invoices.every(i => selected.has(i.id))} onChange={e => toggle(invoices, e.target.checked)}/></th><th>Learner</th><th className="num hide-sm">Billed</th><th className="num hide-sm">Paid</th><th className="num">Balance</th><th className="hide-sm"></th></tr></thead><tbody>{invoices.map(inv => <tr key={inv.id}>
+          <td><input type="checkbox" aria-label={`Select ${inv.full_name}`} checked={selected.has(inv.id)} onChange={e => toggle([inv], e.target.checked)}/></td>
+          <td>{inv.full_name}<span className="sub">{inv.admission_number} · {inv.class_name}</span><div className="show-sm"><div className="row-actions">{rowActions(inv)}</div></div></td>
+          <td className="num hide-sm">{cedis(inv.due_pesewas)}{inv.adjustments.map(a => <span key={a.id} className="sub">{a.kind === 'discount' ? '−' : '+'}{cedis(a.amountPesewas)} {a.label}</span>)}</td><td className="num hide-sm">{cedis(inv.paid_pesewas)}</td>
+          <td className="num">{inv.balance_pesewas > 0 ? <strong className="tone-critical">{cedis(inv.balance_pesewas)}</strong> : inv.balance_pesewas < 0 ? <Pill tone="info">Credit {cedis(-inv.balance_pesewas)}</Pill> : <Pill tone="positive">Settled</Pill>}{inv.arrears_pesewas > 0 ? <span className="sub tone-critical">+ {cedis(inv.arrears_pesewas)} from earlier terms</span> : inv.arrears_pesewas < 0 && <span className="sub">{cedis(-inv.arrears_pesewas)} credit from earlier terms</span>}</td>
+          <td className="num hide-sm"><div className="row-actions">{rowActions(inv)}</div></td>
+        </tr>)}</tbody></table></div> : loadedKey !== dataKey ? <p role="status" className="card-body muted">Loading invoices…</p> : <Empty title={search || owingOnly ? 'No bills match' : 'No invoices yet'} hint={search || owingOnly ? 'Try another name, or clear Owing only.' : classId ? 'Generate this class’s invoices from the fee items.' : 'Choose a class, then generate its invoices.'}/>}
+        <Pager offset={offset} shown={invoices.length} total={total} noun="bills" busy={busy || loadedKey !== dataKey} onMove={setOffset}/>
         {role === 'headteacher' && <p className="muted">To correct a wrong payment, a headteacher can reverse it with a reason; nothing is ever deleted.</p>}
-      </div>
+      </Card>}
+      {view3 === 'items' && <Card title="Fee items" hint={role === 'headteacher' ? 'What each learner is billed for this term.' : 'Set by the headteacher in Settings.'} action={role === 'headteacher' ? <a className="button secondary" href="#/settings/fees">Edit fee items</a> : undefined} flush>{itemList}</Card>}
     </>}
     {pay && <Dialog title={payingFor ? `Payment from ${payingFor.full_name}` : 'Record payment'} onClose={() => setPay(null)}>
       {messages}

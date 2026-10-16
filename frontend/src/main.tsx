@@ -30,7 +30,6 @@ const Family=lazyModule(()=>import('./modules/Family'),'Family');
 const SupportDue=lazy(()=>import('./modules/Support').then(m=>({default:m.SupportDue})));
 const Finance=lazyModule(()=>import('./modules/Finance'),'Finance');
 const GuardianStatement=lazyModule(()=>import('./modules/Finance'),'GuardianStatement');
-const Promotion=lazyModule(()=>import('./modules/Promotion'),'Promotion');
 const AiSettings=lazyModule(()=>import('./modules/AiSettings'),'AiSettings');
 const Assistant=lazyModule(()=>import('./modules/Assistant'),'Assistant');
 const LearnerPage=lazyModule(()=>import('./modules/LearnerPage'),'LearnerPage');
@@ -45,9 +44,11 @@ const navByRole:Record<string,NavGroup[]>={
     {group:'Overview',items:[nav('today','Home','space_dashboard'),nav('ask','Ask','forum')]},
     {group:'People',items:[nav('attendance','Attendance','event_available'),nav('learners','Learners','groups'),nav('guardians','Guardians','family_restroom'),nav('collection','Pickup','directions_walk')]},
     {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]},
-    {group:'Office',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign'),nav('promotion','Promotion','trending_up')]},
+    {group:'Office',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]},
     {group:'Administration',pinned:true,items:[nav('settings','Settings','settings')]}],
-  teacher:[{group:'My work',items:[nav('today','Today','today'),nav('ask','Ask','forum'),nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]}],
+  teacher:[
+    {group:'Overview',items:[nav('today','Today','today'),nav('ask','Ask','forum')]},
+    {group:'My classes',items:[nav('classes','My classes','groups'),nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]}],
   accountant:[{group:'Money',items:[nav('fees','Fees','receipt_long')]}],
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
   guardian:[
@@ -76,7 +77,7 @@ function EarlyYearsWork({schoolId,csrfToken,role}:ModuleProps) {
   </>;
 }
 // Section addresses from the earlier tab layout keep working.
-const legacyIds:Record<string,string>={learning:'assessment',school:'settings',teaching:'settings',accounts:'settings'};
+const legacyIds:Record<string,string>={learning:'assessment',school:'settings',teaching:'settings',accounts:'settings',promotion:'learners'};
 type School = {id:string;name:string;role:string;version:number;address?:string|null;phone?:string|null;motto?:string|null;readOnly?:boolean};
 const detailsOf=(s:School)=>({address:s.address??'',phone:s.phone??'',motto:s.motto??''});
 type Session = {displayName:string;csrfToken:string;schools:School[];platformAdmin:boolean;contentRoles:string[];mustChangePassword:boolean;mfaRequired:boolean;mfaEnrolled:boolean;mfaVerified:boolean};
@@ -187,13 +188,13 @@ function App() {
   ];
   const [tabId,subId]=tab.split('/'),setting=settingsSteps.find(step=>step.id===subId)??settingsSteps[0];
   const views:Record<string,()=>React.ReactNode>={
-    today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} displayName={session.displayName} csrfToken={csrf}><AttendanceFollowUp key={`followup:${sid}`} schoolId={sid}/></GettingStarted>:<><SupportDue key={`support-due:${sid}`} schoolId={sid}/>{attendanceView}{teachingView}</>,
+    today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} displayName={session.displayName} csrfToken={csrf}><AttendanceFollowUp key={`followup:${sid}`} schoolId={sid}/></GettingStarted>:<><SupportDue key={`support-due:${sid}`} schoolId={sid}/>{attendanceView}</>,
+    classes:()=>teachingView,
     attendance:()=>attendanceView,
     ask:()=><Assistant key={`ask:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     collection:()=><Collection key={'collection:'+sid} schoolId={sid} csrfToken={csrf} role={role}/>,
-    learners:()=><Admissions key={sid} schoolId={sid} csrfToken={csrf} role={role} view={role==='headteacher'?'work':undefined} initialTab={subId==='applications'?'applications':'roll'}/>,
+    learners:()=><Admissions key={sid} schoolId={sid} csrfToken={csrf} role={role} view={role==='headteacher'?'work':undefined} initialTab={tabId==='promotion'||subId==='promotion'?'promotion':subId==='applications'?'applications':'roll'}/>,
     guardians:()=><Guardians key={`guardians:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
-    promotion:()=><Promotion key={`promotion:${sid}`} schoolId={sid} csrfToken={csrf}/>,
     assessment:()=><Assessment key={`assessment:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
     progress:()=><Progress key={`progress:${sid}`} schoolId={sid} csrfToken={csrf} role={role} initialTab={subId}/>,
     topics:()=><Topics key={`topics:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,

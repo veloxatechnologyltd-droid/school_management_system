@@ -3,6 +3,7 @@ import { request } from '../lib/api';
 import { LearnerImports } from './LearnerImports';
 import { LearnerUpdates, fieldLabel } from './LearnerUpdates';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Tabs, type Tone } from '../lib/ui';
+import { Promotion } from './Promotion';
 
 type Role = 'headteacher' | 'frontdesk' | string;
 type AcademicYear = { id: string; name: string; start_date: string; end_date: string };
@@ -12,7 +13,7 @@ type Learner = { id: string; full_name: string; admission_number: string; date_o
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
 type Enrolment = { id: string; class_id: string; class_name: string; start_date: string; end_date?: string | null; end_reason?: string | null; superseded_at?:string | null; supersession_reason?:string | null };
 type LearnerDetail = Learner & { enrolments: Enrolment[] };
-type Props = { schoolId: string; csrfToken: string; role: Role; view?: 'setup' | 'work'; initialTab?: 'roll' | 'applications' };
+type Props = { schoolId: string; csrfToken: string; role: Role; view?: 'setup' | 'work'; initialTab?: 'roll' | 'applications' | 'promotion' };
 
 const levels: SchoolClass['level'][] = ['Nursery', 'KG', 'Primary', 'JHS'];
 const statusNames: Record<string, string> = { application: 'Application', review: 'Under review', offered: 'Offered a place', waitlisted: 'Waitlisted', declined: 'Declined', accepted: 'Accepted', enrolled: 'Enrolled' };
@@ -39,7 +40,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
   const [corrections, setCorrections] = useState<{ id: string; field: keyof typeof fieldLabel; old_value: string | null; new_value: string; reason: string; recorded_at: string }[]>([]);
   const [selectedLearner, setSelectedLearner] = useState('');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'roll' | 'applications'>(initialTab);
+  const [tab, setTab] = useState<'roll' | 'applications' | 'promotion'>(initialTab);
   const [dialog, setDialog] = useState<'' | 'application' | 'import' | 'update' | 'census'>('');
   const [census, setCensus] = useState<{ day: string; items: { id: string; name: string; female: number; male: number; unrecorded: number }[] } | null>(null);
   const selectedLearnerRef=useRef('');
@@ -216,11 +217,11 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
 
   return <section aria-label="Admissions and learners" className="page">
     <PageHeader eyebrow="People" title="Learners" blurb="Every learner record, application and class history in one place."
-      actions={<><button type="button" disabled={loading || !classes.length} onClick={() => { setError(''); setNotice(''); setDialog('application'); }}><Icon name="person_add"/>New application</button><button type="button" className="secondary" onClick={() => setDialog('import')}><Icon name="upload_file"/>Import existing learners</button><button type="button" className="secondary" onClick={() => setDialog('update')}><Icon name="edit_document"/>Update from CSV</button><button type="button" className="secondary" onClick={() => { setDialog('census'); setCensus(null); request<NonNullable<typeof census>>(`/schools/${schoolId}/learners/census`).then(setCensus).catch(e => setError((e as Error).message)); }}><Icon name="groups"/>Class sizes</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void loadWorkspace(true)}>Refresh records</button></>}/>
+      actions={tab === 'promotion' ? undefined : <><button type="button" disabled={loading || !classes.length} onClick={() => { setError(''); setNotice(''); setDialog('application'); }}><Icon name="person_add"/>New application</button><button type="button" className="secondary" onClick={() => setDialog('import')}><Icon name="upload_file"/>Import existing learners</button><button type="button" className="secondary" onClick={() => setDialog('update')}><Icon name="edit_document"/>Update from CSV</button><button type="button" className="secondary" onClick={() => { setDialog('census'); setCensus(null); request<NonNullable<typeof census>>(`/schools/${schoolId}/learners/census`).then(setCensus).catch(e => setError((e as Error).message)); }}><Icon name="groups"/>Class sizes</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void loadWorkspace(true)}>Refresh records</button></>}/>
     {!dialog && !selectedLearner && messages}
     {loading ? <p role="status">Loading admissions and learner records…</p> : <>
-      <div className="actions"><Tabs label="Learner lists" value={tab} onChange={setTab} options={[{ id: 'roll', label: `Learner roll (${learnersTotal})` }, { id: 'applications', label: `Admissions (${admissionsTotal})` }]}/></div>
-      {tab === 'roll' ? <Card flush>
+      <div className="actions"><Tabs label="Learner lists" value={tab} onChange={setTab} options={[{ id: 'roll', label: `Learner roll (${learnersTotal})` }, { id: 'applications', label: `Admissions (${admissionsTotal})` }, ...(role === 'headteacher' ? [{ id: 'promotion' as const, label: 'Year-end promotion' }] : [])]}/></div>
+      {tab === 'promotion' && role === 'headteacher' ? <Promotion schoolId={schoolId} csrfToken={csrfToken} embedded/> : tab === 'roll' ? <Card flush>
         <div className="toolbar">
           <form onSubmit={event => { event.preventDefault(); setLearnersOffset(0); setLearnersSearch(learnersSearchInput.trim()); }}>
             <label className="search"><span className="sr-only">Search learners</span><Icon name="search"/><input type="search" aria-label="Search learners" value={learnersSearchInput} onChange={event => setLearnersSearchInput(event.target.value)} placeholder="Search name or admission number"/></label>

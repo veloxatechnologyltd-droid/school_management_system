@@ -375,3 +375,19 @@ progress.meter{display:block;width:100%;max-width:420px;height:10px;margin:4px 0
 .shortcut>.icon{color:var(--ink-3)}
 @media(max-width:1100px){.shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.shortcuts{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.shortcut{flex-direction:column;align-items:flex-start;gap:10px;min-height:0;padding:14px}.shortcut-text span,.shortcut>.icon{display:none}}
+
+/* Page structure: long lists show one summary row per item with the detail on demand; tabs and dialogs keep each page to one job */
+.card-head .actions{margin:0}
+.report-row-head{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap}.report-row-head>div:first-child{flex:1 1 240px;min-width:0}.report-row-head .sub{display:block;margin-top:2px}.report-row-head .pill{flex:none}
+.report-row details{padding:4px 0}.report-row summary{cursor:pointer;font-weight:600;color:var(--accent-text);min-height:32px;display:flex;align-items:center}
+.card-body.muted,p.card-body{margin:0}
+.remarks-table textarea{min-height:64px}
+@media(max-width:640px){.report-row-head .row-actions{width:100%}.report-row-head .row-actions button{flex:1 1 auto}}
+.history span.pill{font-weight:700}.history span.pill-positive{color:var(--positive)}.history span.pill-caution{color:var(--caution)}.history span.pill-critical{color:var(--critical)}.history span.pill-info{color:var(--info)}.history span.pill-neutral{color:var(--ink-2)}
+.cell-stack{display:grid;gap:6px;justify-items:start}.cell-stack button{height:36px;padding:0 16px}
+@media(max-width:640px){td .sub.hide-sm{display:none}}
+.learner-link{display:inline-block;padding:6px 0}
+td .show-sm .row-actions{display:flex;flex-wrap:wrap;justify-content:flex-start;margin-top:6px}
+.inline-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;margin-top:14px}.inline-form label{margin:0;flex:1 1 220px;max-width:360px}
+a.sub[href^="tel:"]{display:inline-block;padding:7px 0}
+.roster-grid .learner-link{display:block;padding:8px 0}

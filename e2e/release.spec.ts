@@ -147,23 +147,27 @@ test('dated teacher grant, fresh roster and revocation work across two browser s
   for(const [fullName,startDate,admissionNumber] of [[name,today,`REG-${suffix}`],[lateName,day(1),`LATE-${suffix}`]]){
     let application=await post('/admissions',{fullName,startDate,admissionNumber,classId:section.id});for(const action of ['review','offer','accept','enrol'])application=await post(`/admissions/${application.id}/transition`,{version:application.version,action});
   }
-  const teaching=page.locator('section').filter({has:page.getByRole('heading',{name:'Teacher assignments',exact:true})});await teaching.getByRole('button',{name:'Refresh assignments',exact:true}).click();await teaching.getByLabel('Search classes',{exact:true}).fill(className);await teaching.getByRole('button',{name:'Search classes',exact:true}).click();await teaching.getByRole('combobox',{name:'Class',exact:true}).selectOption(section.id);
+  const teaching=page.getByRole('region',{name:'Teacher assignments',exact:true});await teaching.getByRole('button',{name:'Refresh assignments',exact:true}).click();await teaching.getByRole('button',{name:'Assign a teacher',exact:true}).click();
+  const assign=page.getByRole('dialog',{name:'Assign a teacher',exact:true});if(await assign.getByLabel('Find a class',{exact:true}).count()){await assign.getByLabel('Find a class',{exact:true}).fill(className);await assign.getByRole('button',{name:'Search classes',exact:true}).click();}await assign.getByRole('combobox',{name:'Class',exact:true}).selectOption(section.id);
   const context=await browser.newContext(),teacherPage=await context.newPage();teacherPage.on('pageerror',error=>errors.push(error.message));await teacherPage.clock.setFixedTime(new Date(`${today}T10:00:00Z`));
   try{
     await signIn(teacherPage,'teacher@example.test');expect((await teacherPage.request.get(`/api/v1/schools/${school}/teaching/classes/${section.id}/roster?date=${today}`)).status()).toBe(404);
-    await teaching.getByRole('combobox',{name:'Teacher',exact:true}).selectOption('30000000-0000-4000-8000-000000000003');await teaching.getByLabel('Assignment start date (inclusive)',{exact:true}).fill(today);await teaching.getByLabel('Assignment end date (exclusive)',{exact:true}).fill(day(100));await teaching.getByLabel('Reason authorizing whole-class roster access',{exact:true}).fill('Synthetic headteacher reviewed class responsibility');await teaching.getByRole('button',{name:'Create teacher assignment',exact:true}).click();await expect(teaching.getByRole('status').filter({hasText:'Teaching assignment created.'})).toBeVisible();
-    await teacherPage.getByRole('button',{name:'Refresh class access',exact:true}).click();await teacherPage.getByLabel('Search my classes',{exact:true}).fill(className);await teacherPage.getByRole('button',{name:'Search classes',exact:true}).click();await teacherPage.getByRole('combobox',{name:'Select an assigned class',exact:true}).selectOption(section.id);
-    const teacherAttendance=teacherPage.locator('section').filter({has:teacherPage.getByRole('heading',{name:'Attendance',exact:true})});await teacherAttendance.getByLabel('Date',{exact:true}).fill(today);await teacherAttendance.getByRole('combobox',{name:'Class',exact:true}).selectOption(section.id);
+    await assign.getByRole('combobox',{name:'Teacher',exact:true}).selectOption('30000000-0000-4000-8000-000000000003');await assign.getByLabel('Assignment start date (inclusive)',{exact:true}).fill(today);await assign.getByLabel('Assignment end date (exclusive)',{exact:true}).fill(day(100));await assign.getByLabel('Reason authorizing whole-class roster access',{exact:true}).fill('Synthetic headteacher reviewed class responsibility');await assign.getByRole('button',{name:'Create teacher assignment',exact:true}).click();await expect(teaching.getByRole('status').filter({hasText:'Teaching assignment created.'})).toBeVisible();
+    const sections=teacherPage.getByRole('navigation',{name:'Sections',exact:true});
+    await sections.getByRole('link',{name:'My classes',exact:true}).click();await teacherPage.getByRole('button',{name:'Refresh class access',exact:true}).click();
+    await sections.getByRole('link',{name:'Today',exact:true}).click();const teacherAttendance=teacherPage.locator('section').filter({has:teacherPage.getByRole('heading',{name:'Attendance',exact:true})});await teacherAttendance.getByLabel('Date',{exact:true}).fill(today);await teacherAttendance.getByRole('combobox',{name:'Class',exact:true}).selectOption(section.id);
+    await sections.getByRole('link',{name:'My classes',exact:true}).click();await teacherPage.getByRole('combobox',{name:'Select an assigned class',exact:true}).selectOption(section.id);
     const teacherRoster=teacherPage.locator('section').filter({has:teacherPage.getByRole('heading',{name:'My classes',exact:true})});await expect(teacherRoster.locator('li').filter({hasText:name})).toHaveCount(1);await expect(teacherRoster.locator('li').filter({hasText:lateName})).toHaveCount(0);
     const roster=await (await teacherPage.request.get(`/api/v1/schools/${school}/teaching/classes/${section.id}/roster?date=${today}`)).json();expect(roster.total).toBe(1);expect(Object.keys(roster.items[0]).sort()).toEqual(['admission_number','enrolment_id','full_name','id']);
     await teacherPage.getByLabel('Class date',{exact:true}).fill(day(1));await teacherPage.getByRole('button',{name:'Show classes for date',exact:true}).click();await teacherPage.getByRole('combobox',{name:'Select an assigned class',exact:true}).selectOption(section.id);await expect(teacherRoster.locator('li').filter({hasText:lateName})).toHaveCount(1);
     await teacherPage.reload();await pickSchool(teacherPage);await teacherPage.getByRole('combobox',{name:'Select an assigned class',exact:true}).selectOption(section.id);await expect(teacherRoster.locator('li').filter({hasText:name})).toHaveCount(1);
     await teacherPage.setViewportSize({width:375,height:812});expect(await teacherPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await teacherPage.getByRole('heading',{name:'My classes',exact:true}).scrollIntoViewIfNeeded();await teacherPage.screenshot({path:'.local/teacher-mobile.png'});
-    const row=teaching.locator('li').filter({hasText:className});await row.getByLabel('Revocation reason',{exact:true}).fill('Synthetic reviewed teaching responsibility ended');await row.getByRole('button',{name:'Revoke assignment',exact:true}).click();await expect(teaching.getByRole('status').filter({hasText:'Assignment revoked for Kofi Sample.'})).toBeVisible();
+    await teaching.getByRole('row').filter({hasText:className}).getByRole('button',{name:/^Revoke /}).click();const revoke=page.getByRole('dialog',{name:/^Revoke /});await revoke.getByLabel('Revocation reason',{exact:true}).fill('Synthetic reviewed teaching responsibility ended');await revoke.getByRole('button',{name:'Revoke assignment',exact:true}).click();await expect(teaching.getByRole('status').filter({hasText:'Assignment revoked for Kofi Sample.'})).toBeVisible();
     expect((await teacherPage.request.get(`/api/v1/schools/${school}/teaching/classes/${section.id}/roster?date=${today}`)).status()).toBe(404);
     await teacherPage.getByLabel('Search this roster',{exact:true}).fill(name);await teacherPage.getByRole('button',{name:'Search roster',exact:true}).click();await expect(teacherPage.getByRole('alert').filter({hasText:'Class access could not be refreshed'})).toBeVisible();await expect(teacherRoster.locator('li').filter({hasText:name})).toHaveCount(0);
-    await teacherPage.getByRole('button',{name:'Refresh class access',exact:true}).click();await expect(teacherAttendance.getByRole('combobox',{name:'Class',exact:true})).toHaveValue('');await expect(teacherAttendance.getByRole('combobox',{name:'Class',exact:true}).locator('option').filter({hasText:className})).toHaveCount(0);
-    await page.reload();await pickSchool(page);await expect(page.locator('li').filter({hasText:className}).filter({hasText:'Synthetic reviewed teaching responsibility ended'})).toContainText(className);expect(errors).toEqual([]);
+    await teacherPage.getByRole('button',{name:'Refresh class access',exact:true}).click();await expect(teacherPage.getByRole('combobox',{name:'Select an assigned class',exact:true}).locator('option').filter({hasText:className})).toHaveCount(0);
+    await teacherPage.getByRole('button',{name:'Menu',exact:true}).click();await sections.getByRole('link',{name:'Today',exact:true}).click();await expect(teacherAttendance.getByRole('combobox',{name:'Class',exact:true}).locator('option').filter({hasText:className})).toHaveCount(0);
+    await page.reload();await pickSchool(page);await expect(page.getByRole('row').filter({hasText:className}).filter({hasText:'Synthetic reviewed teaching responsibility ended'})).toContainText(className);expect(errors).toEqual([]);
   }finally{await context.close();}
 });
 test('a teacher can submit a fresh register without saving a draft first',async({page})=>{
@@ -294,12 +298,12 @@ test('an Excel-style class list with "Admission No." headers and DD/MM/YYYY date
 test('each role lands on its own daily work; the section stays in the address across reload at phone width',async({page,browser})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewportSize({width:375,height:812});
   const links=async(p:Page)=>p.getByRole('navigation',{name:'Sections',exact:true}).locator('a .label').allTextContents();
-  await signIn(page);expect(await links(page)).toEqual(['Home','Ask','Attendance','Learners','Guardians','Pickup','Assessment','Progress','Topics','Early years','Fees','Notices','Promotion','Settings']);
+  await signIn(page);expect(await links(page)).toEqual(['Home','Ask','Attendance','Learners','Guardians','Pickup','Assessment','Progress','Topics','Early years','Fees','Notices','Settings']);
   await expect(page.getByRole('link',{name:'Home',exact:true})).toHaveAttribute('aria-current','page');await expect(page.getByRole('region',{name:'Notices to guardians'})).toHaveCount(0);
   await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('link',{name:'Notices',exact:true}).click();await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   await page.reload();await pickSchool(page);await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  for(const [email,expected] of [['teacher@example.test',['Today','Ask','Assessment','Progress','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['Home','Learn at home','Progress','Report cards','Notes','Fees','Notices']]] as const){
+  for(const [email,expected] of [['teacher@example.test',['Today','Ask','My classes','Assessment','Progress','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['Home','Learn at home','Progress','Report cards','Notes','Fees','Notices']]] as const){
     const other=await browser.newPage();await other.setViewportSize({width:375,height:812});await other.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));await signIn(other,email);expect(await links(other)).toEqual(expected);
     expect(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await other.close();
   }
@@ -343,11 +347,11 @@ test('class teacher remarks and the headteacher remark appear on the printed rep
   await page.reload();await pickSchool(page);
   const panel=page.getByRole('region',{name:'Assessment and terminal reports',exact:true});
   await panel.getByRole('combobox',{name:'Class',exact:true}).selectOption(section.id);await panel.getByRole('combobox',{name:'Term',exact:true}).selectOption(term.id);
-  await panel.getByLabel(`${name} Conduct`,{exact:true}).fill('Very good');await panel.getByLabel(`${name} Class teacher's remark`,{exact:true}).fill('A careful worker.');
+  await panel.getByRole('tab',{name:'Remarks',exact:true}).click();await panel.getByLabel(`${name} Conduct`,{exact:true}).fill('Very good');await panel.getByLabel(`${name} Class teacher's remark`,{exact:true}).fill('A careful worker.');
   await panel.getByLabel(`${name} Headteacher's remark`,{exact:true}).fill('Well done.');
   await panel.getByRole('button',{name:'Save remarks',exact:true}).click();await expect(panel.getByText('Report card remarks saved.')).toBeVisible();
   await send(`/assessment/classes/${section.id}/publish`,{termId:term.id});
-  await panel.getByRole('button',{name:'Report cards',exact:true}).click();
+  await panel.getByRole('tab',{name:'Report cards',exact:true}).click();await panel.getByRole('button',{name:'Report cards',exact:true}).click();
   const card=page.getByRole('dialog',{name:'Report cards',exact:true}).locator('article.report-card');
   await expect(card.getByText(name)).toBeVisible();await expect(card.getByText('1 out of 1')).toBeVisible();await expect(card.getByText('A careful worker.')).toBeVisible();
   await expect(card.getByText('Well done.')).toBeVisible();await expect(card.getByText('Next term begins',{exact:true})).toBeVisible();await expect(card.getByText('1st of 1')).toBeVisible();
@@ -598,3 +602,20 @@ test('each page names itself in the browser tab, and a guardian reads dates as "
   expect(errors).toEqual([]);
 });
 
+test('long lists are split into pages: staff accounts by role with search and a Manage dialog, promotion under Learners',async({page})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  await signIn(page,'head@example.test','Settings');await openSetting(page,'Staff accounts');
+  const suffix=randomUUID().slice(0,8),login=`teacher-${suffix}@example.test`,accounts=page.getByRole('region',{name:'Staff and family accounts',exact:true});
+  await accounts.getByRole('button',{name:'Add account',exact:true}).click();
+  const add=page.getByRole('dialog',{name:'Add an account',exact:true});await add.getByLabel('Full name',{exact:true}).fill(`Layout Teacher ${suffix}`);await add.getByLabel('Email or mobile number',{exact:true}).fill(login);await add.getByRole('combobox',{name:'Role'}).selectOption('teacher');await add.getByRole('button',{name:'Create account',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Temporary password'})).toBeVisible();
+  await accounts.getByLabel('Search accounts',{exact:true}).fill(suffix);await accounts.getByRole('button',{name:'Search',exact:true}).click();
+  const row=accounts.getByRole('row').filter({hasText:`Layout Teacher ${suffix}`});await expect(row).toHaveCount(1);
+  await row.getByRole('button',{name:/^Manage /}).click();const manage=page.getByRole('dialog',{name:`Manage Layout Teacher ${suffix}`,exact:true});
+  await manage.getByRole('button',{name:'Remove access',exact:true}).click();await manage.getByRole('button',{name:'Yes, remove access',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'can no longer sign in to this school'})).toBeVisible();await expect(row).toContainText('Access removed');
+  // The year-end promotion is a tab on Learners, and the old address still opens it.
+  await page.goto('/#/promotion');await pickSchool(page);await expect(page.getByRole('tab',{name:'Year-end promotion',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Promotion'})).toHaveCount(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
+});

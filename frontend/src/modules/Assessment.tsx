@@ -2,6 +2,7 @@ import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'reac
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, Pill, Tabs, currentTerm } from '../lib/ui';
 import { caPartLabels } from '../lib/caParts';
+import { dayLabel } from '../lib/dates';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -23,7 +24,7 @@ function parseBands(text: string): Band[] {
 }
 
 // Settings shows the setup forms directly; elsewhere they sit in a collapsible block.
-const SetupWrap = ({ open, children }: { open: boolean; children: React.ReactNode }) => open ? <div>{children}</div> : <details><summary>Setup: subjects, terms and grading policy</summary>{children}</details>;
+const SetupWrap = ({ open, children }: { open: boolean; children: React.ReactNode }) => open ? <>{children}</> : <details><summary>Setup: subjects, terms and grading policy</summary>{children}</details>;
 export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: string; csrfToken: string; role: string; view?: 'setup' | 'work' }) {
   const head = role === 'headteacher';
   const headers = { 'x-csrf-token': csrfToken };
@@ -39,6 +40,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const [remarkRun, setRemarkRun] = useState<{ runId: string; drafts: Record<string, string> } | null>(null); const [remarkNote, setRemarkNote] = useState('');
   const [printing, setPrinting] = useState<{ id: string; snapshot: Snapshot }[] | null>(null);
   const [printLevel, setPrintLevel] = useState('');
+  const [tab, setTab] = useState<'scores' | 'remarks' | 'reports'>('scores');
   const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [newSubject, setNewSubject] = useState(''); const [newTerm, setNewTerm] = useState({ academicYearId: '', name: '', startDate: '', endDate: '' });
   const [policyForm, setPolicyForm] = useState({ caWeight: '50', examWeight: '50', bands: '80,A,Excellent\n65,B,Good\n50,C,Credit\n0,D,Needs support', sourceNote: '', parts: { exercises: '30', homework: '30', tests: '40', projects: '0' } as Record<keyof CaParts, string> });
@@ -156,47 +158,71 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
       await loadGrid(); setMessage(`Published ${r.published} report(s).`);
     }); };
 
-  return <section aria-label="Assessment and terminal reports">
-    <h2>{view === 'setup' ? 'Subjects, terms and grading' : 'Assessment and terminal reports'}</h2>
-    {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
-    {head && view !== 'work' && <SetupWrap open={view === 'setup'}>
-      <form onSubmit={addSubject}><label>New subject<input value={newSubject} onChange={e => setNewSubject(e.target.value)} required minLength={2} maxLength={80}/></label><button disabled={busy}>Add subject</button></form>
-      <p className="muted">Subjects: {subjects.map(s => s.name).join(', ') || 'none yet'}</p>
-      <form onSubmit={addTerm}><label>Year for this term<select value={newTerm.academicYearId} onChange={e => setNewTerm({ ...newTerm, academicYearId: e.target.value })} required><option value="">Choose a year</option>{years.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}</select></label>
-        <label>Term name<input value={newTerm.name} onChange={e => setNewTerm({ ...newTerm, name: e.target.value })} required placeholder="Term 1"/></label>
-        <label>Term start date<input type="date" value={newTerm.startDate} onChange={e => setNewTerm({ ...newTerm, startDate: e.target.value })} required/></label>
-        <label>Term end date<input type="date" value={newTerm.endDate} onChange={e => setNewTerm({ ...newTerm, endDate: e.target.value })} required/></label><button disabled={busy}>Add term</button></form>
-      <form onSubmit={savePolicy}><h3>Grading policy (set from your school's own policy)</h3>
-        <label>Continuous assessment weight (%)<input type="number" min={0} max={100} value={policyForm.caWeight} onChange={e => setPolicyForm({ ...policyForm, caWeight: e.target.value, examWeight: String(100 - Number(e.target.value)) })} required/></label>
-        <label>Exam weight (%)<input type="number" value={policyForm.examWeight} readOnly/></label>
-        <fieldset className="ca-parts"><legend>What makes up the continuous assessment (out of 100)</legend>
-          {caPartLabels.map(([key, , long]) => <label key={key}>{long}<input type="number" min={0} max={100} step={1} value={policyForm.parts[key]} onChange={e => setPolicyForm({ ...policyForm, parts: { ...policyForm.parts, [key]: e.target.value } })} required/>
-            <span className="sub">{Math.round((Number(policyForm.parts[key]) || 0) * Number(policyForm.caWeight)) / 100}% of the final score</span></label>)}
-          <p className={partsTotal === 100 ? 'muted' : 'field-error'}>Total {partsTotal} of 100. For example, with CA and exam at 50% each, 30 / 30 / 40 gives class exercises 15%, homework 15% and two class tests 10% each of the final score. Put 0 for a part your school does not count. If a learner has no marks in a part, that part is skipped for them and the other parts count for more.</p></fieldset>
-        <label>Grade bands (one per line: minimum score, grade, remark)<textarea value={policyForm.bands} onChange={e => setPolicyForm({ ...policyForm, bands: e.target.value })} required/></label>
-        <label>Where this policy comes from<input value={policyForm.sourceNote} onChange={e => setPolicyForm({ ...policyForm, sourceNote: e.target.value })} required minLength={3} placeholder="e.g. School policy memo, September 2026"/></label><button disabled={busy}>Save policy</button></form></SetupWrap>}
-    {view !== 'setup' && <>{!policy && <p className="muted">{head ? 'Set the grading policy above before scores can be recorded.' : 'The headteacher has not set the grading policy yet.'}</p>}
+  const resultsTable = results.length > 0 && <>
+    <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">Position</th><th className="num">Average</th><th>Subjects</th></tr></thead><tbody>{results.map(r => <tr key={r.learnerId}><td>{r.fullName}{!r.complete && <> <Pill tone="caution">Missing scores</Pill></>}</td><td className="num">{r.position ?? '–'}</td><td className="num">{r.complete ? r.average : '–'}</td><td>{r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</td></tr>)}</tbody></table></div>
+    <div className="actions card-actions"><button disabled={busy} onClick={publish}>Publish terminal reports</button></div></>;
+  const picks = <>
     <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
     <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
-    {head && <div className="actions"><label>Report cards for<select value={printLevel} onChange={e => setPrintLevel(e.target.value)}><option value="">The whole school</option>{['Nursery', 'KG', 'Primary', 'JHS'].map(l => <option key={l} value={l}>{l}</option>)}</select></label>
-      <button type="button" className="secondary" disabled={busy || !termId} onClick={openSchoolReportCards}><Icon name="print"/>Print report cards</button></div>}
-    <label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">Choose a subject</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-    {grid.length > 0 && <><div className="table-wrap"><table><thead><tr><th>Learner</th><th>Continuous assessment (0–100)</th><th>Exam (0–100)</th>{head && <th>Published report</th>}</tr></thead><tbody>
-      {grid.map(row => <tr key={row.learnerId}><td>{row.fullName}</td>{(['ca', 'exam'] as const).map(kind => <td key={kind}><input type="number" min={0} max={100} step="0.01" aria-label={`${row.fullName} ${kind === 'ca' ? 'continuous assessment' : 'exam'}`} disabled={row.locked}
-        value={edits[`${row.learnerId}:${kind}`] ?? (row[kind] ?? '')} onChange={e => setEdits({ ...edits, [`${row.learnerId}:${kind}`]: e.target.value })}/></td>)}{head && <td>{row.locked ? <button type="button" className="secondary" disabled={busy} onClick={() => reopen(row)}>Correct this report</button> : row.published ? <button type="button" disabled={busy} onClick={() => reissue(row)}>Publish corrected report</button> : '–'}</td>}</tr>)}</tbody></table></div>
-      <div className="actions"><button disabled={busy || !policy} onClick={saveScores}>Save scores</button><button className="secondary" disabled={busy || !subjectId} onClick={fillCa}>Fill CA from assessments</button>{head && <button className="secondary" disabled={busy} onClick={preview}>Preview results</button>}</div></>}
-    {results.length > 0 && <><h3>Results preview</h3><ul className="history">{results.map(r => <li key={r.learnerId}><strong>{r.fullName}{r.position ? ` · position ${r.position}` : ''}</strong><span>{r.complete ? `Average ${r.average}` : 'Missing scores'} · {r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</span></li>)}</ul>
-      <button disabled={busy} onClick={publish}>Publish terminal reports</button></>}
-    {remarks.length > 0 && <Card title="Report card remarks" hint={head ? 'Class teachers fill conduct, attitude, interest and their remark; you add the headteacher\'s remark. Locked once the report is published.' : 'Conduct, attitude, interest and your remark for each learner. Locked once the report is published.'} flush>
-      {remarkNote && <p role="status" className="card-body">{remarkNote}</p>}
-      <div className="table-wrap"><table className="remarks-table"><thead><tr><th>Learner</th>{remarkFields.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead><tbody>
-        {remarks.map(row => <tr key={row.learnerId}><td>{row.fullName}{row.locked && <> <Pill>published</Pill></>}{remarkRun?.drafts[row.learnerId] !== undefined && <> <Pill tone="info">draft, not saved</Pill></>}</td>{remarkFields.map(([field, label]) => {
-          const key = `${row.learnerId}:${field}`, readOnly = row.locked || (field === 'headRemark' && !head);
-          const long = field.endsWith('emark'), props = { 'aria-label': `${row.fullName} ${label}`, maxLength: long ? 300 : 120, value: remarkEdits[key] ?? row[field] ?? '', onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setRemarkEdits({ ...remarkEdits, [key]: e.target.value }) };
-          return <td key={field} className={long ? 'remark-cell' : undefined}>{readOnly ? (row[field] ?? '–') : long ? <textarea rows={4} {...props}/> : <input {...props}/>}</td>;
-        })}</tr>)}</tbody></table></div>
-      <div className="actions card-actions"><button disabled={busy} onClick={saveRemarks}>Save remarks</button>{remarks.some(r => !r.locked && !r.teacherRemark) && <button className="secondary" disabled={busy} onClick={suggestRemarks}><Icon name="auto_awesome"/>Suggest remarks</button>}<button className="secondary" disabled={busy} onClick={openReportCards}>Report cards</button></div>
-    </Card>}
+    <Tabs label="Assessment view" value={tab} onChange={setTab} options={[{ id: 'scores', label: 'Scores' }, { id: 'remarks', label: 'Remarks' }, { id: 'reports', label: 'Report cards' }]}/></>;
+  return <section aria-label="Assessment and terminal reports" className="page">
+    <h2 className="sr-only">{view === 'setup' ? 'Subjects, terms and grading' : 'Assessment and terminal reports'}</h2>
+    {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
+    {head && view !== 'work' && <SetupWrap open={view === 'setup'}>
+      <Card title="Subjects" hint="The subjects your school records scores for.">
+        {subjects.length ? <div className="pill-row">{subjects.map(s => <Pill key={s.id}>{s.name}</Pill>)}</div> : <p className="muted">No subjects yet.</p>}
+        <form onSubmit={addSubject} className="inline-form"><label>New subject<input value={newSubject} onChange={e => setNewSubject(e.target.value)} required minLength={2} maxLength={80} placeholder="Mathematics"/></label><button disabled={busy}>Add subject</button></form>
+      </Card>
+      <Card title="Terms" hint="Each term belongs to an academic year. Scores, reports and fees are recorded per term." flush>
+        {terms.length ? <div className="table-wrap"><table><thead><tr><th>Term</th><th>Year</th><th>Starts</th><th>Ends</th></tr></thead><tbody>{terms.map(t => <tr key={t.id}><td>{t.name}</td><td>{t.year_name}</td><td>{dayLabel(t.start_date)}</td><td>{dayLabel(t.end_date)}</td></tr>)}</tbody></table></div> : <Empty title="No terms yet" hint="Add the first term below."/>}
+        <form onSubmit={addTerm} className="card-body"><h4>Add a term</h4><div className="grid"><label>Year for this term<select value={newTerm.academicYearId} onChange={e => setNewTerm({ ...newTerm, academicYearId: e.target.value })} required><option value="">Choose a year</option>{years.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}</select></label>
+          <label>Term name<input value={newTerm.name} onChange={e => setNewTerm({ ...newTerm, name: e.target.value })} required placeholder="Term 1"/></label>
+          <label>Term start date<input type="date" value={newTerm.startDate} onChange={e => setNewTerm({ ...newTerm, startDate: e.target.value })} required/></label>
+          <label>Term end date<input type="date" value={newTerm.endDate} onChange={e => setNewTerm({ ...newTerm, endDate: e.target.value })} required/></label></div><button disabled={busy}>Add term</button></form>
+      </Card>
+      <Card title="Grading policy" hint="Set from your school's own policy: how class work and exams count, and where each grade begins.">
+        <form onSubmit={savePolicy}>
+          <div className="grid"><label>Continuous assessment weight (%)<input type="number" min={0} max={100} value={policyForm.caWeight} onChange={e => setPolicyForm({ ...policyForm, caWeight: e.target.value, examWeight: String(100 - Number(e.target.value)) })} required/></label>
+          <label>Exam weight (%)<input type="number" value={policyForm.examWeight} readOnly/></label></div>
+          <fieldset className="ca-parts"><legend>What makes up the continuous assessment (out of 100)</legend>
+            {caPartLabels.map(([key, , long]) => <label key={key}>{long}<input type="number" min={0} max={100} step={1} value={policyForm.parts[key]} onChange={e => setPolicyForm({ ...policyForm, parts: { ...policyForm.parts, [key]: e.target.value } })} required/>
+              <span className="sub">{Math.round((Number(policyForm.parts[key]) || 0) * Number(policyForm.caWeight)) / 100}% of the final score</span></label>)}
+            <p className={partsTotal === 100 ? 'muted' : 'field-error'}>Total {partsTotal} of 100. For example, with CA and exam at 50% each, 30 / 30 / 40 gives class exercises 15%, homework 15% and two class tests 10% each of the final score. Put 0 for a part your school does not count. If a learner has no marks in a part, that part is skipped for them and the other parts count for more.</p></fieldset>
+          <label>Grade bands (one per line: minimum score, grade, remark)<textarea rows={6} value={policyForm.bands} onChange={e => setPolicyForm({ ...policyForm, bands: e.target.value })} required/></label>
+          <label>Where this policy comes from<input value={policyForm.sourceNote} onChange={e => setPolicyForm({ ...policyForm, sourceNote: e.target.value })} required minLength={3} placeholder="e.g. School policy memo, September 2026"/></label><button disabled={busy}>Save policy</button></form>
+      </Card></SetupWrap>}
+    {view !== 'setup' && <>{!policy && <p className="muted">{head ? 'Set the grading policy in Settings before scores can be recorded.' : 'The headteacher has not set the grading policy yet.'}</p>}
+    <Card flush>
+      <div className="toolbar">{picks}</div>
+      {!classId || !termId ? <Empty title={classes.length ? 'Choose a class and term' : 'No classes yet'} hint={classes.length ? undefined : head ? 'Add classes in Settings first.' : 'You have no class assigned today.'}/>
+      : tab === 'scores' ? <>
+        <div className="toolbar"><label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">Choose a subject</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label><span className="count">{grid.length} learner{grid.length === 1 ? '' : 's'}</span></div>
+        {grid.length > 0 ? <><div className="table-wrap"><table><thead><tr><th>Learner</th><th>Continuous assessment (0–100)</th><th>Exam (0–100)</th>{head && <th>Published report</th>}</tr></thead><tbody>
+          {grid.map(row => <tr key={row.learnerId}><td>{row.fullName}</td>{(['ca', 'exam'] as const).map(kind => <td key={kind}><input type="number" min={0} max={100} step="0.01" aria-label={`${row.fullName} ${kind === 'ca' ? 'continuous assessment' : 'exam'}`} disabled={row.locked}
+            value={edits[`${row.learnerId}:${kind}`] ?? (row[kind] ?? '')} onChange={e => setEdits({ ...edits, [`${row.learnerId}:${kind}`]: e.target.value })}/></td>)}{head && <td>{row.locked ? <button type="button" className="secondary" disabled={busy} onClick={() => reopen(row)}>Correct this report</button> : row.published ? <button type="button" disabled={busy} onClick={() => reissue(row)}>Publish corrected report</button> : '–'}</td>}</tr>)}</tbody></table></div>
+          <div className="actions card-actions"><button disabled={busy || !policy} onClick={saveScores}>Save scores</button><button className="secondary" disabled={busy || !subjectId} onClick={fillCa}>Fill CA from assessments</button></div></>
+          : <Empty title={subjectId ? 'No learners in this class' : 'Choose a subject'} hint={subjectId ? undefined : 'Pick the subject whose scores you are entering.'}/>}
+      </> : tab === 'remarks' ? (remarks.length > 0 ? <>
+        <p className="muted">{head ? 'Class teachers fill conduct, attitude, interest and their remark; you add the headteacher\'s remark. Locked once the report is published.' : 'Conduct, attitude, interest and your remark for each learner. Locked once the report is published.'}</p>
+        {remarkNote && <p role="status">{remarkNote}</p>}
+        <div className="table-wrap"><table className="remarks-table"><thead><tr><th>Learner</th>{remarkFields.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead><tbody>
+          {remarks.map(row => <tr key={row.learnerId}><td>{row.fullName}{row.locked && <> <Pill>published</Pill></>}{remarkRun?.drafts[row.learnerId] !== undefined && <> <Pill tone="info">draft, not saved</Pill></>}</td>{remarkFields.map(([field, label]) => {
+            const key = `${row.learnerId}:${field}`, readOnly = row.locked || (field === 'headRemark' && !head);
+            const long = field.endsWith('emark'), props = { 'aria-label': `${row.fullName} ${label}`, maxLength: long ? 300 : 120, value: remarkEdits[key] ?? row[field] ?? '', onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setRemarkEdits({ ...remarkEdits, [key]: e.target.value }) };
+            return <td key={field} className={long ? 'remark-cell' : undefined}>{readOnly ? (row[field] ?? '–') : long ? <textarea rows={2} {...props}/> : <input {...props}/>}</td>;
+          })}</tr>)}</tbody></table></div>
+        <div className="actions card-actions"><button disabled={busy} onClick={saveRemarks}>Save remarks</button>{remarks.some(r => !r.locked && !r.teacherRemark) && <button className="secondary" disabled={busy} onClick={suggestRemarks}><Icon name="auto_awesome"/>Suggest remarks</button>}</div></>
+        : <Empty title="No learners in this class" hint="Remarks appear once learners are enrolled."/>)
+      : <div className="card-body">
+        <h4>This class</h4>
+        <p className="muted">{head ? 'Look at the results, then publish the terminal reports. Publishing locks the scores and shows the reports to guardians.' : 'Reports the headteacher has published for this class and term.'}</p>
+        <div className="actions">{head && <button className="secondary" disabled={busy} onClick={preview}>Preview results</button>}<button className="secondary" disabled={busy} onClick={openReportCards}><Icon name="description"/>Report cards</button></div>
+        {resultsTable}
+        {head && <><h4>Whole school or one level</h4><p className="muted">Print every published report card for the term, one per page.</p>
+          <div className="actions"><label>Report cards for<select value={printLevel} onChange={e => setPrintLevel(e.target.value)}><option value="">The whole school</option>{['Nursery', 'KG', 'Primary', 'JHS'].map(l => <option key={l} value={l}>{l}</option>)}</select></label>
+            <button type="button" className="secondary" disabled={busy || !termId} onClick={openSchoolReportCards}><Icon name="print"/>Print report cards</button></div></>}
+      </div>}
+    </Card>
     {printing && <Dialog title="Report cards" wide onClose={() => setPrinting(null)}>
       <div className="actions"><button type="button" onClick={() => window.print()}>Print all ({printing.length})</button></div>
       <div className="report-sheet">{printing.map(r => <ReportCard key={r.id} snapshot={r.snapshot}/>)}</div>

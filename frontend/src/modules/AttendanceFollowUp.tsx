@@ -33,6 +33,7 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
   const [fees, setFees] = useState<FeeSummary | null>(null);
   const [waiting, setWaiting] = useState(0);
   const [error, setError] = useState('');
+  const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
@@ -79,6 +80,8 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
     } catch (e) { setError((e as Error).message); }
   }
 
+  const outstanding = follow?.classes.filter(c => c.register_status === 'missing' || c.register_status === 'draft') ?? [];
+  const visibleClasses = showAll ? follow?.classes ?? [] : outstanding;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const names = (list: string[]) => list.slice(0, 4).join(', ') + (list.length > 4 ? '…' : '');
   const missing = morning?.registers.filter(r => r.status === 'missing') ?? [], drafts = morning?.registers.filter(r => r.status === 'draft') ?? [];
@@ -112,8 +115,11 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
     <div className="columns">
       <Card title="Attendance follow-up" hint={follow ? (follow.open ? `Registers for ${follow.day} · ${follow.outstanding} outstanding` : `${follow.day} is not an open school day`) : 'Loading…'} action={<a className="button secondary" href="#/attendance">Open registers</a>} flush>
         {follow && (follow.open
-          ? (follow.classes.length ? <div className="table-wrap"><table><thead><tr><th>Class</th><th className="num">Learners</th><th>Register</th></tr></thead>
-            <tbody>{follow.classes.map(c => <tr key={c.class_id}><td>{c.name}<span className="sub">{c.level}</span></td><td className="num">{c.learners}</td><td><Pill tone={tone[c.register_status] ?? 'neutral'}>{label[c.register_status] ?? c.register_status}</Pill></td></tr>)}</tbody></table></div>
+          ? (follow.classes.length ? <>
+            <div className="toolbar"><span className="count">{showAll ? `All ${follow.classes.length} classes` : `${outstanding.length} of ${follow.classes.length} classes still to do`}</span><button type="button" className="secondary" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show only outstanding' : `Show all ${follow.classes.length} classes`}</button></div>
+            {visibleClasses.length ? <div className="table-wrap"><table><thead><tr><th>Class</th><th className="num">Learners</th><th>Register</th></tr></thead>
+            <tbody>{visibleClasses.map(c => <tr key={c.class_id}><td>{c.name}<span className="sub">{c.level}</span></td><td className="num">{c.learners}</td><td><Pill tone={tone[c.register_status] ?? 'neutral'}>{label[c.register_status] ?? c.register_status}</Pill></td></tr>)}</tbody></table></div>
+            : <Empty title="Every register is in" hint="All classes have submitted today’s register."/>}</>
             : <Empty title="No classes to mark today"/>)
           : <Empty title="No registers are due" hint="Today is not an open school day."/>)}
       </Card>

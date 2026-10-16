@@ -46,6 +46,14 @@ export function Tabs<T extends string>({ value, onChange, options, label }: { va
   </div>;
 }
 
+// "Showing 1–25 of 184 learners" with Previous / Next, for any list that is fetched or shown a page at a time.
+export function Pager({ offset, shown, total, noun, onMove, busy = false, size = 25 }: { offset: number; shown: number; total: number; noun: string; onMove: (offset: number) => void; busy?: boolean; size?: number }) {
+  return <div className="pager" aria-label={`${noun.charAt(0).toUpperCase()}${noun.slice(1)} pages`}>
+    <span>{total === 0 ? `0 ${noun}` : `Showing ${offset + 1}–${Math.min(offset + shown, total)} of ${total} ${noun}`}</span>
+    <div><button type="button" className="secondary" disabled={busy || offset === 0} onClick={() => onMove(Math.max(0, offset - size))}>Previous {noun}</button><button type="button" className="secondary" disabled={busy || offset + shown >= total} onClick={() => onMove(offset + size)}>Next {noun}</button></div>
+  </div>;
+}
+
 export function Empty({ title, hint, children }: { title: string; hint?: string; children?: React.ReactNode }) {
   return <div className="empty"><span className="empty-icon"><Icon name="inbox"/></span><p className="empty-title">{title}</p>{hint && <p className="muted">{hint}</p>}{children}</div>;
 }

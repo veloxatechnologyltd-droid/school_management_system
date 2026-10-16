@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { request } from '../lib/api';
-import { Card, Dialog, Empty, Pill } from '../lib/ui';
+import { Card, Dialog, Empty, Icon, Pill } from '../lib/ui';
 
 type Props = { schoolId: string; csrfToken: string; role: string; view?: 'setup' | 'work' };
 type Level = 'Nursery' | 'KG';
@@ -52,6 +52,7 @@ export function EarlyYears({ schoolId, csrfToken, role, view }: Props) {
   const [indicators, setIndicators] = useState([newIndicator()]);
   const [retireReason, setRetireReason] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [writing, setWriting] = useState(false);
   const [observing, setObserving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -142,7 +143,7 @@ export function EarlyYears({ schoolId, csrfToken, role, view }: Props) {
     event.preventDefault(); setBusy(true); setError(''); setNotice('');
     const payload = { level, title: title.trim(), sourceKind, sourceIssuer: issuer.trim(), sourceReference: reference.trim(), sourceVersion: sourceVersion.trim(), effectiveStart, ...(effectiveEnd ? { effectiveEnd } : {}), ...(level === 'Nursery' ? { specialistName: specialistName.trim(), specialistQualification: specialistQualification.trim(), specialistReviewReference: specialistReference.trim(), specialistReviewedOn } : {}), indicators: indicators.map(row => ({ ...row, code: row.code.trim(), title: row.title.trim(), learningArea: row.learningArea.trim(), strand: row.strand.trim(), subStrand: row.subStrand.trim(), descriptors: row.descriptors.map(item => ({ ...item, text: item.text.trim() })) })) };
     const key = `policy:${JSON.stringify(payload)}`;
-    try { await post(`/schools/${schoolId}/early-years/policies`, payload, key); setNotice('Policy draft saved. Review and approve it before recording observations.'); setTitle(''); setSourceKind('school_local'); setIssuer(''); setReference(''); setSourceVersion(''); setEffectiveStart(''); setEffectiveEnd(''); setSpecialistName(''); setSpecialistQualification(''); setSpecialistReference(''); setSpecialistReviewedOn(''); setIndicators([newIndicator()]); await reloadPolicies(); }
+    try { await post(`/schools/${schoolId}/early-years/policies`, payload, key); setNotice('Policy draft saved. Review and approve it before recording observations.'); setWriting(false); setTitle(''); setSourceKind('school_local'); setIssuer(''); setReference(''); setSourceVersion(''); setEffectiveStart(''); setEffectiveEnd(''); setSpecialistName(''); setSpecialistQualification(''); setSpecialistReference(''); setSpecialistReviewedOn(''); setIndicators([newIndicator()]); await reloadPolicies(); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   async function transition(policy: Policy, action: 'approve' | 'retire') {
@@ -243,14 +244,18 @@ export function EarlyYears({ schoolId, csrfToken, role, view }: Props) {
     </Dialog>}
   </section>;
 
-  return <section aria-labelledby="early-years-title">
-    <h2 id="early-years-title">Early years policies</h2>
-    {error && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}
+  return <section aria-labelledby="early-years-title" className="page">
+    <h2 id="early-years-title" className="sr-only">Early years policies</h2>
+    {error && !writing && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}
     <div className="actions" role="group" aria-label="Early years level">
       {(['Nursery', 'KG'] as Level[]).map(item => <button type="button" className={level === item ? '' : 'secondary'} key={item} disabled={busy} aria-pressed={level === item} onClick={() => { changeContext(); clearObservationDraft(); setLevel(item); }}>{item}</button>)}
     </div>
     {head && <>
-      <h3>School policy configuration · {level}</h3><p className="muted">Enter the school’s own curriculum source and indicators. This screen does not supply or assert official curriculum content.</p>
+      <Card title={`Policies · ${level}`} hint="The school's own curriculum source and indicators. This screen does not supply or assert official curriculum content." action={<button type="button" onClick={() => { setError(''); setNotice(''); setWriting(true); }}><Icon name="add"/>New policy</button>}>
+      {policies.length ? <ul className="history">{policies.map(policy => <li key={policy.id}><strong>{policy.title} · {policy.status} · version {policy.version}</strong><span>{policy.source_issuer} · {policy.source_reference} · {policy.source_version} · {policy.effective_start}{policy.effective_end ? ` to ${policy.effective_end}` : ''} · {policy.indicators.length} indicators</span>{policy.source_kind === 'official_reference_supplied_by_school' && <span>Official reference supplied by the school; not independently verified by this system.</span>}{policy.specialist_name && <span>School-supplied Nursery specialist evidence: {policy.specialist_name}, {policy.specialist_qualification}; {policy.specialist_review_reference}, {policy.specialist_reviewed_on}. Not system-verified.</span>}<details open={policy.status === 'draft'}><summary>Review indicators and rubric descriptors before approval</summary><ol>{policy.indicators.map(indicator => <li key={indicator.id}><strong>{indicator.code} · {indicator.title}</strong><span>{indicator.learning_area} · {indicator.strand} / {indicator.sub_strand}</span><ul>{indicator.descriptors.map(descriptor => <li key={descriptor.id}>{descriptor.text}</li>)}</ul></li>)}</ol></details>{policy.status === 'draft' && <button type="button" className="secondary" disabled={busy} onClick={() => void transition(policy, 'approve')}>Approve policy</button>}{policy.status === 'approved' && <div className="actions"><label>Retirement reason<input minLength={3} maxLength={500} value={retireReason[policy.id] ?? ''} onChange={e => setRetireReason(current => ({ ...current, [policy.id]: e.target.value }))} /></label><button type="button" className="secondary" disabled={busy || (retireReason[policy.id]?.trim().length ?? 0) < 3} onClick={() => void transition(policy, 'retire')}>Retire policy</button></div>}</li>)}</ul> : <p>No school policies recorded for {level}.</p>}
+      </Card>
+      {writing && <Dialog title={`New policy draft · ${level}`} wide onClose={() => setWriting(false)}>
+        {error && <p role="alert">{error}</p>}
       <form onSubmit={savePolicy}>
         <div className="actions"><label>Policy title<input value={title} minLength={3} maxLength={120} required onChange={e => setTitle(e.target.value)} /></label><label>Source type<select value={sourceKind} onChange={e => setSourceKind(e.target.value as typeof sourceKind)}><option value="school_local">School-local content</option><option value="official_reference_supplied_by_school">Official reference supplied by the school (not independently verified)</option></select></label><label>Source issuer<input value={issuer} minLength={3} maxLength={120} required onChange={e => setIssuer(e.target.value)} /></label><label>{sourceKind === 'school_local' ? 'School source reference' : 'Reference supplied by the school'}<input value={reference} minLength={3} maxLength={500} required onChange={e => setReference(e.target.value)} /></label><label>Source version<input value={sourceVersion} minLength={1} maxLength={80} required onChange={e => setSourceVersion(e.target.value)} /></label><label>Effective from<input type="date" value={effectiveStart} required onChange={e => setEffectiveStart(e.target.value)} /></label><label>Effective until (optional)<input type="date" value={effectiveEnd} onChange={e => setEffectiveEnd(e.target.value)} /></label></div>
         {sourceKind === 'official_reference_supplied_by_school' && <p className="muted">This is a reference the school supplied. The system does not independently verify its official status or content.</p>}
@@ -260,8 +265,7 @@ export function EarlyYears({ schoolId, csrfToken, role, view }: Props) {
         <details open><summary>Preview school-entered indicators and descriptor text</summary><ol>{indicators.map((item, index) => <li key={index}><strong>{item.code || 'Code not entered'} · {item.title || 'Title not entered'}</strong><span>{[item.learningArea, item.strand, item.subStrand].filter(Boolean).join(' · ')}</span><ul>{item.descriptors.map(descriptor => <li key={descriptor.id}>{descriptor.text || 'Descriptor text not entered'}</li>)}</ul></li>)}</ol></details>
         <button type="button" className="secondary" disabled={indicators.length >= 40} onClick={() => setIndicators(rows => [...rows, newIndicator()])}>Add indicator</button><button disabled={busy || indicators.length === 0}>Save policy draft</button>
       </form>
-      <h3>Policy history · {level}</h3>
-      {policies.length ? <ul className="history">{policies.map(policy => <li key={policy.id}><strong>{policy.title} · {policy.status} · version {policy.version}</strong><span>{policy.source_issuer} · {policy.source_reference} · {policy.source_version} · {policy.effective_start}{policy.effective_end ? ` to ${policy.effective_end}` : ''} · {policy.indicators.length} indicators</span>{policy.source_kind === 'official_reference_supplied_by_school' && <span>Official reference supplied by the school; not independently verified by this system.</span>}{policy.specialist_name && <span>School-supplied Nursery specialist evidence: {policy.specialist_name}, {policy.specialist_qualification}; {policy.specialist_review_reference}, {policy.specialist_reviewed_on}. Not system-verified.</span>}<details open={policy.status === 'draft'}><summary>Review indicators and rubric descriptors before approval</summary><ol>{policy.indicators.map(indicator => <li key={indicator.id}><strong>{indicator.code} · {indicator.title}</strong><span>{indicator.learning_area} · {indicator.strand} / {indicator.sub_strand}</span><ul>{indicator.descriptors.map(descriptor => <li key={descriptor.id}>{descriptor.text}</li>)}</ul></li>)}</ol></details>{policy.status === 'draft' && <button type="button" className="secondary" disabled={busy} onClick={() => void transition(policy, 'approve')}>Approve policy</button>}{policy.status === 'approved' && <div className="actions"><label>Retirement reason<input minLength={3} maxLength={500} value={retireReason[policy.id] ?? ''} onChange={e => setRetireReason(current => ({ ...current, [policy.id]: e.target.value }))} /></label><button type="button" className="secondary" disabled={busy || (retireReason[policy.id]?.trim().length ?? 0) < 3} onClick={() => void transition(policy, 'retire')}>Retire policy</button></div>}</li>)}</ul> : <p>No school policies recorded for {level}.</p>}
+      </Dialog>}
     </>}
   </section>;
 }
