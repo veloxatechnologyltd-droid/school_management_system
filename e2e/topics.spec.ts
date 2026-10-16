@@ -12,17 +12,19 @@ const noOverflow=(page:Page)=>page.evaluate(()=>document.documentElement.scrollW
 
 // The model is a stand-in (e2e/claude-standin.mjs, started by playwright.config.ts): every layer of ours runs for real, the provider does not.
 // Its first sum in each batch is deliberately wrong, so every level comes back one question short and the screens show the top-up.
+// Four people, a model that takes time to write four topics, and a phone: this test needs more than the 60 seconds the quicker tests get.
+test.setTimeout(180_000);
 test('the head approves a topic and Claude makes it; a teacher reads and retires; a parent reports a question on a phone; the head handles the report',async({page,browser})=>{
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   await signIn(page,'head@example.test','Topics');
-  const suffix=randomUUID().slice(0,8),topic=`Fractions ${suffix}`,second=`Decimals ${suffix}`,elsewhere=`Algebra ${suffix}`,className=`Topics class ${suffix}`,learnerName=`Topics Learner ${suffix}`,termName=`Topics term ${suffix}`,yearName=`Topics year ${suffix}`;
+  const suffix=randomUUID().slice(0,8),topic=`Fractions ${suffix}`,second=`Decimals ${suffix}`,third=`Measures ${suffix}`,fourth=`Shapes ${suffix}`,elsewhere=`Algebra ${suffix}`,className=`Topics class ${suffix}`,learnerName=`Topics Learner ${suffix}`,termName=`Topics term ${suffix}`,yearName=`Topics year ${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}),shift=(d:number)=>new Date(Date.parse(`${today}T00:00:00Z`)+d*86400000).toISOString().slice(0,10);
   async function send(method:'POST'|'PUT',route:string,body:Record<string,unknown>,status=201){const response=await page.request.fetch(`/api/v1/schools/${school}${route}`,{method,headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
   const year=await send('POST','/academic-years',{name:yearName,startDate:shift(-60),endDate:shift(120)}),section=await send('POST','/classes',{name:className,level:'Primary',capacity:5,academicYearId:year.id});
   const subject=await send('POST','/assessment/subjects',{name:`Maths ${suffix}`}),term=await send('POST','/assessment/terms',{academicYearId:year.id,name:termName,startDate:shift(-55),endDate:shift(30)});
-  await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',sourceNote:'Synthetic scheme of work',items:[{description:topic},{description:second}]});
+  await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',sourceNote:'Synthetic scheme of work',items:[{description:topic},{description:second},{description:third},{description:fourth}]});
   await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',grade:`Elsewhere ${suffix}`,sourceNote:'Synthetic scheme of work',items:[{description:elsewhere}]});
   const indicator=(await (await page.request.get(`/api/v1/schools/${school}/assessment/indicators?subjectId=${subject.id}`)).json()).items.find((i:any)=>i.description===topic).id;
   // The class teacher has this class today; a learner in it is weak in the topic, and the school's own hand-written set exists for it.
@@ -46,15 +48,15 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await page.reload();await expect(page.getByRole('heading',{name:'Topics',exact:true})).toBeVisible();
     await page.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
     await expect(page.getByRole('checkbox',{name:`Select ${elsewhere}`})).toBeVisible();
-    await page.getByRole('checkbox',{name:`Select ${topic}`}).check();await page.getByRole('checkbox',{name:`Select ${second}`}).check();
+    await page.getByRole('checkbox',{name:`Select ${topic}`}).check();await page.getByRole('checkbox',{name:`Select ${second}`}).check();await page.getByRole('checkbox',{name:`Select ${third}`}).check();await page.getByRole('checkbox',{name:`Select ${fourth}`}).check();
     await page.getByRole('button',{name:/^Approve for /}).click();
     const dialog=page.getByRole('dialog',{name:/^Approve topics for /});
     await expect(dialog.getByText(/Nothing about any child or any member of staff is sent/)).toBeVisible();
     await dialog.getByRole('combobox',{name:'Class these topics are for',exact:true}).selectOption(className);
-    await dialog.getByRole('button',{name:'Approve 2 topics',exact:true}).click();
+    await dialog.getByRole('button',{name:'Approve 4 topics',exact:true}).click();
     const row=page.locator('li').filter({hasText:topic}).filter({has:page.getByRole('button',{name:'Open',exact:true})});
-    await expect(page.getByText(/2 topics approved for /)).toBeVisible();
-    await expect(page.getByText('Questions 19 · 19 · 19').first()).toBeVisible({timeout:20000});await expect(page.getByText('Questions 19 · 19 · 19')).toHaveCount(2);
+    await expect(page.getByText(/4 topics approved for /)).toBeVisible();
+    await expect(page.getByText('Questions 19 · 19 · 19').first()).toBeVisible({timeout:20000});await expect(page.getByText('Questions 19 · 19 · 19')).toHaveCount(4);
     await expect(row.getByText(/Lesson ready · questions 19 \/ 19 \/ 19 \(aim 20 each\)/)).toBeVisible();
     // The checks left one question out of each level; making the rest tops each level up to 20.
     await row.getByRole('button',{name:'Make lessons and questions',exact:true}).click();
@@ -112,6 +114,26 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await expect(chosen.getByText("Made by AI from your school's topics")).toBeVisible();
     expect(await noOverflow(family)).toBe(true);await family.keyboard.press('Escape');
 
+    // Study first: the lesson one step at a time on a Primary child's phone, then straight into the check.
+    await card.locator('li').filter({hasText:third}).getByRole('button',{name:'Study first',exact:true}).click();
+    const lesson=family.getByRole('dialog',{name:`Study: ${third}`});
+    await expect(lesson.getByText("Made by AI from your school's topics")).toBeVisible();await expect(lesson.getByText('Step 1 of 6')).toBeVisible();await expect(lesson.getByText(/You will learn this:/)).toBeVisible();
+    await expect(lesson.getByRole('button',{name:'Check what you learned',exact:true})).toHaveCount(0);
+    for(let i=0;i<5;i++)await lesson.getByRole('button',{name:'Next',exact:true}).click();
+    await expect(lesson.getByText('Step 6 of 6')).toBeVisible();await expect(lesson.getByText('A worked example')).toHaveCount(0);await expect(lesson.getByText('Remember')).toBeVisible();
+    expect(await noOverflow(family)).toBe(true);
+    await lesson.getByRole('button',{name:'Check what you learned',exact:true}).click();
+    const afterStudy=family.getByRole('dialog',{name:`Practice: ${third}`});await expect(afterStudy.getByText('Question 1 of 5')).toBeVisible();await family.keyboard.press('Escape');
+    // The head sees the study on the learner's page, beside class work.
+    await page.goto(`/#/learner/${learner}`);await expect(page.getByText('Lessons studied')).toBeVisible();await expect(page.getByText(/no check taken/)).toBeVisible();
+    await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Topics',exact:true}).click();await expect(page.getByRole('heading',{name:'Topics',exact:true})).toBeVisible();
+    // A parent can report a lesson: it stops at once, and Study is no longer offered for that topic.
+    await card.locator('li').filter({hasText:fourth}).getByRole('button',{name:'Study first',exact:true}).click();
+    const reported=family.getByRole('dialog',{name:`Study: ${fourth}`});await reported.getByRole('button',{name:'This looks wrong',exact:true}).click();
+    await reported.getByRole('button',{name:'Send to the teacher',exact:true}).click();
+    await expect(reported.getByText('Thank you. We have told the teacher, and this lesson will not be shown again.')).toBeVisible();expect(await noOverflow(family)).toBe(true);await family.keyboard.press('Escape');
+    await expect(card.locator('li').filter({hasText:fourth}).getByRole('button',{name:'Study first',exact:true})).toHaveCount(0);await expect(card.locator('li').filter({hasText:fourth})).toHaveCount(1);
+
     // ---- The teacher and the head see the report, without the parent's name, and handle it.
     await teacher.reload();await teacher.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
     const report=teacher.locator('li').filter({hasText:'Parent wrote: “I think the answer is not right”'});
@@ -119,12 +141,15 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await page.reload();await page.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
     const headReport=page.locator('li').filter({hasText:'Parent wrote: “I think the answer is not right”'});await expect(headReport).toBeVisible();
     await headReport.getByRole('button',{name:'It was wrong',exact:true}).click();await expect(headReport).toHaveCount(0);
+    // The lesson the parent reported is in the same list, shown as a lesson.
+    const lessonReport=page.locator('li').filter({hasText:'You will learn this:'}).filter({has:page.getByRole('button',{name:'It was wrong',exact:true})});
+    await expect(lessonReport).toBeVisible();await lessonReport.getByRole('button',{name:'It was fine',exact:true}).click();await expect(lessonReport).toHaveCount(0);
     await expect(page.getByText(/Reported by parents \(/)).toHaveCount(0);
     await page.setViewportSize({width:390,height:844});expect(await noOverflow(page)).toBe(true);
     expect(errors).toEqual([]);expect(teacherErrors).toEqual([]);expect(familyErrors).toEqual([]);
   } finally {
     // Leave the school's settings as found.
-    if(!practiceBefore.enabled){const now=await (await page.request.get(`/api/v1/schools/${school}/practice/settings`)).json();await page.request.fetch(`/api/v1/schools/${school}/practice/settings`,{method:'PUT',headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),enabled:false,version:now.version}});}
+    if(!practiceBefore.enabled)try{const now=await (await page.request.get(`/api/v1/schools/${school}/practice/settings`,{timeout:10000})).json();await page.request.fetch(`/api/v1/schools/${school}/practice/settings`,{method:'PUT',headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),enabled:false,version:now.version},timeout:10000});}catch{/* the test's own failure is the one to report */}
     await owner.end();
   }
 });

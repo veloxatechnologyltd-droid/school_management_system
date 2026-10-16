@@ -4,7 +4,8 @@ import { Card, Empty, Pill, Stat } from '../lib/ui';
 import { Dots, ago, times } from './HomePractice';
 
 type Topic = { subject: string; topic: string; level: number; levels: number; done: boolean; sessions: number; sessionsThisWeek: number; lastPracticedOn: string };
-type LearnerView = { enabled: boolean; topics: Topic[]; recent: { on: string; subject: string; topic: string; level: number; correct: number; total: number; outcome: string; levelAfter: number }[]; unfinished: number };
+type Study = { on: string; subject: string; topic: string; minutes: number; check: { correct: number; total: number } | null };
+type LearnerView = { enabled: boolean; studies: Study[]; topics: Topic[]; recent: { on: string; subject: string; topic: string; level: number; correct: number; total: number; outcome: string; levelAfter: number }[]; unfinished: number };
 type ClassView = { enabled: boolean; weekStart: string; practisingThisWeek: number; practisedThisTerm: number; total: number;
   learners: { learnerId: string; fullName: string; sessionsThisWeek: number; sessionsTerm: number; lastPracticedOn: string | null; topics: Topic[] }[] };
 const outcomeWords: Record<string, string> = { up: 'moved up', stay: 'stayed', down: 'moved down', done: 'finished the topic' };
@@ -17,11 +18,14 @@ export function LearnerHomePractice({ schoolId, learnerId }: { schoolId: string;
   useEffect(() => { let live = true; setData(null); setError(''); request<LearnerView>(`/schools/${schoolId}/learners/${learnerId}/practice`).then(r => { if (live) setData(r); }).catch(e => { if (live) setError((e as Error).message); }); return () => { live = false; }; }, [schoolId, learnerId]);
   if (error) return <Card title="Home practice"><p role="alert">{error}</p></Card>;
   if (!data) return null;
-  return <Card title="Home practice" hint="Questions answered on a parent's phone, from sets a teacher approved. Evidence beside class work, never part of CA or report scores.">
-    {!data.topics.length ? <p className="muted">{data.enabled ? 'Has not practised at home yet.' : 'Home practice is switched off for this school, and nothing has been practised.'}</p>
-      : <><ul className="plain-list">{data.topics.map((t, i) => <li key={i}><strong>{t.topic}</strong> <span className="muted">{t.subject}</span>
-        <span className="sub">{level(t, `${times(t.sessions)} · last practised ${ago(t.lastPracticedOn)}`)}</span></li>)}</ul>
-        <h4>Recent sessions</h4>
+  const studies = data.studies ?? []; // an older server answers without it
+  return <Card title="Home practice" hint="Lessons read and questions answered on a parent's phone. Evidence beside class work, never part of CA or report scores.">
+    {!data.topics.length && !studies.length ? <p className="muted">{data.enabled ? 'Has not practised at home yet.' : 'Home practice is switched off for this school, and nothing has been practised.'}</p>
+      : <>{studies.length > 0 && <><h4>Lessons studied</h4><ul className="plain-list">{studies.map((x, i) => <li key={i}>{shortDate(x.on)} · {x.topic} <span className="muted">{x.subject}</span>
+          <span className="sub">{x.minutes < 1 ? 'Under a minute' : `${x.minutes} minute${x.minutes === 1 ? '' : 's'}`} reading · {x.check ? `check: ${x.check.correct} of ${x.check.total} right` : 'no check taken'}</span></li>)}</ul></>}
+        {data.topics.length > 0 && <><h4>Practised</h4><ul className="plain-list">{data.topics.map((t, i) => <li key={i}><strong>{t.topic}</strong> <span className="muted">{t.subject}</span>
+        <span className="sub">{level(t, `${times(t.sessions)} · last practised ${ago(t.lastPracticedOn)}`)}</span></li>)}</ul></>}
+        {data.recent.length > 0 && <h4>Recent sessions</h4>}
         <ul className="plain-list">{data.recent.map((r, i) => <li key={i}>{shortDate(r.on)} · {r.topic} <span className="sub">Level {r.level}: {r.correct} of {r.total} right, {outcomeWords[r.outcome]}{r.outcome === 'up' || r.outcome === 'down' ? ` to Level ${r.levelAfter}` : ''}</span></li>)}</ul>
         {data.unfinished > 0 && <p className="muted">{data.unfinished === 1 ? '1 session was started and not finished.' : `${data.unfinished} sessions were started and not finished.`}</p>}
         {!data.enabled && <p className="muted">Home practice is switched off for this school now.</p>}</>}

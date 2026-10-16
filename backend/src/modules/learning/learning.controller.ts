@@ -58,4 +58,9 @@ export class LearningController {
   flag(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('learnerId',new ParseUUIDPipe()) learnerId: string,@Param('questionId',new ParseUUIDPipe()) questionId: string,@Body() body: FlagQuestionDto) {
     return this.access.school(req,schoolId,guardian,(client,actor) => this.topics.flagQuestion(client,actor,learnerId,questionId,body),true);
   }
+  // A parent reports a lesson their child was shown.
+  @Post('guardian/children/:learnerId/study/lessons/:lessonId/flag')
+  flagLesson(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('learnerId',new ParseUUIDPipe()) learnerId: string,@Param('lessonId',new ParseUUIDPipe()) lessonId: string,@Body() body: FlagQuestionDto) {
+    return this.access.school(req,schoolId,guardian,(client,actor) => this.topics.flagLesson(client,actor,learnerId,lessonId,body),true);
+  }
 }

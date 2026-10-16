@@ -11,11 +11,11 @@ type Made = { generated: boolean; note: string | null; lesson: string; levels: {
 type Question = { id: string; level: number; kind: 'choice' | 'number'; prompt: string; options: string[] | null; correctOption: number | null; answer: number | null; explanation: string | null; retired: { cause: string; reason: string } | null };
 type Lesson = { goal: string; steps: { heading: string; text: string }[]; example: { problem: string; working: string }; recap: string[] };
 type Detail = { label: string; indicator: { subject: string; description: string }; grade: string; lesson: { id: string; body: Lesson } | null; questions: Question[]; flags: { questionId: string; handledAt: string | null }[] };
-type Report = { id: string; reason: string; note: string | null; createdAt: string; question: Question & { source: string }; topic: { subject: string; description: string; grade: string | null } };
+type Report = { id: string; reason: string; note: string | null; createdAt: string; target: 'question' | 'lesson'; question: (Question & { source: string }) | null; lesson: { goal: string; steps: { heading: string; text: string }[]; retired: { cause: string; reason: string } | null } | null; topic: { subject: string; description: string; grade: string | null } };
 type Step = { approvalId: string; label: string; state: 'waiting' | 'making' | 'done' | 'problem'; detail: string };
 type AiState = { enabled: boolean; platformEnabled: boolean; providerConfigured: boolean };
 
-const reasons: Record<string, string> = { wrong_answer: 'The answer looks wrong', unclear: 'The question is unclear', not_taught: 'Not what the class learned', other: 'Another reason' };
+const reasons = (reason: string, target: 'question' | 'lesson') => ({ wrong_answer: target === 'lesson' ? 'Something in the lesson looks wrong' : 'The answer looks wrong', unclear: target === 'lesson' ? 'The lesson is unclear' : 'The question is unclear', not_taught: 'Not what the class learned', other: 'Another reason' } as Record<string, string>)[reason];
 const notes: Record<string, string> = {
   ai_disabled_platform: 'Claude is not switched on for the platform yet.', ai_disabled_school: 'AI assistance is off for this school. Switch it on in Settings, under AI assistance.',
   no_provider: 'No AI provider is set up yet.', monthly_cap_reached: "This month's AI limit for the school has been reached.", provider_error: 'Claude did not answer. Try again in a moment.',
@@ -169,10 +169,11 @@ export function Topics({ schoolId, csrfToken }: { schoolId: string; csrfToken: s
         <span className="muted">{s.state === 'waiting' ? 'Waiting' : s.state === 'making' ? 'Making…' : s.detail}</span></li>)}</ul>
     </Card>}
 
-    {reports.length > 0 && <Card title={`Reported by parents (${reports.length})`} hint="A reported question has already stopped being given. Say whether the parent was right; the question stays retired either way.">
+    {reports.length > 0 && <Card title={`Reported by parents (${reports.length})`} hint="A reported question or lesson has already stopped being used. Say whether the parent was right; it stays retired either way, and you can make a new lesson from the topic.">
       <ul className="entries">{reports.map(r => <li key={r.id}>
-        <div className="entry-main"><strong>{r.topic.description}</strong><span className="muted">{r.topic.subject}{r.topic.grade ? ` · ${r.topic.grade}` : ''} · {reasons[r.reason]} · {when(r.createdAt)}</span>
-          <QuestionBody q={r.question}/>{r.note && <span className="sub">Parent wrote: “{r.note}”</span>}</div>
+        <div className="entry-main"><strong>{r.topic.description}</strong><span className="muted">{r.topic.subject}{r.topic.grade ? ` · ${r.topic.grade}` : ''} · {reasons(r.reason,r.target)} · {when(r.createdAt)}</span>
+          {r.question ? <QuestionBody q={r.question}/> : r.lesson && <div className="guide"><Pill tone="neutral">Lesson</Pill> <strong>{r.lesson.goal}</strong><ol className="lesson-steps">{r.lesson.steps.map((st, i) => <li key={i}><strong>{st.heading}</strong> {st.text}</li>)}</ol></div>}
+          {r.note && <span className="sub">Parent wrote: “{r.note}”</span>}</div>
         <div className="entry-side"><button className="small" disabled={busy} onClick={() => handle(r.id, 'was_wrong')}>It was wrong</button><button className="secondary small" disabled={busy} onClick={() => handle(r.id, 'was_fine')}>It was fine</button></div>
       </li>)}</ul>
     </Card>}

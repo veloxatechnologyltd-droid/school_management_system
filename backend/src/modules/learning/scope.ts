@@ -27,4 +27,11 @@ export async function gradeChoices(client: PoolClient, schoolId: string, scope: 
   return { schoolWide: all, mine: scope.all ? all : all.filter(name => scope.classes.includes(name)) };
 }
 
+// What Claude is told the class level is, and what the reading stage is judged from. A school's own class names ("Form 1") say nothing about the stage, so a
+// grade that belongs to a JHS class is labelled as JHS.
+export async function classLabel(client: PoolClient, schoolId: string, grade: string) {
+  const classes = (await client.query("SELECT name,level FROM class_sections WHERE school_id=$1 AND level IN ('Primary','JHS')",[schoolId])).rows;
+  return !/^\s*JHS/i.test(grade) && classes.some(c => c.level === 'JHS' && gradeMatches(c.name as string,grade)) ? `JHS ${grade}` : grade;
+}
+
 export const accraToday = (client: PoolClient) => client.query("SELECT (now() AT TIME ZONE 'Africa/Accra')::date::text AS d").then(r => r.rows[0].d as string);

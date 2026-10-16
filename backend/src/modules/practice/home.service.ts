@@ -5,13 +5,16 @@ import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
 import { AssessmentService } from '../assessment/assessment.service';
 import { ProgressService, mondayOf } from '../assessment/progress.service';
+import { stageOf } from '../content/checks';
+import { AI_LABEL } from '../learning/topics.service';
 import { gradeMatches } from '../learning/scope';
-import { AnswerDto, HomePracticeSettingsDto, StartSessionDto } from './practice.dto';
+import { AnswerDto, HomePracticeSettingsDto, StartSessionDto, StartStudyDto } from './practice.dto';
 import { LEVEL_COUNT } from './questions';
 import { SESSIONS_PER_TOPIC_PER_DAY, SESSION_SIZE, TOPICS_OFFERED, afterSession, parseNumber, sameNumber } from './rules';
 
 const accraToday = (client: PoolClient) => client.query("SELECT (now() AT TIME ZONE 'Africa/Accra')::date::text AS d").then(r => r.rows[0].d as string);
-type Pick = { indicatorId: string; subject: string; topic: string; setId: string };
+const STUDIES_PER_TOPIC_PER_DAY = 3;
+type Pick = { indicatorId: string; subject: string; topic: string; setId: string; lessonId: string | null };
 type Learned = { indicatorId: string; subject: string; topic: string; level: number; done: boolean; sessionsThisWeek: number; sessionsToday: number; lastPracticedOn: string | null; openSessionId: string | null; answeredInOpen: number };
 
 // Home practice for families: the school's switch, what a verified guardian's child is offered, and the sessions themselves.
@@ -88,17 +91,22 @@ export class HomePracticeService {
       JOIN curriculum_indicators i ON i.school_id=a.school_id AND i.id=a.indicator_id AND i.retired_at IS NULL JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
       WHERE a.school_id=$1 AND a.retired_at IS NULL AND a.term_id=ANY($2::uuid[]) ORDER BY i.id,a.approved_at`,[schoolId,terms])).rows.filter(r => gradeMatches(className,r.grade as string)).map(r => [r.indicator_id as string,r])).values()] : [];
     const approvedIds = new Set(approvedRows.map(r => r.indicator_id as string));
+    // The set and the lesson must be the ones made for the very class level that was approved, not merely any that also matches the child's class.
+    const approvedGrade = new Map(approvedRows.map(r => [r.indicator_id as string,(r.grade as string).toLowerCase()]));
     const indicatorIds = [...new Set([...weakRows.map(w => w.indicatorId),...approvedIds])];
     if (!indicatorIds.length) return { weak: [] as Pick[], approved: [] as Pick[] };
     const sets = (await client.query('SELECT id,indicator_id,source,grade FROM practice_sets WHERE school_id=$1 AND indicator_id=ANY($2::uuid[]) AND retired_at IS NULL',[schoolId,indicatorIds])).rows;
+    // A lesson counts only for a topic approved for the child's class, and only the current one.
+    const lessons = (await client.query('SELECT id,indicator_id,grade FROM topic_lessons WHERE school_id=$1 AND indicator_id=ANY($2::uuid[]) AND retired_at IS NULL',[schoolId,indicatorIds])).rows;
+    const lessonOf = (indicatorId: string) => approvedIds.has(indicatorId) ? (lessons.find(l => l.indicator_id === indicatorId && (l.grade as string).toLowerCase() === approvedGrade.get(indicatorId))?.id as string | undefined) ?? null : null;
     const counts = (await client.query('SELECT set_id,level,count(*)::int AS n FROM practice_questions WHERE school_id=$1 AND set_id=ANY($2::uuid[]) AND retired_at IS NULL GROUP BY set_id,level',[schoolId,sets.map(x => x.id)])).rows;
     const live = (setId: string, level: number) => counts.find(c => c.set_id === setId && c.level === level)?.n ?? 0;
     const pick = (indicatorId: string, subject: string, topic: string): Pick | null => {
       const level = levelOf(indicatorId);
       const written = sets.find(x => x.indicator_id === indicatorId && x.source !== 'generated');
-      if (written && live(written.id,level) >= SESSION_SIZE) return { indicatorId, subject, topic, setId: written.id };
-      const made = approvedIds.has(indicatorId) ? sets.find(x => x.indicator_id === indicatorId && x.source === 'generated' && gradeMatches(className,x.grade)) : undefined;
-      return made && live(made.id,level) >= SESSION_SIZE ? { indicatorId, subject, topic, setId: made.id } : null;
+      if (written && live(written.id,level) >= SESSION_SIZE) return { indicatorId, subject, topic, setId: written.id, lessonId: lessonOf(indicatorId) };
+      const made = approvedIds.has(indicatorId) ? sets.find(x => x.indicator_id === indicatorId && x.source === 'generated' && (x.grade as string).toLowerCase() === approvedGrade.get(indicatorId)) : undefined;
+      return made && live(made.id,level) >= SESSION_SIZE ? { indicatorId, subject, topic, setId: made.id, lessonId: lessonOf(indicatorId) } : null;
     };
     const present = <T,>(list: (T | null)[]) => list.filter((x): x is T => x !== null);
     return { weak: present(weakRows.map(w => pick(w.indicatorId,w.subject,w.topic))),
@@ -131,8 +139,9 @@ export class HomePracticeService {
     // A session in progress is always shown so it can be finished; the rest of the slots go to the weakest topics.
     const open = learned.filter(l => l.openSessionId).map(l => ({indicatorId:l.indicatorId,subject:l.subject,topic:l.topic}));
     const offered = [...open,...this.offer(picks.weak,learned).filter(w => !open.some(o => o.indicatorId === w.indicatorId)).slice(0,Math.max(0,TOPICS_OFFERED - open.length))];
+    const lessonIds = new Map([...picks.weak,...picks.approved].map(p => [p.indicatorId,p.lessonId]));
     const card = (o: { indicatorId: string; subject: string; topic: string }) => { const l = byTopic.get(o.indicatorId);
-      return {indicatorId:o.indicatorId,subject:o.subject,topic:o.topic,level:l?.level ?? 1,levels:LEVEL_COUNT,sessionsThisWeek:l?.sessionsThisWeek ?? 0,lastPracticedOn:l?.lastPracticedOn ?? null,
+      return {indicatorId:o.indicatorId,subject:o.subject,topic:o.topic,hasLesson:!!lessonIds.get(o.indicatorId),level:l?.level ?? 1,levels:LEVEL_COUNT,sessionsThisWeek:l?.sessionsThisWeek ?? 0,lastPracticedOn:l?.lastPracticedOn ?? null,
         open:l?.openSessionId ? {sessionId:l.openSessionId,answered:l.answeredInOpen,total:SESSION_SIZE} : null,availableToday:!!l?.openSessionId || (l?.sessionsToday ?? 0) < SESSIONS_PER_TOPIC_PER_DAY}; };
     const topics = offered.map(card);
     // The child's own choices: every other topic approved for their class this term that has questions to practise and is not finished.
@@ -167,6 +176,14 @@ export class HomePracticeService {
       await this.guardianOf(client,actor,learnerId);
       if (!(await this.settings(client,actor.schoolId)).enabled) throw new ConflictException('Home practice is not switched on for this school');
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`practice:${learnerId}:${body.indicatorId}`]);
+      // A check follows a study of the same topic by the same child.
+      if (body.studySessionId) {
+        const study = (await client.query('SELECT learner_id,indicator_id,finished_at FROM study_sessions WHERE school_id=$1 AND id=$2',[actor.schoolId,body.studySessionId])).rows[0];
+        if (!study || study.learner_id !== learnerId) throw new NotFoundException('Study unavailable');
+        if (study.indicator_id !== body.indicatorId) throw new BadRequestException('That study was of another topic');
+        if (!study.finished_at) throw new BadRequestException('Finish the lesson before its check');
+        if ((await client.query('SELECT 1 FROM practice_sessions WHERE school_id=$1 AND study_session_id=$2',[actor.schoolId,body.studySessionId])).rowCount) throw new ConflictException('That lesson already has its check');
+      }
       const today = await accraToday(client);
       const everything = await this.learned(client,actor.schoolId,learnerId,today), learned = everything.find(l => l.indicatorId === body.indicatorId);
       if (learned?.openSessionId) return this.view(client,actor.schoolId,learned.openSessionId);
@@ -184,7 +201,7 @@ export class HomePracticeService {
         WHERE q.school_id=$1 AND q.set_id=$2 AND q.level=$3 AND q.retired_at IS NULL ORDER BY last_asked NULLS FIRST,random() LIMIT $5`,[actor.schoolId,offered.setId,level,learnerId,SESSION_SIZE])).rows as { id: string }[];
       if (pool.length < SESSION_SIZE) throw new ConflictException('This topic does not have enough questions yet');
       const id = randomUUID();
-      await client.query('INSERT INTO practice_sessions(id,school_id,learner_id,indicator_id,set_id,guardian_membership_id,level) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,actor.schoolId,learnerId,body.indicatorId,offered.setId,actor.membershipId,level]);
+      await client.query('INSERT INTO practice_sessions(id,school_id,learner_id,indicator_id,set_id,guardian_membership_id,level,study_session_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[id,actor.schoolId,learnerId,body.indicatorId,offered.setId,actor.membershipId,level,body.studySessionId ?? null]);
       for (const [n,q] of pool.sort(() => Math.random() - 0.5).entries()) await client.query('INSERT INTO practice_session_items(school_id,session_id,position,question_id) VALUES($1,$2,$3,$4)',[actor.schoolId,id,n + 1,q.id]);
       await audit(client,actor,'practice.session.started',id,{learnerId,indicatorId:body.indicatorId,level});
       return this.view(client,actor.schoolId,id);
@@ -228,6 +245,48 @@ export class HomePracticeService {
     });
   }
 
+  // ---------------------------------------------------------------- Study: the lesson on the parent's phone, then a check
+  // Opens the topic's current lesson for the child, or resumes the one opened in the last half hour (so minutes stay honest). A child can start a topic's lesson three times a day. Only a topic approved for the child's class with
+  // a current lesson can be studied. JHS students get the whole lesson on one page; younger children one step at a time (`stage` tells the screen).
+  startStudy(client: PoolClient, actor: Actor, learnerId: string, body: StartStudyDto) {
+    return command(client,actor,body.operationId,'practice.study.start',{learnerId,...body},async () => {
+      await this.guardianOf(client,actor,learnerId);
+      if (!(await this.settings(client,actor.schoolId)).enabled) throw new ConflictException('Home practice is not switched on for this school');
+      const today = await accraToday(client), klass = await this.classOf(client,actor.schoolId,learnerId,today);
+      if (!klass || (klass.level !== 'Primary' && klass.level !== 'JHS')) throw new NotFoundException('This topic has no lesson right now');
+      const everything = await this.learned(client,actor.schoolId,learnerId,today);
+      const picks = await this.available(client,actor.schoolId,learnerId,today,klass.name,id => everything.find(l => l.indicatorId === id)?.level ?? 1);
+      const pick = [...picks.weak,...picks.approved].find(p => p.indicatorId === body.indicatorId && p.lessonId);
+      if (!pick) throw new NotFoundException('This topic has no lesson right now');
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`study:${learnerId}:${body.indicatorId}`]);
+      const lesson = (await client.query('SELECT body FROM topic_lessons WHERE school_id=$1 AND id=$2',[actor.schoolId,pick.lessonId])).rows[0].body;
+      const open = (await client.query(`SELECT id FROM study_sessions WHERE school_id=$1 AND learner_id=$2 AND indicator_id=$3 AND lesson_id=$4 AND finished_at IS NULL
+        AND started_at>clock_timestamp()-interval '30 minutes' ORDER BY started_at DESC LIMIT 1`,[actor.schoolId,learnerId,body.indicatorId,pick.lessonId])).rows[0]?.id as string | undefined;
+      const id = open ?? randomUUID();
+      if (!open) {
+        const startedToday = (await client.query("SELECT count(*)::int AS n FROM study_sessions WHERE school_id=$1 AND learner_id=$2 AND indicator_id=$3 AND started_at>=(date_trunc('day',now() AT TIME ZONE 'Africa/Accra') AT TIME ZONE 'Africa/Accra')",[actor.schoolId,learnerId,body.indicatorId])).rows[0].n as number;
+        if (startedToday >= STUDIES_PER_TOPIC_PER_DAY) throw new ConflictException('That is enough study on this topic for today. Practise it, or come back tomorrow');
+        await client.query('INSERT INTO study_sessions(id,school_id,learner_id,indicator_id,lesson_id,guardian_membership_id) VALUES($1,$2,$3,$4,$5,$6)',[id,actor.schoolId,learnerId,body.indicatorId,pick.lessonId,actor.membershipId]);
+        await audit(client,actor,'practice.study.started',id,{learnerId,indicatorId:body.indicatorId});
+      }
+      return {studySessionId:id,indicatorId:body.indicatorId,subject:pick.subject,topic:pick.topic,stage:klass.level === 'JHS' ? 'jhs' as const : stageOf(klass.name),label:AI_LABEL,lessonId:pick.lessonId as string,lesson};
+    });
+  }
+
+  // The child has reached the end of the lesson. Recorded once; asking again changes nothing. The family is not told the minutes: that is for staff.
+  finishStudy(client: PoolClient, actor: Actor, learnerId: string, studySessionId: string, operationId: string) {
+    return command(client,actor,operationId,'practice.study.finish',{learnerId,studySessionId},async () => {
+      await this.guardianOf(client,actor,learnerId);
+      const row = (await client.query('SELECT finished_at FROM study_sessions WHERE school_id=$1 AND id=$2 AND learner_id=$3 FOR UPDATE',[actor.schoolId,studySessionId,learnerId])).rows[0];
+      if (!row) throw new NotFoundException('Study unavailable');
+      if (!row.finished_at) {
+        await client.query('UPDATE study_sessions SET finished_at=clock_timestamp() WHERE school_id=$1 AND id=$2',[actor.schoolId,studySessionId]);
+        await audit(client,actor,'practice.study.finished',studySessionId,{learnerId});
+      }
+      return {finished:true as const};
+    });
+  }
+
   // ---------------------------------------------------------------- what staff see: evidence beside class work, never part of CA or reports
   // Per learner and topic: the level the child is at now (from their latest finished session), and sessions finished in the window.
   private async evidence(client: PoolClient, schoolId: string, learnerIds: string[], today: string, from: string, to: string) {
@@ -251,7 +310,14 @@ export class HomePracticeService {
       WHERE p.school_id=$1 AND p.learner_id=$2 AND p.completed_at IS NOT NULL ORDER BY p.completed_at DESC,p.id LIMIT 8`,[actor.schoolId,learnerId])).rows
       .map(r => ({on:r.on as string,subject:r.subject as string,topic:r.topic as string,level:r.level as number,correct:r.correct as number,total:SESSION_SIZE,outcome:r.outcome as string,levelAfter:r.level_after as number}));
     const unfinished = (await client.query('SELECT count(*)::int AS n FROM practice_sessions WHERE school_id=$1 AND learner_id=$2 AND completed_at IS NULL',[actor.schoolId,learnerId])).rows[0].n as number;
-    return {enabled:(await this.settings(client,actor.schoolId)).enabled,topics,recent,unfinished};
+    // Lessons the child finished, with the check that followed, if any. Minutes are capped at half an hour: a page left open is not that long a study.
+    const studies = (await client.query(`SELECT (st.finished_at AT TIME ZONE 'Africa/Accra')::date::text AS on,s.name AS subject,i.description AS topic,
+        LEAST(30,round(extract(epoch FROM (st.finished_at-st.started_at))/60))::int AS minutes,c.correct FROM study_sessions st
+      JOIN curriculum_indicators i ON i.school_id=st.school_id AND i.id=st.indicator_id JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
+      LEFT JOIN LATERAL (SELECT p.correct FROM practice_sessions p WHERE p.school_id=st.school_id AND p.study_session_id=st.id AND p.completed_at IS NOT NULL ORDER BY p.completed_at DESC LIMIT 1) c ON true
+      WHERE st.school_id=$1 AND st.learner_id=$2 AND st.finished_at IS NOT NULL ORDER BY st.finished_at DESC,st.id LIMIT 8`,[actor.schoolId,learnerId])).rows
+      .map(r => ({on:r.on as string,subject:r.subject as string,topic:r.topic as string,minutes:r.minutes as number,check:r.correct === null ? null : {correct:r.correct as number,total:SESSION_SIZE}}));
+    return {enabled:(await this.settings(client,actor.schoolId)).enabled,topics,recent,unfinished,studies};
   }
 
   // A class's home practice for the term: who has practised, on what, at which level, and how recently.

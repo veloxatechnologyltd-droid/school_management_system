@@ -20,7 +20,9 @@ export class ApproveQuestionsDto extends OperationDto {
 export class RetireSetDto extends OperationDto { @IsString() @MinLength(3) @MaxLength(300) @Matches(/\S.*\S/) reason!: string; }
 
 export class HomePracticeSettingsDto extends OperationDto { @IsBoolean() enabled!: boolean; @IsOptional() @IsInt() @Min(1) version?: number; }
-export class StartSessionDto extends OperationDto { @IsUUID() indicatorId!: string; }
+// A session can follow a study of the same topic: the check a child answers after reading the lesson.
+export class StartSessionDto extends OperationDto { @IsUUID() indicatorId!: string; @IsOptional() @IsUUID() studySessionId?: string; }
+export class StartStudyDto extends OperationDto { @IsUUID() indicatorId!: string; }
 // One answer: the option tapped (its position in the list) or the number typed.
 export class AnswerDto extends OperationDto {
   @IsUUID() questionId!: string;

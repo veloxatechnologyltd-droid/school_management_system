@@ -380,7 +380,7 @@ test('a parent flags a question their child was given: it stops at once, the tea
 
   // The teacher's list, without the parent's identity; teachers of other classes see nothing.
   const flags=await call('/learning/flags','GET',undefined,teacher);assert.equal(flags.status,200,JSON.stringify(flags.body));assert.equal(flags.body.items.length,1);
-  const item=flags.body.items[0];assert.deepEqual([item.reason,item.note,item.question.id,item.topic.indicatorId],['wrong_answer','I think the answer is wrong',target,topic.percent]);
+  const item=flags.body.items[0];assert.deepEqual([item.target,item.lesson],['question',null],'a question report is tagged as one');assert.deepEqual([item.reason,item.note,item.question.id,item.topic.indicatorId],['wrong_answer','I think the answer is wrong',target,topic.percent]);
   assert.ok(item.question.options.length>=3&&item.question.correctOption!==undefined&&item.question.retired.cause==='flag','the teacher sees the question, its answer and that it is already retired');
   assert.doesNotMatch(JSON.stringify(flags.body),new RegExp(`Abena|${guardianM}|${guardianU}|guardian@example|raised`),'the parent is not identified');
   assert.equal((await call('/learning/flags','GET',undefined,teacher2)).body.items.length,0);assert.equal((await call('/learning/flags')).body.items.length,1);
@@ -512,7 +512,7 @@ test('one parent can report at most ten questions a day',async()=>{
   for(const r of (await owner.query("SELECT q.id FROM practice_questions q WHERE q.school_id=$1 AND NOT EXISTS (SELECT 1 FROM content_flags f WHERE f.question_id=q.id) ORDER BY q.id LIMIT $2",[school,10-used])).rows)
     await owner.query("INSERT INTO content_flags(id,school_id,question_id,raised_by,reason) VALUES($1,$2,$3,$4,'other')",[randomUUID(),school,r.id,guardianM]);
   const served=(await owner.query("SELECT i.question_id FROM practice_session_items i JOIN practice_sessions p ON p.school_id=i.school_id AND p.id=i.session_id JOIN practice_questions q ON q.school_id=i.school_id AND q.id=i.question_id WHERE p.learner_id=$1 AND q.retired_at IS NULL AND NOT EXISTS (SELECT 1 FROM content_flags f WHERE f.question_id=i.question_id) LIMIT 1",[ama])).rows[0].question_id as string;
-  const over=await flag(ama,served);assert.equal(over.status,429,JSON.stringify(over.body));assert.match(over.body.message,/ten questions/i);
+  const over=await flag(ama,served);assert.equal(over.status,429,JSON.stringify(over.body));assert.match(over.body.message,/ten reports/i);
   assert.equal((await owner.query("SELECT retired_at FROM practice_questions WHERE id=$1",[served])).rows[0].retired_at,null,'a refused report retires nothing');
   // A report already made can be repeated: it is the same report.
   assert.equal((await flag(ama,reported)).status,201,'a question she already reported can be reported again: it is the same report');

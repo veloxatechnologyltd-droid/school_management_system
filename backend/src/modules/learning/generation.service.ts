@@ -7,7 +7,7 @@ import { AiService } from '../ai/ai.service';
 import { Neighbour, QuestionBody, runChecks, stageOf } from '../content/checks';
 import { IndicatorFact, MAX_BATCH, buildBatchPrompt, draftingTemplateVersion, validateBatch } from '../content/drafting';
 import { LessonBody, buildLessonPrompt, lessonTemplateVersion, validateLesson } from './lesson';
-import { accraToday, allows, scopeOf } from './scope';
+import { accraToday, allows, classLabel, scopeOf } from './scope';
 import { TARGET_PER_LEVEL } from './topics.service';
 
 const LEVELS = [1, 2, 3];
@@ -50,7 +50,7 @@ export class GenerationService {
     if (a.indicator_retired) throw new ConflictException('This topic has been retired from the curriculum');
     if (a.term_end < await accraToday(client)) throw new ConflictException('That term has ended, so nothing more is made for it. Approve the topic for the new term');
     // The class level is the school's own wording; only plain letters, numbers and punctuation go into a prompt.
-    const fact: IndicatorFact = { subject: a.subject, classLevel: promptSafe(a.grade), code: a.code, strand: a.strand, subStrand: a.sub_strand, description: a.description, termGuidance: null };
+    const fact: IndicatorFact = { subject: a.subject, classLevel: promptSafe(await classLabel(client,actor.schoolId,a.grade)), code: a.code, strand: a.strand, subStrand: a.sub_strand, description: a.description, termGuidance: null };
     const state = await this.state(client,actor.schoolId,a.indicator_id,a.grade);
     // A level has 100 places for questions over its life. A level with no place left is reported, not asked for.
     const deficit = LEVELS.map(level => Math.max(0,TARGET_PER_LEVEL - state.counts[level - 1]!));

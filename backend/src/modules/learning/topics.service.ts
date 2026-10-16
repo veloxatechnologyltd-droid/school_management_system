@@ -6,13 +6,14 @@ import { audit, command } from '../../core/commands';
 import { Neighbour, QuestionBody, runChecks, stageOf } from '../content/checks';
 import { ApproveTopicsDto, FlagQuestionDto, HandleFlagDto, ReasonDto } from './learning.dto';
 import { validateLesson } from './lesson';
-import { Scope, accraToday, allows, allowsTopic, gradeChoices, scopeOf } from './scope';
+import { Scope, accraToday, allows, allowsTopic, classLabel, gradeChoices, scopeOf } from './scope';
 
 export const TARGET_PER_LEVEL = 20;
 // A parent can report this many questions a day: enough for a real problem, too few to strip a topic.
 export const REPORTS_PER_PARENT_PER_DAY = 10;
 export const AI_LABEL = "Made by AI from your school's topics";
 const REASONS: Record<string, string> = { wrong_answer: 'the answer looks wrong', unclear: 'the question is unclear', not_taught: 'it is not what the class learned', other: 'another reason' };
+const LESSON_REASONS: Record<string, string> = { wrong_answer: 'something in it looks wrong', unclear: 'the lesson is unclear', not_taught: 'it is not what the class learned', other: 'another reason' };
 
 type QuestionRow = { id: string; level: number; kind: 'choice' | 'number'; prompt: string; options: string[] | null; correct_option: number | null; answer: number | null; explanation: string | null;
   retired_at: Date | null; retired_cause: string | null; retirement_reason: string | null };
@@ -57,6 +58,9 @@ export class TopicsService {
     const flags = (await client.query(`SELECT s.indicator_id,lower(coalesce(s.grade,i.grade)) AS grade,count(*)::int AS n FROM content_flags f JOIN practice_questions q ON q.school_id=f.school_id AND q.id=f.question_id
       JOIN practice_sets s ON s.school_id=q.school_id AND s.id=q.set_id JOIN curriculum_indicators i ON i.school_id=s.school_id AND i.id=s.indicator_id
       WHERE f.school_id=$1 AND f.handled_at IS NULL AND s.indicator_id=ANY($2::uuid[]) GROUP BY 1,2`,[schoolId,indicatorIds])).rows;
+    // Reports that name a lesson count for the lesson's topic and class level.
+    flags.push(...(await client.query(`SELECT l.indicator_id,lower(l.grade) AS grade,count(*)::int AS n FROM content_flags f JOIN topic_lessons l ON l.school_id=f.school_id AND l.id=f.lesson_id
+      WHERE f.school_id=$1 AND f.handled_at IS NULL AND l.indicator_id=ANY($2::uuid[]) GROUP BY 1,2`,[schoolId,indicatorIds])).rows);
     return (indicatorId: string, grade: string) => {
       const g = grade.toLowerCase();
       return { lesson: lessons.some(l => l.indicator_id === indicatorId && l.grade === g),
@@ -151,24 +155,32 @@ export class TopicsService {
   }
 
   // ------------------------------------------------------------------ parents' reports
-  // Reports not yet handled, for the class levels the person teaches. The parent who raised one is never named.
+  // Reports not yet handled, for the class levels the person teaches: reports on questions and on lessons together, oldest first. The parent who raised
+  // one is never named.
   private async openFlags(client: PoolClient, actor: Actor, scope: Scope) {
-    const rows = (await client.query(`SELECT f.id AS flag_id,f.reason,f.note,f.created_at,${QUESTION_COLUMNS},s.source,coalesce(s.grade,i.grade) AS grade,i.id AS indicator_id,i.description,subj.name AS subject
+    const questions = (await client.query(`SELECT f.id AS flag_id,f.reason,f.note,f.created_at,${QUESTION_COLUMNS},s.source,coalesce(s.grade,i.grade) AS grade,i.id AS indicator_id,i.description,subj.name AS subject
       FROM content_flags f JOIN practice_questions q ON q.school_id=f.school_id AND q.id=f.question_id JOIN practice_sets s ON s.school_id=q.school_id AND s.id=q.set_id
       JOIN curriculum_indicators i ON i.school_id=s.school_id AND i.id=s.indicator_id JOIN subjects subj ON subj.school_id=i.school_id AND subj.id=i.subject_id
-      WHERE f.school_id=$1 AND f.handled_at IS NULL ORDER BY f.created_at,f.id`,[actor.schoolId])).rows;
-    return rows.filter(r => allowsTopic(scope,r.grade));
+      WHERE f.school_id=$1 AND f.handled_at IS NULL`,[actor.schoolId])).rows.map(r => ({ ...r, target: 'question' as const }));
+    const lessons = (await client.query(`SELECT f.id AS flag_id,f.reason,f.note,f.created_at,l.id AS lesson_id,l.body,l.retired_at,l.retired_cause,l.retirement_reason,l.grade,i.id AS indicator_id,i.description,subj.name AS subject
+      FROM content_flags f JOIN topic_lessons l ON l.school_id=f.school_id AND l.id=f.lesson_id JOIN curriculum_indicators i ON i.school_id=l.school_id AND i.id=l.indicator_id
+      JOIN subjects subj ON subj.school_id=i.school_id AND subj.id=i.subject_id WHERE f.school_id=$1 AND f.handled_at IS NULL`,[actor.schoolId])).rows.map(r => ({ ...r, target: 'lesson' as const }));
+    return [...questions,...lessons].filter(r => allowsTopic(scope,r.grade)).sort((a,b) => +new Date(a.created_at) - +new Date(b.created_at) || String(a.flag_id).localeCompare(String(b.flag_id)));
   }
   async flags(client: PoolClient, actor: Actor) {
     const rows = await this.openFlags(client,actor,await scopeOf(client,actor));
-    return { items: rows.map(r => ({ id: r.flag_id, reason: r.reason, note: r.note, createdAt: r.created_at, question: { ...shape(r as QuestionRow), source: r.source },
+    return { items: rows.map(r => ({ id: r.flag_id, reason: r.reason, note: r.note, createdAt: r.created_at, target: r.target,
+      question: r.target === 'question' ? { ...shape(r as unknown as QuestionRow), source: r.source } : null,
+      lesson: r.target === 'lesson' ? { id: r.lesson_id, goal: (r.body as { goal: string }).goal, steps: (r.body as { steps: { heading: string; text: string }[] }).steps, retired: r.retired_at ? { cause: r.retired_cause, reason: r.retirement_reason } : null } : null,
       topic: { indicatorId: r.indicator_id, subject: r.subject, description: r.description, grade: r.grade } })) };
   }
   handleFlag(client: PoolClient, actor: Actor, flagId: string, body: HandleFlagDto) {
     return command(client,actor,body.operationId,'learning.flag.handle',{flagId,...body},async () => {
-      const f = (await client.query(`SELECT f.handled_at,coalesce(s.grade,i.grade) AS grade FROM content_flags f JOIN practice_questions q ON q.school_id=f.school_id AND q.id=f.question_id
-        JOIN practice_sets s ON s.school_id=q.school_id AND s.id=q.set_id JOIN curriculum_indicators i ON i.school_id=s.school_id AND i.id=s.indicator_id WHERE f.school_id=$1 AND f.id=$2 FOR UPDATE OF f`,[actor.schoolId,flagId])).rows[0];
-      if (!f || f.handled_at || !allowsTopic(await scopeOf(client,actor),f.grade)) throw new NotFoundException('Report unavailable or already handled');
+      const f = (await client.query('SELECT handled_at,question_id,lesson_id FROM content_flags WHERE school_id=$1 AND id=$2 FOR UPDATE',[actor.schoolId,flagId])).rows[0];
+      const named = f && !f.handled_at ? (f.question_id
+        ? (await client.query(`SELECT coalesce(s.grade,i.grade) AS grade FROM practice_questions q JOIN practice_sets s ON s.school_id=q.school_id AND s.id=q.set_id JOIN curriculum_indicators i ON i.school_id=s.school_id AND i.id=s.indicator_id WHERE q.school_id=$1 AND q.id=$2`,[actor.schoolId,f.question_id])).rows[0]
+        : (await client.query('SELECT grade FROM topic_lessons WHERE school_id=$1 AND id=$2',[actor.schoolId,f.lesson_id])).rows[0]) : null;
+      if (!named || !allowsTopic(await scopeOf(client,actor),named.grade)) throw new NotFoundException('Report unavailable or already handled');
       await client.query('UPDATE content_flags SET handled_at=clock_timestamp(),handled_by=$3,outcome=$4,handled_note=$5 WHERE school_id=$1 AND id=$2',[actor.schoolId,flagId,actor.membershipId,body.outcome,body.note?.trim() || null]);
       await audit(client,actor,'learning.flag.handled',flagId,{ outcome: body.outcome });
       return { handled: true };
@@ -187,8 +199,7 @@ export class TopicsService {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`flag:${actor.schoolId}:${actor.membershipId}`]);
       // A report already made is the same report, however often it is sent.
       if ((await client.query('SELECT 1 FROM content_flags WHERE school_id=$1 AND question_id=$2 AND raised_by=$3',[actor.schoolId,questionId,actor.membershipId])).rowCount) return { flagged: true };
-      const today = (await client.query("SELECT count(*)::int AS n FROM content_flags WHERE school_id=$1 AND raised_by=$2 AND created_at>=(date_trunc('day',now() AT TIME ZONE 'Africa/Accra') AT TIME ZONE 'Africa/Accra')",[actor.schoolId,actor.membershipId])).rows[0].n as number;
-      if (today >= REPORTS_PER_PARENT_PER_DAY) throw new HttpException('You have already reported ten questions today. Please tell the teacher about anything else, or try again tomorrow',429);
+      await this.withinDailyAllowance(client,actor);
       const q = (await client.query(`SELECT q.retired_at,s.indicator_id FROM practice_questions q JOIN practice_sets s ON s.school_id=q.school_id AND s.id=q.set_id WHERE q.school_id=$1 AND q.id=$2 FOR UPDATE OF q`,[actor.schoolId,questionId])).rows[0];
       await client.query('INSERT INTO content_flags(id,school_id,question_id,raised_by,reason,note) VALUES($1,$2,$3,$4,$5,$6)',[randomUUID(),actor.schoolId,questionId,actor.membershipId,body.reason,body.note?.trim() || null]);
       // The question records that it was reported, not who reported it: the parent's identity stays on the report row.
@@ -197,6 +208,29 @@ export class TopicsService {
       await audit(client,actor,'learning.question.flagged',questionId,{ indicatorId: q.indicator_id, reason: body.reason, rechecked });
       return { flagged: true };
     });
+  }
+
+  // Reporting a lesson follows the same rules as reporting a question: a verified guardian with the academic right, a lesson their own child was shown,
+  // one report per person, ten reports a day across questions and lessons together. The lesson is retired in the same transaction.
+  flagLesson(client: PoolClient, actor: Actor, learnerId: string, lessonId: string, body: FlagQuestionDto) {
+    return command(client,actor,body.operationId,'learning.lesson.flag',{learnerId,lessonId,...body},async () => {
+      if (!(await client.query('SELECT 1 FROM guardian_links WHERE school_id=$1 AND learner_id=$2 AND guardian_membership_id=$3 AND academic=true AND verified_at IS NOT NULL AND revoked_at IS NULL FOR SHARE',[actor.schoolId,learnerId,actor.membershipId])).rowCount)
+        throw new NotFoundException('Child unavailable');
+      if (!(await client.query('SELECT 1 FROM study_sessions WHERE school_id=$1 AND lesson_id=$2 AND learner_id=$3 LIMIT 1',[actor.schoolId,lessonId,learnerId])).rowCount) throw new NotFoundException('Lesson unavailable');
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`flag:${actor.schoolId}:${actor.membershipId}`]);
+      if ((await client.query('SELECT 1 FROM content_flags WHERE school_id=$1 AND lesson_id=$2 AND raised_by=$3',[actor.schoolId,lessonId,actor.membershipId])).rowCount) return { flagged: true };
+      await this.withinDailyAllowance(client,actor);
+      const l = (await client.query('SELECT retired_at,indicator_id FROM topic_lessons WHERE school_id=$1 AND id=$2 FOR UPDATE',[actor.schoolId,lessonId])).rows[0];
+      await client.query('INSERT INTO content_flags(id,school_id,lesson_id,raised_by,reason,note) VALUES($1,$2,$3,$4,$5,$6)',[randomUUID(),actor.schoolId,lessonId,actor.membershipId,body.reason,body.note?.trim() || null]);
+      if (!l.retired_at) await client.query("UPDATE topic_lessons SET retired_at=clock_timestamp(),retired_cause='flag',retirement_reason=$3 WHERE school_id=$1 AND id=$2 AND retired_at IS NULL",[actor.schoolId,lessonId,`Reported by a parent: ${LESSON_REASONS[body.reason]}`]);
+      const rechecked = await this.recheck(client,actor.schoolId,l.indicator_id);
+      await audit(client,actor,'learning.lesson.flagged',lessonId,{ indicatorId: l.indicator_id, reason: body.reason, rechecked });
+      return { flagged: true };
+    });
+  }
+  private async withinDailyAllowance(client: PoolClient, actor: Actor) {
+    const today = (await client.query("SELECT count(*)::int AS n FROM content_flags WHERE school_id=$1 AND raised_by=$2 AND created_at>=(date_trunc('day',now() AT TIME ZONE 'Africa/Accra') AT TIME ZONE 'Africa/Accra')",[actor.schoolId,actor.membershipId])).rows[0].n as number;
+    if (today >= REPORTS_PER_PARENT_PER_DAY) throw new HttpException('You have already made ten reports today. Please tell the teacher about anything else, or try again tomorrow',429);
   }
 
   // The automatic checks run again over what is still live for the topic (questions, then the lesson). Anything that now fails is retired by
@@ -211,15 +245,16 @@ export class TopicsService {
       // Rows another request is already changing are left to it (SKIP LOCKED), and a row is only retired if it is still live, so two reports on one
       // topic at once cannot trip over each other.
       const rows = (await client.query(`SELECT ${QUESTION_COLUMNS} FROM practice_questions q WHERE q.school_id=$1 AND q.set_id=$2 AND q.retired_at IS NULL ORDER BY q.level,q.position FOR UPDATE OF q SKIP LOCKED`,[schoolId,set.id])).rows as QuestionRow[];
+      const stage = stageOf(await classLabel(client,schoolId,set.grade));
       for (const q of rows) {
-        const refused = runChecks('question',stageOf(set.grade),bodyOf(q),seen).findings.find(f => f.blocking);
+        const refused = runChecks('question',stage,bodyOf(q),seen).findings.find(f => f.blocking);
         if (refused) {
           retired += (await client.query("UPDATE practice_questions SET retired_at=clock_timestamp(),retired_cause='check',retirement_reason=$3 WHERE school_id=$1 AND id=$2 AND retired_at IS NULL",[schoolId,q.id,refused.message.slice(0,280)])).rowCount ?? 0;
         } else seen.push({ itemId: q.id, text: q.prompt });
       }
       const lesson = (await client.query('SELECT id,body FROM topic_lessons WHERE school_id=$1 AND indicator_id=$2 AND lower(grade)=lower($3) AND retired_at IS NULL FOR UPDATE SKIP LOCKED',[schoolId,indicatorId,set.grade])).rows[0];
       if (lesson) {
-        const again = validateLesson(JSON.stringify({ lesson: lesson.body }),indicator.description,set.grade);
+        const again = validateLesson(JSON.stringify({ lesson: lesson.body }),indicator.description,await classLabel(client,schoolId,set.grade));
         if (!again.ok) retired += (await client.query("UPDATE topic_lessons SET retired_at=clock_timestamp(),retired_cause='check',retirement_reason=$3 WHERE school_id=$1 AND id=$2 AND retired_at IS NULL",[schoolId,lesson.id,`The lesson no longer passes the checks (${again.reason})`])).rowCount ?? 0;
       }
     }
