@@ -468,6 +468,11 @@ export default function Landing() {
   const [solid, setSolid] = useState(false);
   useEffect(() => {
     document.title = 'Veloxa SmartSchool · School management and home learning for Ghana';
+    // Heavier headline face, loaded only for the landing page (Google Sans stops at 700).
+    if (!document.getElementById('lp-display-font')) {
+      const link = Object.assign(document.createElement('link'), { id: 'lp-display-font', rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@600..1000&display=swap' });
+      document.head.appendChild(link);
+    }
     const on = () => setSolid(scrollY > 24); on();
     addEventListener('scroll', on, { passive: true }); return () => removeEventListener('scroll', on);
   }, []);

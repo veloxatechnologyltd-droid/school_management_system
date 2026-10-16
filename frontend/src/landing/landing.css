@@ -12,6 +12,7 @@
 }
 .lp section{background:none;border:0;border-radius:0;padding:0;margin:0;box-shadow:none}
 .lp h1,.lp h2,.lp h3{text-wrap:balance;color:inherit}
+.lp h1,.lp h2{font-family:'Google Sans Flex','Google Sans',Roboto,system-ui,sans-serif}
 .lp p{text-wrap:pretty}
 .lp label{max-width:none;margin:0;color:inherit}
 .lp table{width:auto;font-size:inherit}.lp th,.lp td{background:none;height:auto;text-transform:none;letter-spacing:0;font-size:inherit}.lp tbody tr:hover td{background:none}.lp tr:last-child td{border-bottom:inherit}
@@ -45,7 +46,7 @@
 .lp-hero{height:175vh;position:relative}
 .lp-hero-sticky{position:sticky;top:0;height:100vh;min-height:640px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);align-items:center;gap:32px;padding:68px var(--gutter) 0;max-width:1320px;margin:0 auto}
 .lp-hero-copy{transform:translateY(calc(var(--p,0) * -60px));opacity:calc(1 - var(--p,0) * 1.4)}
-.lp-hero h1{font-size:clamp(44px,5.6vw,82px);line-height:.98;letter-spacing:-.035em;font-weight:700;margin:0 0 22px}
+.lp-hero h1{font-size:clamp(44px,5.6vw,82px);line-height:.98;letter-spacing:-.04em;font-weight:900;margin:0 0 22px}
 .lp-hero h1 span{color:var(--accent)}
 .lp-stage{--mx:0;--my:0;perspective:1800px;height:min(78vh,640px);display:grid;place-items:center}
 .lp-stack{position:relative;width:min(520px,100%);aspect-ratio:1/1;transform-style:preserve-3d;
@@ -79,7 +80,7 @@
 /* Fees: counters run with scroll; bars fill one after another. */
 .lp .lp-fees{height:230vh;position:relative;background:linear-gradient(var(--canvas),var(--sunk) 60%)}
 .lp-fees-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(32px,6vw,96px);align-items:center;max-width:1180px;margin:0 auto;padding:96px var(--gutter) 48px}
-.lp .lp-fees h2,.lp-ask h2,.lp-day h2,.lp-kwame h2,.lp-pricing h2,.lp-trust h2,.lp-close h2{font-size:clamp(32px,3.6vw,52px);line-height:1.04;letter-spacing:-.03em;font-weight:700;margin:0 0 20px}
+.lp .lp-fees h2,.lp-ask h2,.lp-day h2,.lp-kwame h2,.lp-pricing h2,.lp-trust h2,.lp-close h2{font-size:clamp(32px,3.6vw,52px);line-height:1.04;letter-spacing:-.03em;font-weight:800;margin:0 0 20px}
 .lp .lp-fees h2 em{font-style:normal;color:var(--due)}
 .lp-fees-copy p{font-size:18px;line-height:1.6;color:var(--ink-soft);max-width:48ch}
 .lp-fees-board{background:var(--surface);border-radius:24px;padding:clamp(20px,3vw,32px);box-shadow:var(--e2);border:1px solid var(--line)}
