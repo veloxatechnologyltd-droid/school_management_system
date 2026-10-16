@@ -5,11 +5,13 @@ import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
 import { AssessmentService } from '../assessment/assessment.service';
 import { ProgressService, mondayOf } from '../assessment/progress.service';
+import { gradeMatches } from '../learning/scope';
 import { AnswerDto, HomePracticeSettingsDto, StartSessionDto } from './practice.dto';
 import { LEVEL_COUNT } from './questions';
 import { SESSIONS_PER_TOPIC_PER_DAY, SESSION_SIZE, TOPICS_OFFERED, afterSession, parseNumber, sameNumber } from './rules';
 
 const accraToday = (client: PoolClient) => client.query("SELECT (now() AT TIME ZONE 'Africa/Accra')::date::text AS d").then(r => r.rows[0].d as string);
+type Pick = { indicatorId: string; subject: string; topic: string; setId: string };
 type Learned = { indicatorId: string; subject: string; topic: string; level: number; done: boolean; sessionsThisWeek: number; sessionsToday: number; lastPracticedOn: string | null; openSessionId: string | null; answeredInOpen: number };
 
 // Home practice for families: the school's switch, what a verified guardian's child is offered, and the sessions themselves.
@@ -57,19 +59,50 @@ export class HomePracticeService {
       lastPracticedOn:r.last_at ? new Date(r.last_at).toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}) : null,openSessionId:r.open_id ?? null,answeredInOpen:r.open_id ? answered.get(r.open_id) ?? 0 : 0}));
   }
 
-  // The topics where this term's tagged class work puts the child below 50%, weakest first, that have an approved question set.
+  // The topics where this term's tagged class work puts the child below 50%, weakest first.
   private async weakTopics(client: PoolClient, schoolId: string, learnerId: string, today: string) {
-    const terms = (await client.query('SELECT id FROM terms WHERE school_id=$1 AND start_date<=$2 AND end_date>=$2',[schoolId,today])).rows.map(r => r.id as string);
-    if (!terms.length) return [] as { indicatorId: string; subject: string; topic: string; setId: string }[];
+    const terms = await this.termsCovering(client,schoolId,today);
+    if (!terms.length) return [] as { indicatorId: string; subject: string; topic: string }[];
     return (await client.query(`WITH latest AS (
         SELECT a.id AS assessment_id,round(m.mark*100/a.max_mark,1) AS percent FROM class_assessments a
         JOIN LATERAL (SELECT x.mark FROM class_assessment_marks x WHERE x.school_id=a.school_id AND x.assessment_id=a.id AND x.learner_id=$2 ORDER BY x.created_at DESC,x.id DESC LIMIT 1) m ON true
         WHERE a.school_id=$1 AND a.term_id=ANY($3::uuid[]) AND a.kind<>'mock')
-      SELECT i.id AS indicator_id,s.name AS subject,i.description AS topic,ps.id AS set_id FROM latest l
+      SELECT i.id AS indicator_id,s.name AS subject,i.description AS topic FROM latest l
       JOIN class_assessment_indicators x ON x.school_id=$1 AND x.assessment_id=l.assessment_id JOIN curriculum_indicators i ON i.school_id=x.school_id AND i.id=x.indicator_id AND i.retired_at IS NULL
-      JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id JOIN practice_sets ps ON ps.school_id=i.school_id AND ps.indicator_id=i.id AND ps.retired_at IS NULL AND ps.source<>'generated'
-      GROUP BY i.id,s.name,i.description,ps.id HAVING avg(l.percent)<50 ORDER BY avg(l.percent),i.description`,[schoolId,learnerId,terms])).rows
-      .map(r => ({indicatorId:r.indicator_id as string,subject:r.subject as string,topic:r.topic as string,setId:r.set_id as string}));
+      JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
+      GROUP BY i.id,s.name,i.description HAVING avg(l.percent)<50 ORDER BY avg(l.percent),i.description`,[schoolId,learnerId,terms])).rows
+      .map(r => ({indicatorId:r.indicator_id as string,subject:r.subject as string,topic:r.topic as string}));
+  }
+  private async termsCovering(client: PoolClient, schoolId: string, today: string) {
+    return (await client.query('SELECT id FROM terms WHERE school_id=$1 AND start_date<=$2 AND end_date>=$2',[schoolId,today])).rows.map(r => r.id as string);
+  }
+
+  // What a child could practise now, and which set each topic would use. A topic needs a set with at least a session's worth of live questions at the
+  // child's level: the teacher's own set while it has them, otherwise the questions Claude made for the topic, which only count when the topic is
+  // approved this term for the child's class. `approved` is every topic approved for the child's class; `weak` is the topics class work shows are hard.
+  private async available(client: PoolClient, schoolId: string, learnerId: string, today: string, className: string, levelOf: (indicatorId: string) => number) {
+    const weakRows = await this.weakTopics(client,schoolId,learnerId,today);
+    const terms = await this.termsCovering(client,schoolId,today);
+    // A topic can be approved for several class levels, so the child's class is matched before topics are counted once each.
+    const approvedRows = terms.length ? [...new Map((await client.query(`SELECT i.id AS indicator_id,a.grade,s.name AS subject,i.description AS topic FROM topic_approvals a
+      JOIN curriculum_indicators i ON i.school_id=a.school_id AND i.id=a.indicator_id AND i.retired_at IS NULL JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
+      WHERE a.school_id=$1 AND a.retired_at IS NULL AND a.term_id=ANY($2::uuid[]) ORDER BY i.id,a.approved_at`,[schoolId,terms])).rows.filter(r => gradeMatches(className,r.grade as string)).map(r => [r.indicator_id as string,r])).values()] : [];
+    const approvedIds = new Set(approvedRows.map(r => r.indicator_id as string));
+    const indicatorIds = [...new Set([...weakRows.map(w => w.indicatorId),...approvedIds])];
+    if (!indicatorIds.length) return { weak: [] as Pick[], approved: [] as Pick[] };
+    const sets = (await client.query('SELECT id,indicator_id,source,grade FROM practice_sets WHERE school_id=$1 AND indicator_id=ANY($2::uuid[]) AND retired_at IS NULL',[schoolId,indicatorIds])).rows;
+    const counts = (await client.query('SELECT set_id,level,count(*)::int AS n FROM practice_questions WHERE school_id=$1 AND set_id=ANY($2::uuid[]) AND retired_at IS NULL GROUP BY set_id,level',[schoolId,sets.map(x => x.id)])).rows;
+    const live = (setId: string, level: number) => counts.find(c => c.set_id === setId && c.level === level)?.n ?? 0;
+    const pick = (indicatorId: string, subject: string, topic: string): Pick | null => {
+      const level = levelOf(indicatorId);
+      const written = sets.find(x => x.indicator_id === indicatorId && x.source !== 'generated');
+      if (written && live(written.id,level) >= SESSION_SIZE) return { indicatorId, subject, topic, setId: written.id };
+      const made = approvedIds.has(indicatorId) ? sets.find(x => x.indicator_id === indicatorId && x.source === 'generated' && gradeMatches(className,x.grade)) : undefined;
+      return made && live(made.id,level) >= SESSION_SIZE ? { indicatorId, subject, topic, setId: made.id } : null;
+    };
+    const present = <T,>(list: (T | null)[]) => list.filter((x): x is T => x !== null);
+    return { weak: present(weakRows.map(w => pick(w.indicatorId,w.subject,w.topic))),
+      approved: present(approvedRows.sort((x,y) => (x.subject as string).localeCompare(y.subject) || (x.topic as string).localeCompare(y.topic)).map(r => pick(r.indicator_id,r.subject,r.topic))) };
   }
 
   // The weakest topics with approved questions that the child has not finished, weakest first.
@@ -78,32 +111,36 @@ export class HomePracticeService {
     return weak.filter(w => !done.has(w.indicatorId)).slice(0,TOPICS_OFFERED);
   }
 
+  private async classOf(client: PoolClient, schoolId: string, learnerId: string, today: string) {
+    const row = (await client.query(`SELECT c.name,c.level FROM enrolments e JOIN class_sections c ON c.school_id=e.school_id AND c.id=e.class_id
+      WHERE e.school_id=$1 AND e.learner_id=$2 AND e.superseded_at IS NULL AND e.start_date<=$3::date AND (e.end_date IS NULL OR e.end_date>$3::date) LIMIT 1`,[schoolId,learnerId,today])).rows[0];
+    return row ? { name: row.name as string, level: row.level as string } : null;
+  }
+
   // What the family sees for one child: the topics on offer now, and what the child has practised. No marks, percentages or comparisons.
   async child(client: PoolClient, actor: Actor, learnerId: string) {
     await this.guardianOf(client,actor,learnerId);
     if (!(await this.settings(client,actor.schoolId)).enabled) return {enabled:false as const};
     const today = await accraToday(client);
     // Practice is built on tagged class work, which only Primary and JHS classes have: Nursery and KG families see nothing here.
-    const level = (await client.query(`SELECT c.level FROM enrolments e JOIN class_sections c ON c.school_id=e.school_id AND c.id=e.class_id
-      WHERE e.school_id=$1 AND e.learner_id=$2 AND e.superseded_at IS NULL AND e.start_date<=$3::date AND (e.end_date IS NULL OR e.end_date>$3::date) LIMIT 1`,[actor.schoolId,learnerId,today])).rows[0]?.level as string | undefined;
-    if (level !== 'Primary' && level !== 'JHS') return {enabled:false as const};
+    const klass = await this.classOf(client,actor.schoolId,learnerId,today);
+    if (!klass || (klass.level !== 'Primary' && klass.level !== 'JHS')) return {enabled:false as const};
     const firstName = ((await client.query('SELECT full_name FROM learners WHERE school_id=$1 AND id=$2',[actor.schoolId,learnerId])).rows[0].full_name as string).split(' ')[0]!;
     const learned = await this.learned(client,actor.schoolId,learnerId,today), byTopic = new Map(learned.map(l => [l.indicatorId,l]));
-    // A topic whose questions have run low (some retired) is not offered until it can fill a session at the child's level, rather than failing on Start.
-    const weak: Awaited<ReturnType<HomePracticeService['weakTopics']>> = [];
-    for (const w of await this.weakTopics(client,actor.schoolId,learnerId,today)) {
-      const live = (await client.query('SELECT count(*)::int AS n FROM practice_questions WHERE school_id=$1 AND set_id=$2 AND level=$3 AND retired_at IS NULL',[actor.schoolId,w.setId,byTopic.get(w.indicatorId)?.level ?? 1])).rows[0].n as number;
-      if (live >= SESSION_SIZE) weak.push(w);
-    }
+    const picks = await this.available(client,actor.schoolId,learnerId,today,klass.name,id => byTopic.get(id)?.level ?? 1);
     // A session in progress is always shown so it can be finished; the rest of the slots go to the weakest topics.
     const open = learned.filter(l => l.openSessionId).map(l => ({indicatorId:l.indicatorId,subject:l.subject,topic:l.topic}));
-    const offered = [...open,...this.offer(weak,learned).filter(w => !open.some(o => o.indicatorId === w.indicatorId)).slice(0,Math.max(0,TOPICS_OFFERED - open.length))];
-    const topics = offered.map(o => { const l = byTopic.get(o.indicatorId);
+    const offered = [...open,...this.offer(picks.weak,learned).filter(w => !open.some(o => o.indicatorId === w.indicatorId)).slice(0,Math.max(0,TOPICS_OFFERED - open.length))];
+    const card = (o: { indicatorId: string; subject: string; topic: string }) => { const l = byTopic.get(o.indicatorId);
       return {indicatorId:o.indicatorId,subject:o.subject,topic:o.topic,level:l?.level ?? 1,levels:LEVEL_COUNT,sessionsThisWeek:l?.sessionsThisWeek ?? 0,lastPracticedOn:l?.lastPracticedOn ?? null,
-        open:l?.openSessionId ? {sessionId:l.openSessionId,answered:l.answeredInOpen,total:SESSION_SIZE} : null,availableToday:!!l?.openSessionId || (l?.sessionsToday ?? 0) < SESSIONS_PER_TOPIC_PER_DAY}; });
+        open:l?.openSessionId ? {sessionId:l.openSessionId,answered:l.answeredInOpen,total:SESSION_SIZE} : null,availableToday:!!l?.openSessionId || (l?.sessionsToday ?? 0) < SESSIONS_PER_TOPIC_PER_DAY}; };
+    const topics = offered.map(card);
+    // The child's own choices: every other topic approved for their class this term that has questions to practise and is not finished.
+    const done = new Set(learned.filter(l => l.done).map(l => l.indicatorId)), shown = new Set(offered.map(o => o.indicatorId));
+    const explore = picks.approved.filter(a => !shown.has(a.indicatorId) && !done.has(a.indicatorId)).map(card);
     const practised = learned.filter(l => l.lastPracticedOn).sort((a,b) => (b.lastPracticedOn ?? '').localeCompare(a.lastPracticedOn ?? ''))
       .map(l => ({indicatorId:l.indicatorId,subject:l.subject,topic:l.topic,level:l.level,levels:LEVEL_COUNT,done:l.done,sessionsThisWeek:l.sessionsThisWeek,lastPracticedOn:l.lastPracticedOn}));
-    return {enabled:true as const,firstName,topics,practised};
+    return {enabled:true as const,firstName,topics,explore,practised};
   }
 
   private async view(client: PoolClient, schoolId: string, sessionId: string) {
@@ -133,7 +170,12 @@ export class HomePracticeService {
       const today = await accraToday(client);
       const everything = await this.learned(client,actor.schoolId,learnerId,today), learned = everything.find(l => l.indicatorId === body.indicatorId);
       if (learned?.openSessionId) return this.view(client,actor.schoolId,learned.openSessionId);
-      const offered = this.offer(await this.weakTopics(client,actor.schoolId,learnerId,today),everything).find(w => w.indicatorId === body.indicatorId);
+      const klass = await this.classOf(client,actor.schoolId,learnerId,today);
+      if (!klass) throw new NotFoundException('This topic is not offered right now');
+      const picks = await this.available(client,actor.schoolId,learnerId,today,klass.name,id => everything.find(l => l.indicatorId === id)?.level ?? 1);
+      const finished = new Set(everything.filter(l => l.done).map(l => l.indicatorId));
+      // Either one of the weakest topics on offer, or any other topic approved for the child's class this term.
+      const offered = [...this.offer(picks.weak,everything),...picks.approved.filter(a => !finished.has(a.indicatorId))].find(w => w.indicatorId === body.indicatorId);
       if (!offered) throw new NotFoundException('This topic is not offered right now');
       if ((learned?.sessionsToday ?? 0) >= SESSIONS_PER_TOPIC_PER_DAY) throw new ConflictException('That is enough practice on this topic for today. Come back tomorrow');
       const level = learned?.level ?? 1;

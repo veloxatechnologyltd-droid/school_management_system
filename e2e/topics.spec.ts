@@ -16,13 +16,13 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   await signIn(page,'head@example.test','Topics');
-  const suffix=randomUUID().slice(0,8),topic=`Fractions ${suffix}`,elsewhere=`Algebra ${suffix}`,className=`Topics class ${suffix}`,learnerName=`Topics Learner ${suffix}`,termName=`Topics term ${suffix}`,yearName=`Topics year ${suffix}`;
+  const suffix=randomUUID().slice(0,8),topic=`Fractions ${suffix}`,second=`Decimals ${suffix}`,elsewhere=`Algebra ${suffix}`,className=`Topics class ${suffix}`,learnerName=`Topics Learner ${suffix}`,termName=`Topics term ${suffix}`,yearName=`Topics year ${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}),shift=(d:number)=>new Date(Date.parse(`${today}T00:00:00Z`)+d*86400000).toISOString().slice(0,10);
   async function send(method:'POST'|'PUT',route:string,body:Record<string,unknown>,status=201){const response=await page.request.fetch(`/api/v1/schools/${school}${route}`,{method,headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
   const year=await send('POST','/academic-years',{name:yearName,startDate:shift(-60),endDate:shift(120)}),section=await send('POST','/classes',{name:className,level:'Primary',capacity:5,academicYearId:year.id});
   const subject=await send('POST','/assessment/subjects',{name:`Maths ${suffix}`}),term=await send('POST','/assessment/terms',{academicYearId:year.id,name:termName,startDate:shift(-55),endDate:shift(30)});
-  await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',sourceNote:'Synthetic scheme of work',items:[{description:topic}]});
+  await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',sourceNote:'Synthetic scheme of work',items:[{description:topic},{description:second}]});
   await send('POST','/assessment/indicators',{subjectId:subject.id,origin:'local',grade:`Elsewhere ${suffix}`,sourceNote:'Synthetic scheme of work',items:[{description:elsewhere}]});
   const indicator=(await (await page.request.get(`/api/v1/schools/${school}/assessment/indicators?subjectId=${subject.id}`)).json()).items.find((i:any)=>i.description===topic).id;
   // The class teacher has this class today; a learner in it is weak in the topic, and the school's own hand-written set exists for it.
@@ -46,15 +46,15 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await page.reload();await expect(page.getByRole('heading',{name:'Topics',exact:true})).toBeVisible();
     await page.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
     await expect(page.getByRole('checkbox',{name:`Select ${elsewhere}`})).toBeVisible();
-    await page.getByRole('checkbox',{name:`Select ${topic}`}).check();
+    await page.getByRole('checkbox',{name:`Select ${topic}`}).check();await page.getByRole('checkbox',{name:`Select ${second}`}).check();
     await page.getByRole('button',{name:/^Approve for /}).click();
     const dialog=page.getByRole('dialog',{name:/^Approve topics for /});
     await expect(dialog.getByText(/Nothing about any child or any member of staff is sent/)).toBeVisible();
     await dialog.getByRole('combobox',{name:'Class these topics are for',exact:true}).selectOption(className);
-    await dialog.getByRole('button',{name:'Approve 1 topic',exact:true}).click();
+    await dialog.getByRole('button',{name:'Approve 2 topics',exact:true}).click();
     const row=page.locator('li').filter({hasText:topic}).filter({has:page.getByRole('button',{name:'Open',exact:true})});
-    await expect(page.getByText(/1 topic approved for /)).toBeVisible();
-    await expect(page.getByText('Questions 19 · 19 · 19')).toBeVisible({timeout:20000});
+    await expect(page.getByText(/2 topics approved for /)).toBeVisible();
+    await expect(page.getByText('Questions 19 · 19 · 19').first()).toBeVisible({timeout:20000});await expect(page.getByText('Questions 19 · 19 · 19')).toHaveCount(2);
     await expect(row.getByText(/Lesson ready · questions 19 \/ 19 \/ 19 \(aim 20 each\)/)).toBeVisible();
     // The checks left one question out of each level; making the rest tops each level up to 20.
     await row.getByRole('button',{name:'Make lessons and questions',exact:true}).click();
@@ -87,7 +87,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await signIn(family,'guardian@example.test','My children');await family.setViewportSize({width:375,height:812});
     await family.getByRole('combobox',{name:'Linked child',exact:true}).selectOption(learner);
     const card=family.getByRole('region',{name:'Practice at home',exact:true});
-    await expect(card.getByText(topic)).toBeVisible();await card.getByRole('button',{name:'Start',exact:true}).click();
+    await expect(card.getByText(topic)).toBeVisible();await card.locator('li').filter({hasText:topic}).getByRole('button',{name:'Start',exact:true}).click();
     const play=family.getByRole('dialog');await expect(play.getByText('Question 1 of 5')).toBeVisible();
     await expect(play.getByText("Made by AI from your school's topics")).toHaveCount(0);
     const prompt=await play.locator('.practice-prompt').innerText();
@@ -102,6 +102,15 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await expect(play.getByText('Thank you. We have told the teacher, and this question will not be shown again.')).toBeVisible();
     await expect(play.getByRole('button',{name:'Next question',exact:true})).toBeVisible();
     expect(await noOverflow(family)).toBe(true);
+
+    // The child can also choose any other topic approved for their class this term; its questions are Claude's and say so.
+    await family.keyboard.press('Escape');
+    await expect(card.getByRole('heading',{name:'Choose a topic',exact:true})).toBeVisible();
+    await expect(card.locator('li').filter({hasText:second})).toBeVisible();await expect(card.locator('li').filter({hasText:elsewhere})).toHaveCount(0);
+    await card.locator('li').filter({hasText:second}).getByRole('button',{name:'Start',exact:true}).click();
+    const chosen=family.getByRole('dialog',{name:`Practice: ${second}`});await expect(chosen.getByText('Question 1 of 5')).toBeVisible();
+    await expect(chosen.getByText("Made by AI from your school's topics")).toBeVisible();
+    expect(await noOverflow(family)).toBe(true);await family.keyboard.press('Escape');
 
     // ---- The teacher and the head see the report, without the parent's name, and handle it.
     await teacher.reload();await teacher.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});

@@ -326,20 +326,23 @@ test('generation checks again after the model has answered, and stops where ther
   assert.equal(prompts.length,0,'no model call for a level that cannot take more');assert.deepEqual(await live(id('B5.22')),[19,20,20]);
 });
 
-test('nothing generated reaches a child yet: practice is still offered only from teacher-approved sets',async()=>{
-  // Ama is weak in fractions (generated questions only) and in percentages (a hand-written set, and generated questions too).
+test('generated questions reach a child for a topic approved for their class, and the teacher\'s set wins while it has enough questions',async()=>{
+  // Ama (Basic 5) is weak in fractions (generated questions only, approved for Basic 5 this term) and in percentages (a hand-written set, and generated questions too).
   const offer=(await call(`${practice}/${ama}/practice`,'GET',undefined,guardian)).body;
-  assert.deepEqual(offer.topics.map((t:any)=>t.indicatorId),[topic.percent],'only the topic with a teacher-approved set is offered');
-  assert.equal((await start(ama,topic.fractions)).status,404,'a topic with only generated questions cannot be started');
-  const first=await start(ama,topic.percent);assert.equal(first.status,201,JSON.stringify(first.body));assert.equal(first.body.next.madeByAi,false,'a teacher-approved question carries no AI label');
+  assert.deepEqual(offer.topics.map((t:any)=>t.indicatorId),[topic.fractions,topic.percent],'weakest first: a topic with only generated questions is offered now');
   const handSet=(await owner.query("SELECT id FROM practice_sets WHERE school_id=$1 AND indicator_id=$2 AND source<>'generated' AND retired_at IS NULL",[school,topic.percent])).rows[0].id;
-  assert.equal((await owner.query('SELECT set_id FROM practice_sessions WHERE id=$1',[first.body.sessionId])).rows[0].set_id,handSet,'the session is built from the teacher\'s set');
+  const setOf=async(session:string)=>(await owner.query("SELECT s.id,s.source FROM practice_sessions p JOIN practice_sets s ON s.school_id=p.school_id AND s.id=p.set_id WHERE p.id=$1",[session])).rows[0];
+  // Percentages: the teacher's set has five or more questions at the child's level, so it is the one used, and it carries no AI label.
+  const first=await start(ama,topic.percent);assert.equal(first.status,201,JSON.stringify(first.body));assert.equal(first.body.next.madeByAi,false,'a teacher-approved question carries no AI label');
+  assert.equal((await setOf(first.body.sessionId)).id,handSet,'the session is built from the teacher\'s set');
+  // Fractions: only generated questions exist, so they are used, with the label. This session stays open for the tests that follow.
+  const made=await start(ama,topic.fractions);assert.equal(made.status,201,JSON.stringify(made.body));assert.equal(made.body.next.madeByAi,true);assert.equal((await setOf(made.body.sessionId)).source,'generated');
   // The teacher's approved-set screens do not see or touch the generated set.
   const bank=(await call(`/assessment/indicators/${topic.percent}/questions`,'GET',undefined,teacher)).body;
   assert.equal(bank.current.id,handSet);assert.equal(bank.current.questions.length,18);assert.equal(bank.history.length,0);
   const generated=(await owner.query("SELECT id FROM practice_sets WHERE school_id=$1 AND indicator_id=$2 AND source='generated'",[school,topic.percent])).rows[0].id;
   assert.equal((await call(`/assessment/practice-sets/${generated}/retire`,'POST',{operationId:randomUUID(),reason:'Trying the old route'},head)).status,404,'a generated set is not retired as a whole through the teacher-set screen');
-  // Finish the session so the child's day is in a known state.
+  // Finish the percentages session so the child's day is in a known state.
   let view=first.body;for(let i=0;i<5;i++){const r=await answer(ama,view.sessionId,view.next);assert.equal(r.status,201);if(!r.body.summary)view=(await call(`${practice}/${ama}/practice/sessions/${view.sessionId}`,'GET',undefined,guardian)).body;}
 });
 
@@ -403,12 +406,9 @@ test('a parent flags a question their child was given: it stops at once, the tea
 });
 
 test('a generated question the child was given shows the AI label and can be flagged the same way',async()=>{
-  // Slice 2 will serve generated questions; here a session is built by hand on a generated set to prove the label and the flag already work for them.
-  const generated=(await owner.query("SELECT id FROM practice_sets WHERE school_id=$1 AND indicator_id=$2 AND source='generated'",[school,topic.fractions])).rows[0].id;
-  const ids=(await owner.query("SELECT id FROM practice_questions WHERE set_id=$1 AND level=1 AND retired_at IS NULL ORDER BY position LIMIT 5",[generated])).rows.map(r=>r.id as string);
-  const session=randomUUID();
-  await owner.query("INSERT INTO practice_sessions(id,school_id,learner_id,indicator_id,set_id,guardian_membership_id,level) VALUES($1,$2,$3,$4,$5,$6,1)",[session,school,ama,topic.fractions,generated,guardianM]);
-  for(const [n,id] of ids.entries())await owner.query("INSERT INTO practice_session_items(school_id,session_id,position,question_id) VALUES($1,$2,$3,$4)",[school,session,n+1,id]);
+  // The fractions session started above is made of generated questions.
+  const session=(await owner.query("SELECT id FROM practice_sessions WHERE school_id=$1 AND learner_id=$2 AND indicator_id=$3",[school,ama,topic.fractions])).rows[0].id as string;
+  const ids=(await owner.query("SELECT question_id FROM practice_session_items WHERE session_id=$1 ORDER BY position",[session])).rows.map(r=>r.question_id as string);
   const view=(await call(`${practice}/${ama}/practice/sessions/${session}`,'GET',undefined,guardian)).body;assert.equal(view.next.madeByAi,true);assert.equal(view.next.questionId,ids[0]);
   assert.equal((await flag(ama,ids[0]!,{reason:'not_taught'})).status,201);
   assert.deepEqual((await owner.query("SELECT retired_cause FROM practice_questions WHERE id=$1",[ids[0]])).rows[0],{retired_cause:'flag'});
@@ -455,9 +455,53 @@ test('a question reported wrong is never given to another child, and a session a
   let view=started.body;for(let i=0;i<5;i++){const r=await answer(esi,view.sessionId,view.next,false);assert.equal(r.status,201,JSON.stringify(r.body));if(!r.body.summary)view=(await call(`${practice}/${esi}/practice/sessions/${view.sessionId}`,'GET',undefined,guardian)).body;}
   // The question she was told was wrong credited her: none right of five, but one was reported, so one counts.
   assert.equal((await owner.query("SELECT correct FROM practice_sessions WHERE id=$1",[started.body.sessionId])).rows[0].correct,1);
-  // Four are left at Level 1, which is fewer than a session needs: the topic is no longer offered, and starting it says why.
-  assert.ok(!(await call(`${practice}/${esi}/practice`,'GET',undefined,guardian)).body.topics.some((t:any)=>t.indicatorId===topic.percent),'a topic that cannot fill a session is not offered');
-  const again=await start(esi,topic.percent);assert.equal(again.status,409);assert.match(again.body.message,/enough questions/);
+  // Four are left in the teacher's set at Level 1, fewer than a session needs, so the generated questions for the topic take over: the topic is still offered.
+  assert.ok((await call(`${practice}/${esi}/practice`,'GET',undefined,guardian)).body.topics.some((t:any)=>t.indicatorId===topic.percent),'the topic is still offered');
+  const next=await start(esi,topic.percent);assert.equal(next.status,201,JSON.stringify(next.body));assert.equal(next.body.next.madeByAi,true);
+  assert.equal((await owner.query("SELECT s.source FROM practice_sessions p JOIN practice_sets s ON s.school_id=p.school_id AND s.id=p.set_id WHERE p.id=$1",[next.body.sessionId])).rows[0].source,'generated');
+});
+
+test('a child can choose any topic approved for their class this term, and only those',async()=>{
+  const explore=async(child:string)=>(await call(`${practice}/${child}/practice`,'GET',undefined,guardian)).body.explore as {indicatorId:string;subject:string;topic:string}[];
+  const ids=(list:{indicatorId:string}[])=>list.map(t=>t.indicatorId);
+  // Ama (Basic 5): the topics approved for Basic 5 with enough questions, apart from the two she is already offered because class work is weak.
+  const own=await explore(ama);
+  assert.ok(ids(own).includes(topic.decimals)&&ids(own).includes(topic.unapproved),'approved Basic 5 topics with questions are on the list');
+  assert.ok(!ids(own).includes(topic.fractions)&&!ids(own).includes(topic.percent),'the topics she is already offered are not listed twice');
+  assert.ok(!ids(own).includes(topic.algebra),'a JHS 1 topic is not for a Basic 5 child');
+  assert.ok(own.every(t=>t.subject&&t.topic),'each shows its subject and wording');
+  // A child in JHS 1 sees JHS 1 topics, and only ones that have questions.
+  const yaw=randomUUID();
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,'Yaw Boateng')",[yaw,school,`TP-${yaw.slice(0,8)}`]);
+  await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,$5)",[randomUUID(),school,yaw,jhs1,shift(-50)]);
+  await owner.query("INSERT INTO guardian_links(id,school_id,learner_id,guardian_membership_id,guardian_display_name,academic,billing,pickup,contact,verified_at,verified_by,verification_reason) VALUES($1,$2,$3,$4,'Abena Sample',true,false,true,false,now(),$5,'Synthetic verification')",[randomUUID(),school,yaw,guardianM,headM]);
+  // A topic that names no class level can be approved for several: decimals is already approved for Basic 5, and now for JHS 1 as well.
+  const jhsDecimals=(await ok('/learning/topics/approve','POST',{termId,items:[{indicatorId:topic.decimals,grade:'JHS 1'}]},head)).approved[0].approvalId;
+  assert.equal((await generate(jhsDecimals)).body.generated,true);
+  assert.deepEqual(ids(await explore(yaw)),[topic.decimals,topic.algebra],'J1.20 is approved too but nothing was made for it, so it is not offered; decimals is, though its Basic 5 approval came first');
+  // Choosing: an approved topic starts, any other does not.
+  const decimals=await start(ama,topic.decimals);assert.equal(decimals.status,201,JSON.stringify(decimals.body));assert.equal(decimals.body.next.madeByAi,true);
+  assert.equal((await start(ama,topic.algebra)).status,404,'another class level');
+  assert.equal((await start(ama,topic.retired)).status,404,'a topic nobody approved');
+  assert.equal((await start(yaw,topic.algebra)).status,201);assert.equal((await start(yaw,topic.fractions)).status,404,'a Basic 5 topic for a JHS 1 child');
+  // Ama's class work turns out weak on one of those topics, so it is offered as a weak topic too; retiring its approval takes it off at once, because
+  // generated questions are only ever served for an approved topic. (The session already started is finished.)
+  const quiz=await ok(`/assessment/classes/${basic5}/assessments`,'POST',{termId,subjectId:maths,kind:'quiz',title:'Measuring quiz',heldOn:shift(-4),maxMark:100,indicatorIds:[topic.unapproved]},teacher);
+  await ok(`/assessment/classes/${basic5}/assessments/${quiz.id}/marks`,'POST',{marks:[{learnerId:ama,mark:10}]},teacher);
+  assert.ok(ids((await call(`${practice}/${ama}/practice`,'GET',undefined,guardian)).body.topics).includes(topic.unapproved),'weak and approved: offered from the generated questions');
+  await ok(`/learning/approvals/${await approvalOf(topic.unapproved)}/retire`,'POST',{reason:'Not teaching this now'},head);
+  assert.ok(!ids(await explore(ama)).includes(topic.unapproved),'no approval, no questions for the child');
+  assert.ok(!ids((await call(`${practice}/${ama}/practice`,'GET',undefined,guardian)).body.topics).includes(topic.unapproved),'and a weak topic is no longer offered once its approval is retired');
+  assert.equal((await start(ama,topic.unapproved)).status,404);
+  assert.equal((await call(`${practice}/${ama}/practice/sessions/${decimals.body.sessionId}`,'GET',undefined,guardian)).status,200,'a session already started carries on');
+  // The usual limits hold: two sessions a topic a day.
+  const play2=async(child:string,indicatorId:string)=>{const s1=await start(child,indicatorId);assert.equal(s1.status,201,JSON.stringify(s1.body));let v=s1.body;for(let i=0;i<5;i++){const r=await answer(child,v.sessionId,v.next);assert.equal(r.status,201,JSON.stringify(r.body));if(!r.body.summary)v=(await call(`${practice}/${child}/practice/sessions/${v.sessionId}`,'GET',undefined,guardian)).body;}};
+  await play2(yaw,topic.algebra);await play2(yaw,topic.algebra);
+  const third=await start(yaw,topic.algebra);assert.equal(third.status,409);assert.match(third.body.message,/enough practice/);
+  // Staff see what the child chose as practice evidence, beside class work and never in it.
+  const evidence=(await call(`/learners/${yaw}/practice`)).body;
+  assert.ok(evidence.topics.some((t:any)=>t.topic==='Solves simple linear equations in one unknown'&&t.sessions===2),'the topic they chose appears in their practice, two sessions');
+  assert.equal(evidence.recent.length,2);
 });
 
 test('one parent can report at most ten questions a day',async()=>{
@@ -518,7 +562,7 @@ test('teachers read everything Claude made for their classes, answers included, 
   assert.equal((await call(`/learning/lessons/${lesson}/retire`,'POST',{operationId:randomUUID(),reason:'Retiring it twice'},teacher)).status,404);
   assert.equal((await content(topic.decimals,'Basic 5',teacher)).body.lesson,null);
   const regenerated=await generate(await approvalOf(topic.decimals),teacher);assert.deepEqual([regenerated.body.generated,regenerated.body.lesson,regenerated.body.levels.map((l:any)=>l.added)],[true,'made',[1,0,0]]);
-  assert.equal(Number((await owner.query("SELECT count(*) FROM topic_lessons WHERE school_id=$1 AND indicator_id=$2",[school,topic.decimals])).rows[0].count),2,'the retired lesson is kept');
+  assert.equal(Number((await owner.query("SELECT count(*) FROM topic_lessons WHERE school_id=$1 AND indicator_id=$2 AND lower(grade)='basic 5'",[school,topic.decimals])).rows[0].count),2,'the retired lesson is kept');
   assert.notEqual((await content(topic.decimals,'Basic 5',teacher)).body.lesson.id,lesson);
 
   // Retire the topic for the term: nothing more is made, nothing is lost, and approving it again brings it back as it was.

@@ -69,7 +69,7 @@ export function PracticeQuestions({ schoolId, csrfToken, indicatorId, onChanged 
   return <div className="question-bank">
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {!editor && <>
-      {!current ? <Empty title="No approved questions for this topic" hint="Draft three levels of questions with Claude, check them and approve. Until then, no child is offered practice on this topic."/> : <>
+      {!current ? <Empty title="No hand-written set for this topic" hint="A set you approve here is used first. Without one, children practise the questions Claude made for this topic, if you have approved it on the Topics page."/> : <>
         <p><Pill tone="positive">Approved</Pill> <span className="muted">{current.questions.filter(q => !q.retired).length} questions in use{current.questions.some(q => q.retired) ? ` (${current.questions.filter(q => q.retired).length} retired)` : ''} · {current.source === 'ai' ? 'drafted with Claude and checked by' : 'written by'} {current.approved_by_name}, {when(current.approved_at)}</span></p>
         {levels.map(([level, name, hint]) => <details key={level} open={level === 1}><summary><strong>{name}</strong> <span className="muted">{hint} · {current.questions.filter(q => q.level === level).length} questions</span></summary>
           <ol className="q-list">{current.questions.filter(q => q.level === level).map((q, i) => <li key={i}><QuestionView q={q}/></li>)}</ol></details>)}

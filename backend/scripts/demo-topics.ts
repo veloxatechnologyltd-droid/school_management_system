@@ -34,9 +34,10 @@ async function main() {
   console.log(`Term: ${overview.term.name} (${overview.term.yearName})`);
   const find = (topics: Topic[], description: string, grade: string | null) => topics.find(t => t.description === description && t.grade === grade);
 
-  // The headteacher approves what Basic 6 is learning; the JHS 3 class teacher approves the JHS 3 topics. Topics left alone stay available to approve.
+  // The headteacher approves what Basic 6 and Basic 4 are learning; the JHS 3 class teacher approves the JHS 3 topics. Topics left alone stay available to approve.
   const plan: [Person, string, [string, string | null][]][] = [
     [head, 'Basic 6', ['Reading comprehension', 'Grammar: tenses and agreement', 'Composition writing', 'Place value and number sense', 'Fractions', 'Energy and its forms', 'Map reading', 'Governance and citizenship'].map(d => [d, null] as [string, null])],
+    [head, 'Basic 4', [['Addition and subtraction', null], ['Reading tables and graphs', null], ['Living things and their habitats', null], ['Our environment', null], ['Reading aloud with expression', 'Basic 4'], ['Using capital letters and full stops', 'Basic 4']]],
     [teacher, 'JHS 3', [['Solving linear equations', 'JHS 3'], ['Simple and compound interest', 'JHS 3'], ['Argumentative essay writing', 'JHS 3'], ['Summary writing', 'JHS 3'], ['Energy and its forms', null]]],
   ];
   const approved: { who: Person; id: string; label: string }[] = [];

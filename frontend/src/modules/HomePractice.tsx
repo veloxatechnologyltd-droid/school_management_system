@@ -5,7 +5,7 @@ import { AiLabel, Card, Dialog, Empty, Icon, Pill, todayInAccra } from '../lib/u
 type Topic = { indicatorId: string; subject: string; topic: string; level: number; levels: number; sessionsThisWeek: number; lastPracticedOn: string | null;
   open: { sessionId: string; answered: number; total: number } | null; availableToday: boolean };
 type Practised = { indicatorId: string; subject: string; topic: string; level: number; levels: number; done: boolean; sessionsThisWeek: number; lastPracticedOn: string };
-type Overview = { enabled: false } | { enabled: true; firstName: string; topics: Topic[]; practised: Practised[] };
+type Overview = { enabled: false } | { enabled: true; firstName: string; topics: Topic[]; explore: Topic[]; practised: Practised[] };
 type Question = { questionId: string; position: number; kind: 'choice' | 'number'; prompt: string; options: string[] | null; madeByAi: boolean };
 type Summary = { correct: number; total: number; outcome: 'up' | 'stay' | 'down' | 'done'; levelAfter: number };
 type View = { sessionId: string; subject: string; topic: string; level: number; total: number; answered: number; next: Question | null; summary: Summary | null };
@@ -27,21 +27,27 @@ export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: strin
     request<View>(`${base}/sessions`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), indicatorId: topic.indicatorId }) })
       .then(view => setSession({ topic, view })).catch(e => { setError((e as Error).message); void load(); }).finally(() => setBusy('')); };
   if (!data || !data.enabled) return error && data ? <p role="alert">{error}</p> : null;
-  const { firstName, topics } = data;
+  const { firstName, topics, explore } = data;
   // Topics on offer already show their level and sessions; this list is for the ones finished or no longer on the list.
   const practised = data.practised.filter(p => !topics.some(t => t.indicatorId === p.indicatorId));
-  return <section aria-label="Practice at home" className="page">
-    <Card title="Practice at home" hint={`Short practice for ${firstName} on the topics class work shows are hardest. A teacher checked every question. Five questions at a time.`}>
-      {error && <p role="alert">{error}</p>}
-      {!topics.length ? <Empty title="Nothing to practise right now" hint={`When ${firstName}'s class work shows a topic is hard and the teacher has approved questions for it, it will appear here.`}/>
-        : <ul className="practice-topics">{topics.map(t => <li key={t.indicatorId}>
+  const row = (t: Topic) => <li key={t.indicatorId}>
           <div><strong>{t.topic}</strong><span className="sub">{t.subject}</span>
             <span className="practice-meta"><Dots level={t.level} levels={t.levels}/> Level {t.level} of {t.levels}{t.sessionsThisWeek > 0 && <> · {times(t.sessionsThisWeek)} this week</>}{t.lastPracticedOn && <> · last practised {ago(t.lastPracticedOn)}</>}</span></div>
           {t.open ? <button disabled={busy === t.indicatorId} onClick={() => begin(t)}>Continue</button>
             : t.availableToday ? <button disabled={busy === t.indicatorId} onClick={() => begin(t)}>{t.lastPracticedOn ? 'Practise again' : 'Start'}</button>
             : <Pill tone="positive">Done for today</Pill>}
-        </li>)}</ul>}
+        </li>;
+  // The child's own choices, grouped by subject.
+  const subjects = [...new Set(explore.map(t => t.subject))];
+  return <section aria-label="Practice at home" className="page">
+    <Card title="Practice at home" hint={`Short practice for ${firstName} on the topics class work shows are hardest, five questions at a time. The questions come from the school's own topics; the ones written by AI say so.`}>
+      {error && <p role="alert">{error}</p>}
+      {!topics.length ? <Empty title="Nothing to practise right now" hint={`When ${firstName}'s class work shows a topic is hard and the school has approved the term's topics, it will appear here.`}/>
+        : <ul className="practice-topics">{topics.map(row)}</ul>}
     </Card>
+    {explore.length > 0 && <Card title="Choose a topic" hint={`The topics ${firstName}'s class is learning this term. Pick any one to practise: five questions at a time, at ${firstName}'s own level. This never changes class marks.`}>
+      {subjects.map(subject => <div key={subject}><h4 className="topic-subject">{subject}</h4><ul className="practice-topics">{explore.filter(t => t.subject === subject).map(row)}</ul></div>)}
+    </Card>}
     {practised.length > 0 && <Card title="Earlier practice">
       <ul className="practice-topics">{practised.map(p => <li key={p.indicatorId}>
         <div><strong>{p.topic}</strong><span className="sub">{p.subject}</span>
