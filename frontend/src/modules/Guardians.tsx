@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, when } from '../lib/ui';
+import { dayLabel, lastDayBefore } from '../lib/dates';
 
 type Role = 'headteacher' | 'guardian' | string;
 type GuardianCandidate = { id: string; display_name: string };
@@ -200,9 +201,9 @@ export function Guardians({ schoolId, csrfToken, role, onChildChange }: Props) {
         </div>
         {detailLoading ? <p role="status">Checking current guardian access…</p> : childDetail && <div className="columns">
           {childDetail.academic ? <Card title="Academic information">
-            <p>Date of birth: {childDetail.date_of_birth || 'Not recorded'}</p>
+            <p>Date of birth: {childDetail.date_of_birth ? dayLabel(childDetail.date_of_birth) : 'Not recorded'}</p>
             <h4>Enrolment history</h4>
-            {childDetail.enrolments?.length ? <ul className="history">{childDetail.enrolments.map((row, index) => <li key={`${row.class_name}-${row.start_date}-${index}`}><strong>{row.class_name}</strong><span>{enrolmentStatus(row.start_date, row.end_date)} · Starts {row.start_date}{row.end_date ? ` · Ends (exclusive) ${row.end_date}` : ''}</span></li>)}</ul> : <p>No enrolment history is available.</p>}
+            {childDetail.enrolments?.length ? <ul className="history">{childDetail.enrolments.map((row, index) => <li key={`${row.class_name}-${row.start_date}-${index}`}><strong>{row.class_name}</strong><span>{enrolmentStatus(row.start_date, row.end_date)} · {row.end_date ? `${dayLabel(row.start_date)} to ${dayLabel(lastDayBefore(row.end_date))}` : `from ${dayLabel(row.start_date)}`}</span></li>)}</ul> : <p>No enrolment history is available.</p>}
           </Card> : <Card><Empty title="Academic records are not shared with you" hint="Ask the school if you should have academic access for this child."/></Card>}
           <Card title="Your verified access" hint="What the school has confirmed you may see and do.">
             <ul className="rights">{rightNames.map(([key, name]) => <li key={key}>{childDetail[key] ? <Pill tone="positive"><Icon name="check"/>{name}</Pill> : <Pill tone="neutral">{name}: not granted</Pill>}</li>)}</ul>

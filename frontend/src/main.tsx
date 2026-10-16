@@ -61,6 +61,11 @@ const pageMeta:Record<string,{eyebrow:string;title:string;blurb:string}>={
   ask:{eyebrow:'Assistant',title:'Ask',blurb:'Plain-language questions about your school, answered from your own records.'},
   settings:{eyebrow:'Administration',title:'Settings',blurb:'Set up your school once, in this order. Daily pages stay for daily work.'},
 };
+// The browser tab and history name the page, e.g. "Fees · Sunrise International School".
+function PageTitle({title}:{title:string}) {
+  useEffect(()=>{document.title=title;return ()=>{document.title='Veloxa SmartSchool';};},[title]);
+  return null;
+}
 type ModuleProps={schoolId:string;csrfToken:string;role:string};
 // Guardian portal: the child chosen at the top drives the report cards below it.
 function MyChildren({schoolId,csrfToken,role}:ModuleProps) {
@@ -213,6 +218,7 @@ function App() {
   const navGroup=(g:NavGroup)=><div key={g.items[0].id} className="nav-section">{g.group&&<p className="nav-group">{g.group}</p>}{g.items.map(item=><a key={item.id} href={`#/${item.id}`} aria-current={!showContent&&item.id===current?.id?'page':undefined}><Icon name={item.icon}/><span className="label">{item.label}</span></a>)}</div>;
   const initials=(school?.name??'V').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]!.toUpperCase()).join('');
   return <div className="shell">
+    <PageTitle title={`${showContent?'Content library':learnerPage?'Learner':current?.id==='settings'?`Settings · ${setting.label}`:current?.label??'Home'} · ${school?.name??'Veloxa SmartSchool'}`}/>
     <a href="#main" className="skip-link" onClick={e=>{e.preventDefault();document.getElementById('main')?.focus();}}>Skip to content</a>
     <aside className={menuOpen?'sidebar open':'sidebar'}>
       <a href="#/" className="brand"><span className="logo" aria-hidden="true">{initials}</span><span className="brand-text"><strong>{school?.name??'Veloxa SmartSchool'}</strong><span>{roleName||'Signed in'}</span></span></a>

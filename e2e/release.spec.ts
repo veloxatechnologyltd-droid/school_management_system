@@ -125,11 +125,11 @@ test('guardian verification, distinct rights and revocation persist across two b
     const verified=family.locator('tr').filter({hasText:name}).filter({hasText:'Synthetic reviewed billing authority'});await verified.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Revocation reason',{exact:true}).fill('Synthetic sponsor authority ended');await family.getByRole('button',{name:'Revoke guardian link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Guardian link revoked.'})).toBeVisible();
     expect((await portal.request.get(`/api/v1/schools/${school}/guardian/children/${application.learner_id}`)).status()).toBe(404);await portal.getByRole('button',{name:'Refresh guardian records',exact:true}).click();await expect(portal.locator('option').filter({hasText:admission})).toHaveCount(0);
     await family.getByRole('button',{name:'Link a guardian',exact:true}).click();await create('Academic records');pending=family.locator('tr').filter({hasText:name}).filter({hasText:'Pending verification'});await pending.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Reviewed verification reason',{exact:true}).fill('Synthetic reviewed academic authority');await family.getByRole('button',{name:'Verify guardian link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Guardian link verified.'})).toBeVisible();
-    await portal.getByRole('button',{name:'Refresh guardian records',exact:true}).click();const linkedChildren=portal.getByRole('combobox',{name:'Linked child',exact:true});await expect(linkedChildren.locator('option').filter({hasText:admission})).toHaveCount(1);await linkedChildren.selectOption({label:`${name} · ${admission}`});await expect(portal.getByText('Date of birth: 2018-05-03',{exact:true})).toBeVisible();await expect(portal.locator('li').filter({hasText:`Family class ${suffix}`})).toContainText('Active today');
+    await portal.getByRole('button',{name:'Refresh guardian records',exact:true}).click();const linkedChildren=portal.getByRole('combobox',{name:'Linked child',exact:true});await expect(linkedChildren.locator('option').filter({hasText:admission})).toHaveCount(1);await linkedChildren.selectOption({label:`${name} · ${admission}`});await expect(portal.getByText('Date of birth: 3 May 2018',{exact:true})).toBeVisible();await expect(portal.locator('li').filter({hasText:`Family class ${suffix}`})).toContainText('Active today');
     await portal.setViewportSize({width:375,height:812});expect(await portal.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await portal.getByRole('heading',{name:'Guardian portal',exact:true}).scrollIntoViewIfNeeded();await portal.screenshot({path:'.local/guardian-mobile.png'});
     expect((await portal.request.get(`/api/v1/schools/${school}/learners/${application.learner_id}`)).status()).toBe(403);expect((await portal.request.get(`/api/v1/schools/${school}/guardian/children/${randomUUID()}`)).status()).toBe(404);
     const academic=family.locator('tr').filter({hasText:name}).filter({hasText:'Synthetic reviewed academic authority'});await academic.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Revocation reason',{exact:true}).fill('Synthetic academic authority ended');await family.getByRole('button',{name:'Revoke guardian link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Guardian link revoked.'})).toBeVisible();
-    await portal.getByRole('button',{name:'Refresh guardian records',exact:true}).click();await expect(portal.getByText('Date of birth: 2018-05-03',{exact:true})).toHaveCount(0);await expect(portal.locator('option').filter({hasText:admission})).toHaveCount(0);expect(errors).toEqual([]);
+    await portal.getByRole('button',{name:'Refresh guardian records',exact:true}).click();await expect(portal.getByText('Date of birth: 3 May 2018',{exact:true})).toHaveCount(0);await expect(portal.locator('option').filter({hasText:admission})).toHaveCount(0);expect(errors).toEqual([]);
   }finally{await context.close();}
 });
 test('dated teacher grant, fresh roster and revocation work across two browser sessions',async({page,browser})=>{
@@ -570,3 +570,19 @@ test('Early years and Fees say they are loading, not "No reports yet" or "No ter
   await expect(page.getByRole('status').filter({hasText:'Loading'}).first()).toBeVisible();await expect(page.getByText('No terms yet')).toHaveCount(0);
   await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0,{timeout:20000});expect(errors).toEqual([]);
 });
+test('each page names itself in the browser tab, and a guardian reads dates as "8 Sept 2025", not 2025-09-08',async({page})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  await signIn(page,'head@example.test','Fees');
+  await expect(page).toHaveTitle('Fees · Adinkra Synthetic School');
+  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Learners',exact:true}).click();
+  await expect(page).toHaveTitle('Learners · Adinkra Synthetic School');
+  await page.goto('/#/settings/curriculum');await expect(page).toHaveTitle('Settings · Curriculum & family sharing · Adinkra Synthetic School');
+  await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page).toHaveTitle('Veloxa SmartSchool');
+  await signIn(page,'guardian@example.test');
+  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'My children',exact:true}).click();
+  await expect(page).toHaveTitle('My children · Adinkra Synthetic School');
+  const history=page.locator('.history li').first();await expect(history).toBeVisible();
+  const text=(await history.innerText());expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/);expect(text).not.toContain('exclusive');expect(text).toMatch(/\d{1,2} \w{3,4} \d{4}/);
+  expect(errors).toEqual([]);
+});
+

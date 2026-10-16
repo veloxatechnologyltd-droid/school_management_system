@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, Pill, Stat, Tabs, type Tone } from '../lib/ui';
+import { dayLabel, momentLabel } from '../lib/dates';
 
 type Props = { schoolId: string; csrfToken: string; role: string; childId?: string };
 type Page<T> = { items: T[]; total: number; offset: number; limit: number };
@@ -142,7 +143,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
     setGuardianReports(result.items);
   }
 
-  const reportItems = guardianReports.map(row => <li key={row.revision_id}><strong>{row.snapshot.learner.fullName} · {row.level} · {row.period_start} to {row.period_end}</strong><p><b>Strengths:</b> {row.strengths}</p><p><b>Next steps:</b> {row.next_steps}</p>{row.teacher_note && <p><b>Teacher note:</b> {row.teacher_note}</p>}<span>Published {new Date(row.published_at).toLocaleDateString('en-GH', { timeZone: 'Africa/Accra' })}</span></li>);
+  const reportItems = guardianReports.map(row => <li key={row.revision_id}><strong>{row.snapshot.learner.fullName} · {row.level} · {dayLabel(row.period_start)} to {dayLabel(row.period_end)}</strong><p><b>Strengths:</b> {row.strengths}</p><p><b>Next steps:</b> {row.next_steps}</p>{row.teacher_note && <p><b>Teacher note:</b> {row.teacher_note}</p>}<span>Published {momentLabel(row.published_at)}</span></li>);
   // Inside the portal page, the card only appears when the chosen child has published reports.
   if (guardian && chosenChild !== undefined) return guardianReports.length || error ? <section aria-label="Nursery and KG progress reports" className="page">
     <Card title="Nursery and KG progress reports" hint="Written by the class teacher and approved by the headteacher.">{error && <p role="alert">{error}</p>}<ul className="history report-list">{reportItems}</ul></Card>
@@ -171,7 +172,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
       {shown.length ? <ul className="history report-list">{shown.map(row => {
         const draft = drafts[row.id] ?? { strengths: row.strengths, nextSteps: row.next_steps, teacherNote: row.teacher_note ?? '' };
         const base = `/schools/${schoolId}/early-years/report-revisions/${row.id}`;
-        return <li key={row.id}><div className="notice-head"><strong>{row.snapshot.learner.fullName} · {row.level} · {row.period_start} to {row.period_end}</strong><Pill tone={statusTone[row.status] ?? 'neutral'}>{row.status}</Pill></div><span>Revision {row.revision} · {row.status}</span>
+        return <li key={row.id}><div className="notice-head"><strong>{row.snapshot.learner.fullName} · {row.level} · {dayLabel(row.period_start)} to {dayLabel(row.period_end)}</strong><Pill tone={statusTone[row.status] ?? 'neutral'}>{row.status}</Pill></div><span>Revision {row.revision} · {row.status}</span>
           <p><b>Strengths:</b> {row.strengths}</p><p><b>Next steps:</b> {row.next_steps}</p>
           {row.snapshot.attendance && <p className="muted">Finalized registers: {row.snapshot.attendance.counts.present} present, {row.snapshot.attendance.counts.late} late, {row.snapshot.attendance.counts.absent} absent, {row.snapshot.attendance.counts.excused} excused, {row.snapshot.attendance.counts.unmarked} unmarked. {row.snapshot.attendance.coverageNote}</p>}
           {row.snapshot.observations?.length > 0 && <details><summary>{row.snapshot.observations.length} recorded observations</summary>{row.snapshot.observations.map((observation: any) => <article key={observation.id}><h4>{observation.observed_on} · {observation.educator_display_name}</h4>{observation.entries.map((entry: any, index: number) => <p key={`${entry.indicatorId}-${index}`}><b>{entry.title}:</b> {entry.status === 'observed' ? `${entry.descriptor?.text ?? ''} ${entry.evidence ?? ''}` : 'Not observed'}</p>)}</article>)}</details>}
