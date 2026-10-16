@@ -59,7 +59,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await expect(page.getByText('Questions 19 · 19 · 19').first()).toBeVisible({timeout:20000});await expect(page.getByText('Questions 19 · 19 · 19')).toHaveCount(4);
     await expect(row.getByText(/Lesson ready · questions 19 \/ 19 \/ 19 \(aim 20 each\)/)).toBeVisible();
     // The checks left one question out of each level; making the rest tops each level up to 20.
-    await row.getByRole('button',{name:'Make lessons and questions',exact:true}).click();
+    await row.getByRole('button',{name:'Make the missing questions',exact:true}).click();
     await expect(row.getByText('Lesson and 20 questions at each level')).toBeVisible({timeout:20000});
     expect(await noOverflow(page)).toBe(true);
 
@@ -89,7 +89,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await signIn(family,'guardian@example.test','My children');await family.setViewportSize({width:375,height:812});
     await family.getByRole('combobox',{name:'Linked child',exact:true}).selectOption(learner);
     const card=family.getByRole('region',{name:'Practice at home',exact:true});
-    await expect(card.getByText(topic)).toBeVisible();await card.locator('li').filter({hasText:topic}).getByRole('button',{name:'Start',exact:true}).click();
+    await expect(card.getByText(topic)).toBeVisible();await card.locator('li').filter({hasText:topic}).getByRole('button',{name:'Start practice',exact:true}).click();
     const play=family.getByRole('dialog');await expect(play.getByText('Question 1 of 5')).toBeVisible();
     await expect(play.getByText("Made by AI from your school's topics")).toHaveCount(0);
     const prompt=await play.locator('.practice-prompt').innerText();
@@ -109,7 +109,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await family.keyboard.press('Escape');
     await expect(card.getByRole('heading',{name:'Choose a topic',exact:true})).toBeVisible();
     await expect(card.locator('li').filter({hasText:second})).toBeVisible();await expect(card.locator('li').filter({hasText:elsewhere})).toHaveCount(0);
-    await card.locator('li').filter({hasText:second}).getByRole('button',{name:'Start',exact:true}).click();
+    await card.locator('li').filter({hasText:second}).getByRole('button',{name:'Start practice',exact:true}).click();
     const chosen=family.getByRole('dialog',{name:`Practice: ${second}`});await expect(chosen.getByText('Question 1 of 5')).toBeVisible();
     await expect(chosen.getByText("Made by AI from your school's topics")).toBeVisible();
     expect(await noOverflow(family)).toBe(true);await family.keyboard.press('Escape');

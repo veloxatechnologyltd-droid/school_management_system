@@ -164,7 +164,7 @@ export function Topics({ schoolId, csrfToken }: { schoolId: string; csrfToken: s
       <Stat label="Reported by parents" value={reports.length} caption={reports.length ? 'Needs a look' : 'Nothing waiting'} icon="flag" tone={reports.length ? 'critical' : 'neutral'}/>
     </div>
 
-    {steps && <Card title="Making lessons and questions" hint="Keep this page open until it finishes. Each topic takes about half a minute." action={steps.every(s => s.state === 'done' || s.state === 'problem') ? <button className="secondary small" onClick={() => setSteps(null)}>Close</button> : undefined}>
+    {steps && <Card title={steps.every(s => s.state === 'done' || s.state === 'problem') ? 'Lessons and questions are ready' : 'Making lessons and questions'} hint={steps.every(s => s.state === 'done' || s.state === 'problem') ? 'You can close this. Anything marked as short can be topped up from its row below.' : 'Keep this page open until it finishes. Each topic takes about half a minute.'} action={steps.every(s => s.state === 'done' || s.state === 'problem') ? <button className="secondary small" onClick={() => setSteps(null)}>Close</button> : undefined}>
       <ul className="make-progress">{steps.map(s => <li key={s.approvalId}><Icon name={s.state === 'done' ? 'check_circle' : s.state === 'problem' ? 'error' : s.state === 'making' ? 'autorenew' : 'schedule'}/><strong>{s.label}</strong>
         <span className="muted">{s.state === 'waiting' ? 'Waiting' : s.state === 'making' ? 'Making…' : s.detail}</span></li>)}</ul>
     </Card>}
@@ -198,7 +198,7 @@ export function Topics({ schoolId, csrfToken }: { schoolId: string; csrfToken: s
               <Pill tone="positive">Approved</Pill>
               {a.content.openFlags > 0 && <Pill tone="critical">{a.content.openFlags} reported</Pill>}
               <span className="muted">{summary(a.content)}</span>
-              {!complete(a.content) && aiReady && <button className="small" disabled={!!steps && steps.some(s => s.state === 'making' || s.state === 'waiting')} onClick={() => void make([{ approvalId: a.id, label: t.description }])}>Make lessons and questions</button>}
+              {!complete(a.content) && aiReady && <button className="small" disabled={!!steps && steps.some(s => s.state === 'making' || s.state === 'waiting')} onClick={() => void make([{ approvalId: a.id, label: t.description }])}>{a.content.lesson ? 'Make the missing questions' : 'Make lessons and questions'}</button>}
               <button className="secondary small" onClick={() => setOpen({ topic: t, approval: a })}>Open</button>
             </> : <Pill tone="neutral">Not approved</Pill>}
           </div>

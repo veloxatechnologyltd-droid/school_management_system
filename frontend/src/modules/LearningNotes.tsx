@@ -17,7 +17,7 @@ export function LearningNotes({ schoolId, csrfToken, learnerId }: { schoolId: st
   const load = () => request<Data>(`${base}/learners/${learnerId}/learning-notes`).then(setData).catch(e => setError((e as Error).message));
   useEffect(() => { setData(null); setError(''); void load(); }, [schoolId, learnerId]);
   const send = (path: string, body: object) => request(`${base}${path}`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), ...body }) });
-  async function act(work: () => Promise<unknown>, done: string) { setBusy(true); setError(''); setMessage(''); try { await work(); setMessage(done); await load(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
+  async function act(work: () => Promise<unknown>, done: string) { setBusy(true); setError(''); setMessage(''); try { await work(); await load(); setMessage(done); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
   const add = (e: FormEvent) => { e.preventDefault(); void act(async () => {
     await send(`/learners/${learnerId}/learning-notes`, { note: note.trim(), ...(topic ? { indicatorId: topic } : {}), ...(topic && until ? { until } : {}) });
     setNote(''); setTopic(''); setUntil('');

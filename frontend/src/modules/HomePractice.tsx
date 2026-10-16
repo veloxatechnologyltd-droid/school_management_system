@@ -42,7 +42,7 @@ export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: strin
             <span className="practice-meta"><Dots level={t.level} levels={t.levels}/> Level {t.level} of {t.levels}{t.sessionsThisWeek > 0 && <> · {times(t.sessionsThisWeek)} this week</>}{t.lastPracticedOn && <> · last practised {ago(t.lastPracticedOn)}</>}</span></div>
           <div className="row-actions">{t.hasLesson && !t.open && t.availableToday && <button className="secondary" disabled={busy === t.indicatorId} onClick={() => study_(t)}>Study first</button>}
           {t.open ? <button disabled={busy === t.indicatorId} onClick={() => void begin(t).catch(e => { setError((e as Error).message); void load(); })}>Continue</button>
-            : t.availableToday ? <button disabled={busy === t.indicatorId} onClick={() => void begin(t).catch(e => { setError((e as Error).message); void load(); })}>{t.lastPracticedOn ? 'Practise again' : 'Start'}</button>
+            : t.availableToday ? <button disabled={busy === t.indicatorId} onClick={() => void begin(t).catch(e => { setError((e as Error).message); void load(); })}>{t.lastPracticedOn ? 'Practise again' : 'Start practice'}</button>
             : <Pill tone="positive">Done for today</Pill>}</div>
         </li>;
   // The child's own choices, grouped by subject.

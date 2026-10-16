@@ -523,7 +523,7 @@ test('a guardian practises approved questions with their child on a phone, the c
   await expect(card.getByText(topic)).toBeVisible();await expect(card.getByText('Level 1 of 3')).toBeVisible();
   expect(await family.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await expect(card.getByText(/\d+%/)).toHaveCount(0);
-  await card.getByRole('button',{name:'Start',exact:true}).click();
+  await card.getByRole('button',{name:'Start practice',exact:true}).click();
   const dialog=family.getByRole('dialog');await expect(dialog.getByText('Question 1 of 5')).toBeVisible();
   for(let i=0;i<5;i++){
     const prompt=await dialog.locator('.practice-prompt').innerText();
