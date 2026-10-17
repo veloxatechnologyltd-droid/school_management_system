@@ -30,7 +30,7 @@ function Screen({ shot, eager = false, decorative = false }: { shot: Shot; eager
 function Nav({ mode, onSwitch }: Pick<AuthProps, 'mode' | 'onSwitch'>) {
   const other: AuthMode = mode === 'signin' ? 'register' : 'signin';
   return <nav className="au-nav" aria-label="Main">
-    <a className="au-brand" href="#"><span className="logo" aria-hidden="true">V</span>Veloxa SmartSchool</a>
+    <a className="au-brand" href="#" aria-label="Veloxa SmartSchool home"><img className="logo" src="/brand/icon.png" alt="" /></a>
     <a className="au-nav-cta" href={`#/${other}`} onClick={event => { event.preventDefault(); onSwitch(other); }}>{mode === 'signin' ? 'Create account' : 'Sign in'}</a>
   </nav>;
 }

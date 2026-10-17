@@ -15,7 +15,7 @@
 :where(.au) ul,:where(.au) ol,:where(.au) dl,:where(.au) dd{margin:0;padding:0;list-style:none}
 .au figure{margin:0}
 .au img{display:block;max-width:100%;height:auto}
-.au .logo{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--accent);color:#fff;font-weight:800;font-size:16px;flex:none}
+.au .logo{display:block;width:32px;height:32px;object-fit:contain;flex:none}
 .au .icon{font-size:20px;width:20px;height:20px}
 .au-wrap{max-width:1180px;margin:0 auto;padding:0 var(--gutter)}
 .au-kicker{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
@@ -27,7 +27,7 @@
 .au-header{position:absolute;inset:0 0 auto;z-index:5}
 .au-nav{display:flex;align-items:center;gap:18px;height:72px;max-width:1320px;margin:0 auto;padding:0 var(--gutter)}
 .au .au-brand{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:700;font-size:17px;color:#fff;text-decoration:none}
-.au .au-brand .logo{background:#fff;color:var(--accent)}
+.au .au-brand .logo{background:none}
 .au .au-nav-cta{margin-left:auto;display:inline-flex;align-items:center;height:40px;padding:0 18px;border:1px solid rgba(255,255,255,.55);border-radius:999px;color:#fff;font-weight:600;font-size:15px;text-decoration:none;transition:background-color .15s}
 .au .au-nav-cta:hover{background:rgba(255,255,255,.14)}
 

@@ -7,7 +7,7 @@
   html, body { margin: 0; background: #dce4f2; font-family: Arial, Helvetica, sans-serif; }
   .flyer { width: 1080px; height: 1350px; position: relative; overflow: hidden; margin: 24px auto; color: #fff; background: #1449a8; }
   .brand { display: flex; align-items: center; gap: 16px; font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
-  .mark { width: 54px; height: 54px; display: grid; place-items: center; border: 2px solid currentColor; border-radius: 15px; font-size: 35px; font-weight: 900; line-height: 1; }
+  .mark { width: 54px; height: 54px; display: block; object-fit: contain; }
   .kicker { font-size: 25px; font-weight: 800; text-transform: uppercase; letter-spacing: .14em; }
   h1, p { margin: 0; }
   h1 { font-size: 112px; line-height: .98; letter-spacing: -.067em; font-weight: 900; }
@@ -53,7 +53,7 @@
 <article class="flyer" id="day" aria-label="Run the school. See the whole day.">
   <div class="photo"></div>
   <div class="top">
-    <div class="brand"><span class="mark">V</span> Veloxa SmartSchool</div>
+    <div class="brand"><img class="mark" src="../../logos/veloxa-icon.png" alt="Veloxa SmartSchool"></div>
     <div class="kicker">For Ghanaian basic schools</div>
     <h1>Run the school.<br>See the whole day.</h1>
     <p class="sub">Registers. Fees. Report cards.</p>
@@ -64,7 +64,7 @@
 <article class="flyer" id="fees" aria-label="Know what's owed.">
   <div class="blue-rail"></div><div class="photo"></div>
   <div class="copy">
-    <div class="brand"><span class="mark">V</span> Veloxa SmartSchool</div>
+    <div class="brand"><img class="mark" src="../../logos/veloxa-icon.png" alt="Veloxa SmartSchool"></div>
     <div class="kicker">A clearer fee picture</div>
     <h1>Know<br>what's<br>owed.</h1>
     <div class="line"></div>
@@ -76,7 +76,7 @@
 <article class="flyer" id="parents" aria-label="Keep parents in the loop.">
   <div class="photo"></div>
   <div class="header">
-    <div class="brand"><span class="mark">V</span> Veloxa SmartSchool</div>
+    <div class="brand"><img class="mark" src="../../logos/veloxa-icon.png" alt="Veloxa SmartSchool"></div>
     <div class="kicker">A school parents can follow</div>
     <h1>Keep parents<br>in the loop.</h1>
   </div>
