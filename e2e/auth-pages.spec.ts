@@ -11,6 +11,12 @@ const loadAllImages = async (page: Page) => {
   await expect.poll(() => page.evaluate(() => [...document.images].filter(image => !image.complete || image.naturalWidth === 0).length)).toBe(0);
 };
 
+// The dashboard and the phone are shown whole: the room left under their bottom edges, not cut off by the screen.
+const roomUnderPictures = (page: Page) => page.evaluate(() => {
+  const bottom = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().bottom;
+  return innerHeight - Math.max(bottom('.au-visual .au-browser'), bottom('.au-visual-phone'));
+});
+
 test('sign-in is one screen with nothing to scroll to, and the password can be shown and hidden', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   for (const [width, height] of [[1440, 900], [1280, 720]]) {
@@ -19,6 +25,7 @@ test('sign-in is one screen with nothing to scroll to, and the password can be s
     await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
     await loadAllImages(page);
     expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), `${width}x${height} fits one screen`).toBe(true);
+    expect(await roomUnderPictures(page), `${width}x${height} shows the whole dashboard and phone`).toBeGreaterThanOrEqual(8);
   }
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/#/signin');
@@ -44,6 +51,7 @@ test('register is one screen with nothing to scroll to, counts the password and 
     await expect(page).toHaveURL(/#\/register$/);
     await loadAllImages(page);
     expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), `${width}x${height} fits one screen`).toBe(true);
+    expect(await roomUnderPictures(page), `${width}x${height} shows the whole dashboard and phone`).toBeGreaterThanOrEqual(8);
   }
   const password = page.getByLabel('Password (at least 12 characters)', { exact: true });
   await password.fill('short');
