@@ -57,7 +57,7 @@ const navByRole:Record<string,NavGroup[]>={
   headteacher:[
     {group:'Overview',items:[nav('today','Home','space_dashboard'),nav('ask','Ask','forum')]},
     {group:'People',items:[nav('attendance','Attendance','event_available'),nav('learners','Learners','groups'),nav('guardians','Guardians','family_restroom'),nav('collection','Pickup','directions_walk')]},
-    {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('progress','Performance','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]},
+    {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('progress','Performance','insights'),nav('curriculum','Curriculum','menu_book'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]},
     {group:'Office',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]},
     {group:'Administration',pinned:true,items:[nav('settings','Settings','settings')]}],
   teacher:[
@@ -72,6 +72,7 @@ const navByRole:Record<string,NavGroup[]>={
 // Page headers for modules that do not draw their own (the other pages do).
 const pageMeta:Record<string,{eyebrow:string;title:string;blurb:string}>={
   assessment:{eyebrow:'Teaching',title:'Assessment',blurb:'Record class work and exam marks; the CA is worked out from class work. Then remarks and report cards.'},
+  curriculum:{eyebrow:'Teaching',title:'Curriculum',blurb:'The topics your school teaches in each subject.'},
   ask:{eyebrow:'Assistant',title:'Ask',blurb:'Plain-language questions about your school, answered from your own records.'},
   settings:{eyebrow:'Administration',title:'Settings',blurb:'Set up your school once, in this order. Daily pages stay for daily work.'},
 };
@@ -198,7 +199,7 @@ function App() {
     {id:'staff',label:'Staff accounts',render:()=><Accounts key={`accounts:${sid}`} schoolId={sid} csrfToken={csrf}/>},
     {id:'assignments',label:'Teacher assignments',render:()=>teachingView},
     {id:'grading',label:'Subjects, terms & grading',render:()=><Assessment key={`setup:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>},
-    {id:'curriculum',label:'Curriculum & family sharing',render:()=><Curriculum key={`curriculum:${sid}`} schoolId={sid} csrfToken={csrf}/>},
+    {id:'sharing',label:'Family sharing & home practice',render:()=><Curriculum key={`sharing:${sid}`} schoolId={sid} csrfToken={csrf} part="sharing"/>},
     {id:'fees',label:'Fee items',render:()=><Finance key={`setup:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>},
     {id:'early-years',label:'Early years policies',render:()=><EarlyYears key={`setup:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>},
     {id:'ai',label:'AI assistance',render:()=><AiSettings key={`ai:${sid}`} schoolId={sid} csrfToken={csrf}/>},
@@ -215,6 +216,7 @@ function App() {
     guardians:()=><Guardians key={`guardians:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     assessment:()=><Assessment key={`assessment:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
     progress:()=><Progress key={`progress:${sid}`} schoolId={sid} csrfToken={csrf} role={role} initialTab={subId}/>,
+    curriculum:()=><Curriculum key={`curriculum:${sid}`} schoolId={sid} csrfToken={csrf}/>,
     topics:()=><Topics key={`topics:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     'early-years':()=><EarlyYearsWork key={`early-years:${sid}:${role}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     fees:()=>role==='guardian'?<GuardianStatement key={`statement:${sid}`} schoolId={sid}/>:<Finance key={`finance:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
@@ -245,7 +247,7 @@ function App() {
     </aside>
     {menuOpen&&<div className="scrim" onClick={()=>setMenuOpen(false)}/>}
     <div className="content">
-      <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
+      <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}{role==='headteacher'&&<a className="icon-button settings-link" href="#/settings" aria-label="Settings" title="Settings"><Icon name="settings"/></a>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
       {school?.readOnly&&<p role="status" style={{margin:0,padding:'8px 16px',background:'var(--info-soft)',color:'var(--info)',fontSize:13,fontWeight:600}}>Demo school with sample data · read-only. Explore every page and try Ask; changes and password changes are switched off.</p>}
       <main id="main" tabIndex={-1}>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{showContent&&<Suspense fallback={<p role="status">Loading…</p>}><ContentLibrary csrfToken={csrf}/></Suspense>}{school&&!showContent&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{learnerPage?views.learner!():current&&views[current.id]()}</Suspense></>}{!school&&!showContent&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
     </div>

@@ -86,6 +86,7 @@ export function ClassWork({ schoolId, csrfToken, classId, className, termId, sub
         <label>Title<input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required minLength={2} maxLength={120} placeholder="e.g. Fractions exercise 3"/></label>
         <label>Date<input type="date" value={form.heldOn} onChange={e => setForm({ ...form, heldOn: e.target.value })} required/></label>
         <label>Marked out of<input type="number" min={1} max={1000} step="0.5" value={form.maxMark} onChange={e => setForm({ ...form, maxMark: e.target.value })} required/></label>
+        {form.subjectId && indicators.length === 0 && <p className="muted">No curriculum topics for this subject yet. The headteacher adds them on the Curriculum page, then you can tick the topic each piece of work covers.</p>}
         {indicators.length > 0 && <fieldset className="indicator-picker"><legend>Curriculum indicators tested (optional)</legend>
           {otherGrades > 0 && <label className="check"><input type="checkbox" checked={allGrades} onChange={e => setAllGrades(e.target.checked)}/><span>Show other grades too ({otherGrades} more)</span></label>}
           {pickable.length > 8 && <input type="search" aria-label="Search indicators" placeholder="Search by code or words" value={indicatorSearch} onChange={e => setIndicatorSearch(e.target.value)}/>}

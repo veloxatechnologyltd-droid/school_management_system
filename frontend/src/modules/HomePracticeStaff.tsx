@@ -49,7 +49,7 @@ export function ClassHomePractice({ schoolId, classId, termId, earlyYears = fals
       <Stat label="Practising this week" value={`${data.practisingThisWeek} of ${data.total}`} caption={`Since Monday ${shortDate(data.weekStart)}`} icon="menu_book" tone={data.practisingThisWeek ? 'positive' : 'neutral'}/>
       <Stat label="Practised this term" value={`${data.practisedThisTerm} of ${data.total}`} caption="Learners with at least one finished session" icon="history_edu"/>
     </div>
-    {!data.enabled && <p className="muted pad">Home practice is switched off for this school. Turn it on in Settings, under Curriculum and family sharing.</p>}
+    {!data.enabled && <p className="muted pad">Home practice is switched off for this school. Turn it on in Settings, under Family sharing and home practice.</p>}
     <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Topics and levels</th><th className="hide-sm">Last practised</th></tr></thead><tbody>
       {[...data.learners].sort((a, b) => (b.lastPracticedOn ?? '').localeCompare(a.lastPracticedOn ?? '') || a.fullName.localeCompare(b.fullName)).map(l => <tr key={l.learnerId}>
         <td><a href={`#/learner/${l.learnerId}`}>{l.fullName}</a>{l.sessionsTerm > 0 && <span className="sub">Sessions: {l.sessionsThisWeek} this week, {l.sessionsTerm} this term</span>}{l.lastPracticedOn && <span className="sub show-sm">Last practised {ago(l.lastPracticedOn)}</span>}</td>

@@ -19,7 +19,8 @@ function parseIndicators(text: string) {
 }
 
 // The school's own curriculum indicators per subject. The platform ships no curriculum text; each batch records where it came from.
-export function Curriculum({ schoolId, csrfToken }: { schoolId: string; csrfToken: string }) {
+// part "indicators" is the Curriculum page (the topics the school teaches); part "sharing" is the two family switches kept in Settings.
+export function Curriculum({ schoolId, csrfToken, part = 'indicators' }: { schoolId: string; csrfToken: string; part?: 'indicators' | 'sharing' }) {
   const [subjects, setSubjects] = useState<Subject[]>([]); const [subjectId, setSubjectId] = useState('');
   const [items, setItems] = useState<Indicator[]>([]); const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ origin: 'official', sourceNote: '', grade: '', lines: '' });
@@ -50,11 +51,12 @@ export function Curriculum({ schoolId, csrfToken }: { schoolId: string; csrfToke
   const shown = items.filter(i => !gradeFilter || (gradeFilter === '-' ? !i.grade : i.grade === gradeFilter));
   const current = shown.filter(i => !i.retired_at).length;
 
-  return <section aria-label="Curriculum indicators">
+  if (part === 'sharing') return <section aria-label="Family sharing and home practice">
     <FamilySharing schoolId={schoolId} csrfToken={csrfToken}/>
     <HomePracticeSwitch schoolId={schoolId} csrfToken={csrfToken}/>
-    <h2>Curriculum indicators</h2>
-    <p className="muted">Enter the indicators your school teaches for each subject, from your curriculum documents or scheme of work. Teachers tag them on class assessments, and Progress then shows which ones a class has not yet mastered. Mark codes as official only when copied from the official curriculum.</p>
+  </section>;
+  return <section aria-label="Curriculum indicators" className="page">
+    <p className="muted">Enter the topics (indicators) your school teaches for each subject, from your curriculum documents or scheme of work. Teachers tag them on class work on the Assessment page, and Performance then shows which ones a class has not yet mastered. Approve a topic for the term on the Topics page and Claude prepares its lesson and practice. Mark codes as official only when copied from the official curriculum.</p>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <Card flush>
       <div className="toolbar">

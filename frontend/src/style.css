@@ -389,3 +389,5 @@ td .show-sm .row-actions{display:flex;flex-wrap:wrap;justify-content:flex-start;
 .inline-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;margin-top:14px}.inline-form label{margin:0;flex:1 1 220px;max-width:360px}
 a.sub[href^="tel:"]{display:inline-block;padding:7px 0}
 .roster-grid .learner-link{display:block;padding:8px 0}
+
+.settings-link{display:grid;place-items:center;margin-left:auto;text-decoration:none}.settings-link+.user{margin-left:0}
