@@ -300,12 +300,12 @@ test('an Excel-style class list with "Admission No." headers and DD/MM/YYYY date
 test('each role lands on its own daily work; the section stays in the address across reload at phone width',async({page,browser})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewportSize({width:375,height:812});
   const links=async(p:Page)=>p.getByRole('navigation',{name:'Sections',exact:true}).locator('a .label').allTextContents();
-  await signIn(page);expect(await links(page)).toEqual(['Home','Kobby AI','Students','Parents','Teachers','Staff','Classes','Attendance','Pickup','Curriculum','Assessment','Performance','Early years','Accounts','Notices','Settings']);
+  await signIn(page);expect(await links(page)).toEqual(['Home','Kobby AI','Students','Parents','Teachers','Staff','Classes','Timetable','Attendance','Pickup','Curriculum','Assessment','Performance','Early years','Accounts','Notices','Settings']);
   await expect(page.getByRole('link',{name:'Home',exact:true})).toHaveAttribute('aria-current','page');await expect(page.getByRole('region',{name:'Notices to parents'})).toHaveCount(0);
   await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('link',{name:'Notices',exact:true}).click();await expect(page.getByRole('region',{name:'Notices to parents'})).toBeVisible();
   await page.reload();await pickSchool(page);await expect(page.getByRole('region',{name:'Notices to parents'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  for(const [email,expected] of [['teacher@example.test',['Today','Kobby AI','Classes','Curriculum','Assessment','Performance','Early years']],['frontdesk@example.test',['Pickup','Students']],['guardian@example.test',['Home','Learn at home','Performance','Report cards','Notes','Fees','Notices']]] as const){
+  for(const [email,expected] of [['teacher@example.test',['Today','Kobby AI','Classes','Timetable','Curriculum','Assessment','Performance','Early years']],['frontdesk@example.test',['Pickup','Students']],['guardian@example.test',['Home','Learn at home','Performance','Report cards','Notes','Fees','Notices']]] as const){
     const other=await browser.newPage();await other.setViewportSize({width:375,height:812});await other.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));await signIn(other,email);expect(await links(other)).toEqual(expected);
     expect(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await other.close();
   }

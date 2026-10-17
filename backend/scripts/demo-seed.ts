@@ -5,6 +5,7 @@ import path from 'node:path';
 import { localConfig } from '../src/core/database';
 import { demoQuestionSets, playDemoWeek } from './demo-practice';
 import { playApplications } from './demo-admissions';
+import { playTimetable } from './demo-timetable';
 
 // Loads a realistic Ghanaian basic school into the local demo database (LOCAL_DB_NAME=school_demo) for client
 // demonstrations. Accounts and the school row are inserted directly; everything else goes through the running API
@@ -92,6 +93,7 @@ class Person {
   }
   get = <T = any>(path: string) => this.call<T>('GET', path);
   post = <T = any>(path: string, body: Record<string, unknown> = {}) => this.call<T>('POST', path, body);
+  put = <T = any>(path: string, body: Record<string, unknown> = {}) => this.call<T>('PUT', path, body);
 }
 async function inBatches<T>(items: T[], size: number, work: (item: T) => Promise<unknown>) {
   for (let i = 0; i < items.length; i += size) await Promise.all(items.slice(i, i + size).map(work));
@@ -225,6 +227,8 @@ async function main() {
     step('Subjects, grading policy and scores');
     const subjectIds: string[] = [];
     for (const s of subjects) subjectIds.push((await head.post('/assessment/subjects', { name: s })).id);
+    step('Timetable: published for this term, with the next version in draft');
+    await playTimetable(head, current.id, classes.map(c => c.id), classes.map((_, i) => membership[`teacher${i}`]!), subjectIds);
     await head.call('PUT', '/assessment/policy', { caWeight: 50, examWeight: 50, caParts: { exercises: 30, homework: 30, tests: 40, projects: 0 }, sourceNote: 'Grading scheme approved by the Sunrise academic board for basic school terminal reports: class score 50% (exercises 15, homework 15, two class tests 10 each), exam 50%', bands: [{ min: 80, grade: 'A', remark: 'Excellent' }, { min: 70, grade: 'B', remark: 'Very good' }, { min: 60, grade: 'C', remark: 'Good' }, { min: 50, grade: 'D', remark: 'Credit' }, { min: 40, grade: 'E', remark: 'Pass' }, { min: 0, grade: 'F', remark: 'Needs support' }] });
     const graded = classes.map((c, i) => ({ ...c, i })).filter(c => c.level === 'Primary' || c.level === 'JHS');
     const score = (l: Learner, subject: number, kind: string) => Math.round(clamp(normal(l.ability + (subject % 3 - 1) * 4 + (kind === 'ca' ? 6 : 0), 9), 12, 99));

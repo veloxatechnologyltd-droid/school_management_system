@@ -35,6 +35,8 @@ const GuardianStatement=lazyModule(()=>import('./modules/Finance'),'GuardianStat
 const AiSettings=lazyModule(()=>import('./modules/AiSettings'),'AiSettings');
 const Assistant=lazyModule(()=>import('./modules/Assistant'),'Assistant');
 const LearnerPage=lazyModule(()=>import('./modules/LearnerPage'),'LearnerPage');
+const Timetable=lazyModule(()=>import('./modules/Timetable'),'Timetable');
+const TodayLessons=lazy(()=>import('./modules/Timetable').then(m=>({default:m.TodayLessons})));
 const AdmissionPage=lazyModule(()=>import('./modules/AdmissionPage'),'AdmissionPage');
 const StaffPage=lazyModule(()=>import('./modules/StaffPage'),'StaffPage');
 const Accounts=lazyModule(()=>import('./modules/Accounts'),'Accounts');
@@ -61,13 +63,13 @@ const navByRole:Record<string,NavGroup[]>={
   headteacher:[
     {group:'Overview',items:[nav('today','Home','space_dashboard'),nav('ask','Kobby AI','auto_awesome')]},
     {group:'People',items:[nav('students','Students','groups'),nav('parents','Parents','family_restroom'),nav('teachers','Teachers','badge'),nav('staff','Staff','manage_accounts')]},
-    {group:'School',items:[nav('classes','Classes','meeting_room'),nav('attendance','Attendance','event_available'),nav('collection','Pickup','directions_walk')]},
+    {group:'School',items:[nav('classes','Classes','meeting_room'),nav('timetable','Timetable','calendar_view_week'),nav('attendance','Attendance','event_available'),nav('collection','Pickup','directions_walk')]},
     {group:'Teaching',items:[nav('curriculum','Curriculum','menu_book'),nav('assessment','Assessment','school'),nav('progress','Performance','insights'),nav('early-years','Early years','child_care')]},
     {group:'Office',items:[nav('accounts','Accounts','receipt_long'),nav('notices','Notices','campaign')]},
     {group:'Administration',pinned:true,items:[nav('settings','Settings','settings')]}],
   teacher:[
     {group:'Overview',items:[nav('today','Today','today'),nav('ask','Kobby AI','auto_awesome')]},
-    {group:'My classes',items:[nav('classes','Classes','meeting_room'),nav('curriculum','Curriculum','menu_book'),nav('assessment','Assessment','school'),nav('progress','Performance','insights'),nav('early-years','Early years','child_care')]}],
+    {group:'My classes',items:[nav('classes','Classes','meeting_room'),nav('timetable','Timetable','calendar_view_week'),nav('curriculum','Curriculum','menu_book'),nav('assessment','Assessment','school'),nav('progress','Performance','insights'),nav('early-years','Early years','child_care')]}],
   accountant:[{group:'Office',items:[nav('accounts','Accounts','receipt_long')]}],
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('students','Students','groups')]}],
   guardian:[
@@ -250,11 +252,12 @@ function App() {
   const [rawTab='',rawSub]=tab.split('/'),moved=rawTab==='settings'&&rawSub?movedFromSettings[rawSub]:undefined;
   const tabId=moved??rawTab,subId=moved?undefined:rawSub,setting=settingsSteps.find(step=>step.id===subId)??settingsSteps[0];
   const views:Record<string,()=>React.ReactNode>={
-    today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} displayName={session.displayName} csrfToken={csrf}><HeadHome key={`home:${sid}`} schoolId={sid}/></GettingStarted>:<><SupportDue key={`support-due:${sid}`} schoolId={sid}/>{attendanceView}</>,
+    today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} displayName={session.displayName} csrfToken={csrf}><HeadHome key={`home:${sid}`} schoolId={sid}/></GettingStarted>:<><TodayLessons key={`lessons:${sid}`} schoolId={sid}/><SupportDue key={`support-due:${sid}`} schoolId={sid}/>{attendanceView}</>,
     classes:()=>role==='headteacher'?<Admissions key={`classes:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>:teachingView,
     teachers:()=><TeachersWork key={`teachers:${sid}`} schoolId={sid} csrfToken={csrf} role={role} sub={moved==='teachers'?'assignments':subId} onAccessRefresh={()=>setTeacherAccessRefresh(value=>value+1)}/>,
     staff:()=><><PageHeader eyebrow="People" title="Staff" blurb="The headteacher, front desk and accounts staff, and their sign-ins."/><Accounts key={`staff:${sid}`} schoolId={sid} csrfToken={csrf} only="office"/></>,
     attendance:()=>attendanceView,
+    timetable:()=><Timetable key={`timetable:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     ask:()=><Assistant key={`ask:${sid}`} schoolId={sid} csrfToken={csrf} role={role} displayName={session.displayName}/>,
     collection:()=><Collection key={'collection:'+sid} schoolId={sid} csrfToken={csrf} role={role}/>,
     students:()=><Admissions key={`${sid}:${findEpoch}`} schoolId={sid} csrfToken={csrf} role={role} view={role==='headteacher'?'work':undefined} initialTab={tabId==='promotion'||subId==='promotion'?'promotion':subId==='applications'?'applications':'roll'}/>,
