@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Empty, Pill } from '../lib/ui';
-import { caPartLabels } from '../lib/caParts';
+import { caPartLabels, pointsOfFinal } from '../lib/caParts';
 
 type Part = typeof caPartLabels[number][0];
 type Counts = Record<Part, number>;
@@ -43,20 +43,22 @@ export function CaSheet({ schoolId, classId, termId, subjects, subjectId, onSubj
   const shown = caPartLabels.filter(([key]) => key !== 'tests' && (parts[key] || sheet?.set[key]));
   const testColumns = (sheet?.tests.length ?? 0) <= 4;
   const caWeight = sheet?.policy?.caWeight ?? null, examWeight = sheet?.policy?.examWeight ?? null;
+  // Parts are stored as shares of the CA out of 100; teachers think in points of the final score (15 + 15 + 10 + 10 under a CA of 50).
+  const finalPoints = (share: number) => pointsOfFinal(share, caWeight ?? 100);
   const rows = sheet?.items.filter(r => !r.left) ?? [];
   const flagged = rows.filter(r => r.gap);
   return <>
     <div className="toolbar"><label>Subject<select value={subject} onChange={e => onSubject(e.target.value)}>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-      {sheet?.policy && <span className="count">CA {sheet.policy.caWeight}% · Exam {sheet.policy.examWeight}% · CA made of {caPartLabels.filter(([key]) => parts[key]).map(([key, label]) => `${label.toLowerCase()} ${parts[key]}`).join(', ')}</span>}</div>
+      {sheet?.policy && <span className="count">CA {sheet.policy.caWeight}% · Exam {sheet.policy.examWeight}% · CA made of {caPartLabels.filter(([key]) => parts[key]).map(([key, label]) => `${label.toLowerCase()} ${finalPoints(parts[key])}%`).join(', ')}</span>}</div>
     {error && <p role="alert" className="card-body">{error}</p>}
     {!sheet ? !error && <p className="muted card-body" role="status">Loading…</p>
       : !sheet.policy ? <Empty title="No grading policy yet" hint="The headteacher sets the CA and exam weights, and the parts of the CA, in Settings."/>
       : !rows.length ? <Empty title="No learners in this class for the term"/>
       : <>
         <div className="table-wrap"><table className="ca-sheet"><thead><tr><th>Learner</th>
-          {shown.map(([key, label]) => <th key={key} className="num">{label}<span className="sub">{parts[key] ? `${parts[key]} of CA` : 'not counted'} · {sheet.set[key]} set</span></th>)}
-          {testColumns ? sheet.tests.map((t, i) => <th key={t.id} className="num">Test {i + 1}<span className="sub">{shortDate(t.held_on)} · {parts.tests && sheet.tests.length ? `${round1(parts.tests / sheet.tests.length)} of CA` : 'not counted'}</span></th>)
-            : <th className="num">Class tests<span className="sub">{parts.tests} of CA · {sheet.tests.length} set</span></th>}
+          {shown.map(([key, label]) => <th key={key} className="num">{label}<span className="sub">{parts[key] ? `${finalPoints(parts[key])}% of final` : 'not counted'} · {sheet.set[key]} set</span></th>)}
+          {testColumns ? sheet.tests.map((t, i) => <th key={t.id} className="num">Test {i + 1}<span className="sub">{shortDate(t.held_on)} · {parts.tests && sheet.tests.length ? `${round1(finalPoints(parts.tests) / sheet.tests.length)}% of final` : 'not counted'}</span></th>)
+            : <th className="num">Class tests<span className="sub">{finalPoints(parts.tests)}% of final · {sheet.tests.length} set</span></th>}
           <th className="num">CA<span className="sub">out of 100</span></th><th className="num">CA<span className="sub">{caWeight}%</span></th>
           <th className="num">Exam<span className="sub">out of 100</span></th><th className="num">Exam<span className="sub">{examWeight}%</span></th><th className="num">Total</th><th>Class work and exam</th></tr></thead>
           <tbody>{rows.map(r => { const caUsed = r.recordedCa ?? r.ca;

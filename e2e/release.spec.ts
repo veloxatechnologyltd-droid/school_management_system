@@ -676,3 +676,34 @@ test('long lists are split into pages: staff accounts by role with search and a 
   await expect(page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Promotion'})).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
+
+test('the grading policy is set in points of the final score: a CA of 50 is 15 + 15 + 20, and rescales when the CA weight changes',async({page})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page);
+  const session=await (await page.request.get('/api/v1/auth/session')).json();
+  const read=async()=>(await (await page.request.get(`/api/v1/schools/${school}/assessment/policy`)).json()).policy;
+  const original=await read();
+  await page.goto('/#/settings/grading');
+  const ca=page.getByLabel(/^Continuous assessment \(CA\) counts for/),exam=page.getByLabel(/^Exam counts for/);
+  const exercises=page.getByLabel(/^Class exercises and quizzes/),homework=page.getByLabel(/^Homework/),tests=page.getByLabel(/^Class tests/),projects=page.getByLabel(/^Projects/);
+  // Wait for the saved policy to load into the form before typing over it.
+  if(original)await expect(ca).toHaveValue(String(original.ca_weight));
+  // A CA of 50 with the parts the teacher described: exercises 15, homework 15, two class tests 10 each.
+  await ca.fill('50');await expect(exam).toHaveValue('50');
+  await expect(exercises).toHaveValue('15');await expect(homework).toHaveValue('15');await expect(tests).toHaveValue('20');await expect(projects).toHaveValue('0');
+  await expect(page.getByText('Total 50 of 50')).toBeVisible();await expect(page.getByText('Two tests count 10 each')).toBeVisible();
+  await expect(page.getByText('a CA of 80 and an exam of 70 give 75 out of 100')).toBeVisible();
+  // The parts must add up to the CA weight.
+  await exercises.fill('20');await expect(page.getByText('Total 55 of 50')).toBeVisible();
+  await page.getByLabel(/^Where this policy comes from/).fill('Synthetic grading memo');await page.getByRole('button',{name:'Save policy',exact:true}).click();
+  await expect(page.getByText(/add up to 55, but it counts for 50/)).toBeVisible();
+  // Changing the CA weight keeps the parts in proportion; the server keeps each part as its share of the CA.
+  await exercises.fill('15');await ca.fill('30');await expect(exam).toHaveValue('70');
+  await expect(exercises).toHaveValue('9');await expect(homework).toHaveValue('9');await expect(tests).toHaveValue('12');
+  await exercises.fill('10');await homework.fill('10');await tests.fill('10');await expect(page.getByText('Total 30 of 30')).toBeVisible();
+  await page.getByRole('button',{name:'Save policy',exact:true}).click();await expect(page.getByText('Assessment policy saved.')).toBeVisible();
+  const saved=await read();expect(saved.ca_weight).toBe(30);expect(saved.exam_weight).toBe(70);
+  const shares=Object.values(saved.ca_parts) as number[];expect(shares.reduce((a,b)=>a+b,0)).toBeCloseTo(100,6);expect(saved.ca_parts.tests).toBeCloseTo(33.3333,3);expect(saved.ca_parts.projects).toBe(0);
+  await page.reload();await expect(exercises).toHaveValue('10');await expect(homework).toHaveValue('10');await expect(tests).toHaveValue('10');
+  if(original){const response=await page.request.put(`/api/v1/schools/${school}/assessment/policy`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),caWeight:original.ca_weight,examWeight:original.exam_weight,caParts:original.ca_parts,bands:original.bands,sourceNote:original.source_note,version:saved.version}});expect(response.status(),await response.text()).toBe(200);}
+  expect(errors).toEqual([]);
+});

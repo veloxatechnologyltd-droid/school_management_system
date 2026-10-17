@@ -93,7 +93,12 @@ test('the CA suggestion weights each learner\'s class work by the school\'s CA p
   assert.equal(changed.version,policy.version+1);assert.deepEqual(await suggest(),[89,70,45]);
   const kept=(await call('/assessment/policy','PUT',{operationId:randomUUID(),caWeight:30,examWeight:70,bands,sourceNote:'Synthetic progress policy',version:changed.version})).body;
   assert.deepEqual(kept.ca_parts,{exercises:100,homework:0,tests:0,projects:0},'saving without parts keeps them');
-  await save({exercises:30,homework:30,tests:40,projects:0},kept.version);
+  // The settings form sends shares that are not whole numbers when the CA is not 50 (10 + 10 + 10 points of a CA of 30).
+  const thirds=(await save({exercises:33.3333,homework:33.3333,tests:33.3334,projects:0},kept.version)).body;
+  assert.deepEqual(thirds.ca_parts,{exercises:33.3333,homework:33.3333,tests:33.3334,projects:0});
+  assert.equal((await save({exercises:33.33333,homework:33.3333,tests:33.3334,projects:0},thirds.version)).status,400,'at most four decimals');
+  assert.equal((await save({exercises:33.3333,homework:33.3333,tests:33.3333,projects:0},thirds.version)).status,400,'still has to add up to 100');
+  await save({exercises:30,homework:30,tests:40,projects:0},thirds.version);
   await assert.rejects(owner.query(`UPDATE assessment_policies SET ca_parts='{"exercises":50,"homework":30,"tests":40,"projects":0}' WHERE school_id=$1`,[school]),/ca_parts/);
   await assert.rejects(owner.query(`UPDATE assessment_policies SET ca_parts='{"exercises":30,"homework":30,"tests":40,"projects":0,"extra":0}' WHERE school_id=$1`,[school]),/ca_parts/);
   assert.equal((await owner.query('SELECT count(*) FROM assessment_score_entries WHERE school_id=$1',[school])).rows[0].count,'0','nothing written');

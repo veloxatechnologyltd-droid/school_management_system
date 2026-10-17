@@ -485,11 +485,11 @@ async function setup() {
   for (const t of TERMS.filter(x => x.year === 0)) if (!state.termIds[t.key]) { state.termIds[t.key] = (await head.post('/assessment/terms', { academicYearId: state.yearIds[0], name: t.name, startDate: t.start, endDate: t.end }, `term:${t.key}`)).id; save(); }
   for (const [c, def] of CLASSES.entries()) if (!state.classIds[0]![c]) { state.classIds[0]![c] = (await head.post('/classes', { name: def.name, level: def.level, capacity: SIZES[c]! + 6, academicYearId: state.yearIds[0] }, `class:0:${c}`)).id; save(); }
 
-  step('Subjects, the grading policy (30% class score, 70% examination) and the school\'s curriculum topics');
+  step('Subjects, the grading policy (50% class score, 50% examination) and the school\'s curriculum topics');
   for (const [s, name] of SUBJECTS.entries()) if (!state.subjectIds[s]) { state.subjectIds[s] = (await head.post('/assessment/subjects', { name }, `subject:${s}`)).id; save(); }
   const policy = await head.get('/assessment/policy');
   if (!policy?.policy) await head.put('/assessment/policy', {
-    caWeight: 30, examWeight: 70, caParts: { exercises: 30, homework: 30, tests: 40, projects: 0 }, sourceNote: 'GES basic school terminal report: class score 30%, end-of-term examination 70%; bands adopted by the Sunrise academic board for the 2025/2026 year',
+    caWeight: 50, examWeight: 50, caParts: { exercises: 30, homework: 30, tests: 40, projects: 0 }, sourceNote: 'Sunrise academic board: class score 50% (exercises 15, homework 15, two class tests 10 each) and end-of-term examination 50%; bands adopted for the 2025/2026 year',
     bands: [{ min: 80, grade: '1', remark: 'Highest' }, { min: 70, grade: '2', remark: 'Higher' }, { min: 60, grade: '3', remark: 'High' }, { min: 55, grade: '4', remark: 'High average' }, { min: 50, grade: '5', remark: 'Average' }, { min: 45, grade: '6', remark: 'Low average' }, { min: 40, grade: '7', remark: 'Low' }, { min: 35, grade: '8', remark: 'Lower' }, { min: 0, grade: '9', remark: 'Lowest' }],
   }, 'policy');
   if (!done('indicators')) {
@@ -803,7 +803,7 @@ async function results(t: TermDef) {
   for (const c of GRADED) {
     if (done(`published:${t.key}:${c}`)) continue;
     const cid = classId(t.year, c), present = model.learners.filter(l => inTerm(l, t.year, c, t));
-    const avg = (l: L) => { const subj = [...Array(SUBJECTS.length).keys()].map(s => 0.3 * caScore(l, t, c, s) + 0.7 * examPercent(l, t, c, s)); return subj.reduce((a, b) => a + b, 0) / subj.length; };
+    const avg = (l: L) => { const subj = [...Array(SUBJECTS.length).keys()].map(s => 0.5 * caScore(l, t, c, s) + 0.5 * examPercent(l, t, c, s)); return subj.reduce((a, b) => a + b, 0) / subj.length; };
     const teacherRemark = (l: L) => avg(l) > 75 ? 'Excellent performance. Keep it up.' : avg(l) > 62 ? 'Good work. Can do better with more effort.' : avg(l) > 48 ? 'Fair performance. Needs to put in more effort.' : 'Weak performance. Needs extra support at home and in school.';
     await head.post(`/assessment/classes/${cid}/remarks`, { termId, author: 'class_teacher', items: present.map(l => ({ learnerId: idOf(l), conduct: CONDUCT[Math.floor(u('conduct', l.key, t.key) * CONDUCT.length)], attitude: ATTITUDE[Math.floor(u('attitude', l.key, t.key) * ATTITUDE.length)], interest: INTEREST[Math.floor(u('interest', l.key) * INTEREST.length)], remark: teacherRemark(l) })) }, `remarks:${t.key}:${c}:teacher`);
     const next = CLASSES[c + 1]?.name;

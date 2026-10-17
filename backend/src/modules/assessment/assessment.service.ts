@@ -5,6 +5,7 @@ import { Actor } from '../../core/access';
 import { audit, command } from '../../core/commands';
 import { PolicyDto, PublishDto, RecordScoresDto, ReissueDto, ReopenDto, RemarksDto, SubjectDto, TermDto } from './assessment.dto';
 
+// Each part's share of the CA out of 100 (the settings form shows them as points of the final score). Up to four decimals.
 export type CaParts = { exercises: number; homework: number; tests: number; projects: number };
 // Matches the column default in migration 041.
 export const DEFAULT_CA_PARTS: CaParts = {exercises:30,homework:30,tests:40,projects:0};
@@ -31,7 +32,7 @@ export class AssessmentService {
     if (body.caWeight + body.examWeight !== 100) throw new BadRequestException('Continuous assessment and exam weights must add up to 100');
     const mins = body.bands.map(band => band.min);
     if (new Set(mins).size !== mins.length || !mins.includes(0)) throw new BadRequestException('Grade bands need distinct minimum scores and one starting at 0');
-    if (body.caParts && body.caParts.exercises + body.caParts.homework + body.caParts.tests + body.caParts.projects !== 100) throw new BadRequestException('The parts of continuous assessment must add up to 100');
+    if (body.caParts && Math.round((body.caParts.exercises + body.caParts.homework + body.caParts.tests + body.caParts.projects) * 10000) !== 1000000) throw new BadRequestException('The parts of continuous assessment must add up to 100');
     return command(client,actor,body.operationId,'assessment.policy',body,async () => {
       const current = await this.policy(client,actor.schoolId);
       if (current && body.version !== current.version) throw new ConflictException('The assessment policy changed. Reload before saving');

@@ -17,10 +17,10 @@ export class BandDto {
 }
 // Shares of the continuous assessment (out of 100) given to each kind of class work.
 export class CaPartsDto {
-  @IsInt() @Min(0) @Max(100) exercises!: number;
-  @IsInt() @Min(0) @Max(100) homework!: number;
-  @IsInt() @Min(0) @Max(100) tests!: number;
-  @IsInt() @Min(0) @Max(100) projects!: number;
+  @IsNumber({maxDecimalPlaces:4}) @Min(0) @Max(100) exercises!: number;
+  @IsNumber({maxDecimalPlaces:4}) @Min(0) @Max(100) homework!: number;
+  @IsNumber({maxDecimalPlaces:4}) @Min(0) @Max(100) tests!: number;
+  @IsNumber({maxDecimalPlaces:4}) @Min(0) @Max(100) projects!: number;
 }
 export class PolicyDto extends OperationDto {
   @IsInt() @Min(0) @Max(100) caWeight!: number;

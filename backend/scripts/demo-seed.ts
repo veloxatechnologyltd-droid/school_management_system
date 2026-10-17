@@ -212,7 +212,7 @@ async function main() {
     step('Subjects, grading policy and scores');
     const subjectIds: string[] = [];
     for (const s of subjects) subjectIds.push((await head.post('/assessment/subjects', { name: s })).id);
-    await head.call('PUT', '/assessment/policy', { caWeight: 30, examWeight: 70, caParts: { exercises: 30, homework: 30, tests: 40, projects: 0 }, sourceNote: 'Grading scheme approved by the Sunrise academic board for basic school terminal reports', bands: [{ min: 80, grade: 'A', remark: 'Excellent' }, { min: 70, grade: 'B', remark: 'Very good' }, { min: 60, grade: 'C', remark: 'Good' }, { min: 50, grade: 'D', remark: 'Credit' }, { min: 40, grade: 'E', remark: 'Pass' }, { min: 0, grade: 'F', remark: 'Needs support' }] });
+    await head.call('PUT', '/assessment/policy', { caWeight: 50, examWeight: 50, caParts: { exercises: 30, homework: 30, tests: 40, projects: 0 }, sourceNote: 'Grading scheme approved by the Sunrise academic board for basic school terminal reports: class score 50% (exercises 15, homework 15, two class tests 10 each), exam 50%', bands: [{ min: 80, grade: 'A', remark: 'Excellent' }, { min: 70, grade: 'B', remark: 'Very good' }, { min: 60, grade: 'C', remark: 'Good' }, { min: 50, grade: 'D', remark: 'Credit' }, { min: 40, grade: 'E', remark: 'Pass' }, { min: 0, grade: 'F', remark: 'Needs support' }] });
     const graded = classes.map((c, i) => ({ ...c, i })).filter(c => c.level === 'Primary' || c.level === 'JHS');
     const score = (l: Learner, subject: number, kind: string) => Math.round(clamp(normal(l.ability + (subject % 3 - 1) * 4 + (kind === 'ca' ? 6 : 0), 9), 12, 99));
     const scoreTerm = async (term: typeof terms[number], kinds: string[], cls: typeof graded) => {
