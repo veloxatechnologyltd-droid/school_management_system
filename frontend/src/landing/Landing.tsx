@@ -580,7 +580,7 @@ function Footer() {
           <li><a href="#pricing">Pricing</a></li>
           <li><a href="#/signin">Sign in</a></li>
         </ul>
-        <p className="lp-footer-brand"><img className="logo" src="/brand/icon.png" alt="Veloxa SmartSchool" /></p>
+        <p className="lp-footer-brand"><img className="logo" src="/brand/mark-white.svg" alt="Veloxa SmartSchool" /></p>
         <div className="lp-footer-meta">
           <p>Made for schools in Ghana, KG to JHS</p>
           <p><a href={SHARE} target="_blank" rel="noopener noreferrer">Share with a school on WhatsApp</a></p>
@@ -589,7 +589,7 @@ function Footer() {
         </div>
       </div>
     </div>
-    <p className="lp-footer-mark" aria-hidden="true"><img src="/brand/icon.png" alt="" /></p>
+    <p className="lp-footer-mark" aria-hidden="true"><img src="/brand/mark-white.svg" alt="" /></p>
   </footer>;
 }
 
@@ -616,7 +616,7 @@ export default function Landing() {
   };
   return <div className="lp" onClick={jump}>
     <nav className={`lp-nav ${solid ? 'solid' : 'on-blue'}`} aria-label="Main">
-      <a className="lp-brand" href="#" aria-label="Veloxa SmartSchool home"><img className="logo" src="/brand/icon.png" alt="" /></a>
+      <a className="lp-brand" href="#" aria-label="Veloxa SmartSchool home"><img className="logo" src={solid ? "/brand/mark.svg" : "/brand/mark-white.svg"} alt="" /></a>
       <div className="lp-links"><a href="#schools">Schools</a><a href="#families">Parents</a><a href="#pricing">Pricing</a></div>
       <div className="lp-nav-cta"><a className="lp-signin" href="#/signin">Sign in</a><a className="lp-btn small" href={START}>Start free</a></div>
     </nav>

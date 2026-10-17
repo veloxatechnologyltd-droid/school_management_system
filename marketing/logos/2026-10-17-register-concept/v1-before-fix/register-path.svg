@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Veloxa SmartSchool register path concept</title>
+  <desc id="desc">Three class register lines beside a margin; one line rises toward a learner marker.</desc>
+  <g fill="none" stroke="#1449a8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 15v39" stroke-width="7"/>
+    <path d="M23 26h13c5 0 7-2 10-6l5-6" stroke-width="7"/>
+    <path d="M23 39h23" stroke-width="6"/>
+    <path d="M23 51h17" stroke-width="6"/>
+  </g>
+  <circle cx="54" cy="10" r="4" fill="#1449a8"/>
+</svg>
