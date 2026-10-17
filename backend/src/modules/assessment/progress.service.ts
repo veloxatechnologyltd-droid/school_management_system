@@ -216,10 +216,10 @@ export class ProgressService {
   }
 
   // Indicators for a subject (or all), current ones first; retired ones stay listed with why.
-  async indicators(client: PoolClient, schoolId: string, subjectId?: string) {
-    return {items:(await client.query(`SELECT i.id,i.subject_id,s.name AS subject_name,i.code,i.strand,i.sub_strand,i.description,i.grade,i.origin,i.source_note,i.retired_at,i.retirement_reason
+  async indicators(client: PoolClient, actor: Actor, subjectId?: string) {
+    return {items:(await client.query(`SELECT i.id,i.created_by=$3 AS mine,i.subject_id,s.name AS subject_name,i.code,i.strand,i.sub_strand,i.description,i.grade,i.origin,i.source_note,i.retired_at,i.retirement_reason
       FROM curriculum_indicators i JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id WHERE i.school_id=$1 AND ($2::uuid IS NULL OR i.subject_id=$2)
-      ORDER BY s.name,i.retired_at IS NOT NULL,i.grade NULLS FIRST,i.code NULLS LAST,i.created_at,i.id`,[schoolId,subjectId ?? null])).rows};
+      ORDER BY s.name,i.retired_at IS NOT NULL,i.grade NULLS FIRST,i.code NULLS LAST,i.created_at,i.id`,[actor.schoolId,subjectId ?? null,actor.membershipId])).rows};
   }
   addIndicators(client: PoolClient, actor: Actor, body: AddIndicatorsDto) {
     return command(client,actor,body.operationId,'assessment.indicators',body,async () => {
@@ -236,6 +236,11 @@ export class ProgressService {
   }
   retireIndicator(client: PoolClient, actor: Actor, indicatorId: string, body: RetireIndicatorDto) {
     return command(client,actor,body.operationId,'assessment.indicator.retire',{indicatorId,...body},async () => {
+      // Teachers add topics for the school but retire only their own; the headteacher retires any.
+      if (actor.role === 'teacher') {
+        const found = (await client.query('SELECT created_by FROM curriculum_indicators WHERE school_id=$1 AND id=$2 AND retired_at IS NULL',[actor.schoolId,indicatorId])).rows[0];
+        if (found && found.created_by !== actor.membershipId) throw new ForbiddenException('Only the headteacher or the person who added a topic can retire it');
+      }
       const row = (await client.query('UPDATE curriculum_indicators SET retired_at=now(),retired_by=$3,retirement_reason=$4 WHERE school_id=$1 AND id=$2 AND retired_at IS NULL RETURNING id',[actor.schoolId,indicatorId,actor.membershipId,body.reason.trim()])).rows[0];
       if (!row) throw new NotFoundException('Indicator unavailable or already retired');
       await audit(client,actor,'assessment.indicator.retired',indicatorId,{reason:body.reason.trim()});

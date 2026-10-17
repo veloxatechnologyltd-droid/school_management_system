@@ -4,7 +4,7 @@ import { Card, Dialog, Empty, Icon, Pill } from '../lib/ui';
 import { PracticeDialog } from './Practice';
 
 type Subject = { id: string; name: string };
-type Indicator = { id: string; grade: string | null; code: string | null; strand: string | null; sub_strand: string | null; description: string; origin: 'official' | 'local'; source_note: string; retired_at: string | null; retirement_reason: string | null };
+type Indicator = { id: string; grade: string | null; code: string | null; strand: string | null; sub_strand: string | null; description: string; origin: 'official' | 'local'; source_note: string; mine: boolean; retired_at: string | null; retirement_reason: string | null };
 
 // One indicator per line: "code | strand | sub-strand | description" (tabs work too, as pasted from a spreadsheet).
 // A line with a single field is just the description.
@@ -20,7 +20,7 @@ function parseIndicators(text: string) {
 
 // The school's own curriculum indicators per subject. The platform ships no curriculum text; each batch records where it came from.
 // part "indicators" is the Curriculum page (the topics the school teaches); part "sharing" is the two family switches kept in Settings.
-export function Curriculum({ schoolId, csrfToken, part = 'indicators' }: { schoolId: string; csrfToken: string; part?: 'indicators' | 'sharing' }) {
+export function Curriculum({ schoolId, csrfToken, role = 'headteacher', part = 'indicators' }: { schoolId: string; csrfToken: string; role?: string; part?: 'indicators' | 'sharing' }) {
   const [subjects, setSubjects] = useState<Subject[]>([]); const [subjectId, setSubjectId] = useState('');
   const [items, setItems] = useState<Indicator[]>([]); const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ origin: 'official', sourceNote: '', grade: '', lines: '' });
@@ -56,7 +56,7 @@ export function Curriculum({ schoolId, csrfToken, part = 'indicators' }: { schoo
     <HomePracticeSwitch schoolId={schoolId} csrfToken={csrfToken}/>
   </section>;
   return <section aria-label="Curriculum indicators" className="page">
-    <p className="muted">Enter the topics (indicators) your school teaches for each subject, from your curriculum documents or scheme of work. Teachers tag them on class work on the Assessment page, and Performance then shows which ones a class has not yet mastered. Approve a topic for the term on the Topics page and Claude prepares its lesson and practice. Mark codes as official only when copied from the official curriculum.</p>
+    <p className="muted">Enter the topics (indicators) your school teaches for each subject, from your curriculum documents or scheme of work. The headteacher and teachers can add them; you can retire your own, and the headteacher any. Teachers tag them on class work on the Assessment page, and Performance then shows which ones a class has not yet mastered. Approve a topic for the term on the Topics page and Claude prepares its lesson and practice. Mark codes as official only when copied from the official curriculum.</p>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <Card flush>
       <div className="toolbar">
@@ -70,7 +70,7 @@ export function Curriculum({ schoolId, csrfToken, part = 'indicators' }: { schoo
           {shown.map(i => <tr key={i.id} className={i.retired_at ? 'muted' : undefined}><td>{i.grade ?? 'Any'}</td><td>{i.code ?? '–'}</td>
             <td>{i.description}{(i.strand || i.sub_strand) && <span className="sub">{[i.strand, i.sub_strand].filter(Boolean).join(' · ')}</span>}{i.retired_at && <span className="sub">Retired: {i.retirement_reason}</span>}</td>
             <td><Pill tone={i.origin === 'official' ? 'info' : 'neutral'}>{i.origin === 'official' ? 'Official' : 'School'}</Pill><span className="sub">{i.source_note}</span></td>
-            <td>{!i.retired_at && <div className="row-actions"><button type="button" className="secondary small" onClick={() => setPracticeFor(i.id)}>Practice</button><button type="button" className="secondary small" disabled={busy} onClick={() => retire(i)}>Retire</button></div>}</td></tr>)}</tbody></table></div>}
+            <td>{!i.retired_at && <div className="row-actions"><button type="button" className="secondary small" onClick={() => setPracticeFor(i.id)}>Practice</button>{(role === 'headteacher' || i.mine) && <button type="button" className="secondary small" disabled={busy} onClick={() => retire(i)}>Retire</button>}</div>}</td></tr>)}</tbody></table></div>}
     </Card>
     {practiceFor && <PracticeDialog schoolId={schoolId} csrfToken={csrfToken} indicatorId={practiceFor} onClose={() => setPracticeFor('')}/>}
     {adding && <Dialog title={`Add indicators · ${subjects.find(s => s.id === subjectId)?.name ?? ''}`} wide onClose={() => setAdding(false)}>

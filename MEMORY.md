@@ -395,3 +395,19 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **Why:** A teacher described CA as made of exercises, homework and class tests; typing a CA beside them duplicated the work and let the two disagree.
 **What was rejected:** Keeping "Fill CA from assessments" as an optional pre-fill (this supersedes the 2026-10-14 "CA is suggested, not derived" decision); recording anything on the Performance page.
 **Still open:** the scores API still accepts a CA sent directly (only the screen enforces it); published reports keep the CA they were published with.
+
+## 2026-10-17, WhatsApp status offer and referral positioning
+**What was decided:** Use three vertical status flyers: free school system with optional paid home learning and school earnings; parents recommending the system for guided home learning; and a 20% referral reward. Evans wants referral payout details discussed when people contact him.
+**Why:** Each audience needs one clear reason to share or enquire, and the reward terms are to be explained directly.
+**What was rejected:** Publishing a pass revenue basis, payout duration, or other referral terms on the flyer.
+
+## 2026-10-17, Use the established flyer proportions
+**What was decided:** Evans corrected the new flyer exports from 1080 × 1920 to 1080 × 1350; use the latter proportions for this marketing set.
+**Why:** The first version looked too long in the image viewer and did not match the existing flyers.
+**What was rejected:** Keeping the story-height exports for this set.
+
+## 2026-10-17, Teachers fill the curriculum; it lives on the sidebar
+**What was decided:** Evans said curriculum should not be hidden in Settings and that teachers, who use it, need fill access. The Curriculum page is on the headteacher's and teachers' sidebars; family sharing and home practice stay in Settings. Teachers may add topics for any subject; they retire only their own, the headteacher any.
+**Why:** Teachers tag topics on class work and know what they teach; routing every topic through the head put the work on the wrong person. This supersedes "headteachers add the school's indicators" (2026-10-14).
+**What was rejected:** Letting a teacher retire a colleague's or the head's topic (retiring takes a topic out of practice and Gaps for everyone); limiting teachers to subjects or grades they teach (assignments are by class, not subject).
+**Still open:** topics added by any teacher are school-wide and feed approved topics and Claude's drafting, so a poor entry reaches families through the Topics step; the head's approval of each topic for the term is the check.

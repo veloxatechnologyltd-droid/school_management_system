@@ -303,7 +303,7 @@ test('each role lands on its own daily work; the section stays in the address ac
   await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('link',{name:'Notices',exact:true}).click();await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   await page.reload();await pickSchool(page);await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  for(const [email,expected] of [['teacher@example.test',['Today','Ask','My classes','Assessment','Performance','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['Home','Learn at home','Progress','Report cards','Notes','Fees','Notices']]] as const){
+  for(const [email,expected] of [['teacher@example.test',['Today','Ask','My classes','Assessment','Performance','Curriculum','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['Home','Learn at home','Progress','Report cards','Notes','Fees','Notices']]] as const){
     const other=await browser.newPage();await other.setViewportSize({width:375,height:812});await other.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));await signIn(other,email);expect(await links(other)).toEqual(expected);
     expect(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await other.close();
   }
@@ -406,6 +406,21 @@ test('CA cannot be typed: class work recorded on the Assessment page makes the C
   const result=page.getByRole('row').filter({has:page.getByRole('link',{name})});await expect(result.getByText(String(total),{exact:true}).first()).toBeVisible();
   await expect(page.getByRole('button',{name:/New assessment|Add class work/})).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+test('a teacher adds curriculum topics from the sidebar and retires their own, but not the headteacher\'s',async({page,browser})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Curriculum');
+  const suffix=randomUUID().slice(0,8),session=await (await page.request.get('/api/v1/auth/session')).json();
+  const subject=(await (await page.request.post(`/api/v1/schools/${school}/assessment/subjects`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),name:`Topics ${suffix}`}})).json());
+  const headTopic=await page.request.post(`/api/v1/schools/${school}/assessment/indicators`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),subjectId:subject.id,origin:'local',sourceNote:'Head scheme of work',items:[{description:`Head topic ${suffix}`}]}});expect(headTopic.status()).toBe(201);
+  const context=await browser.newContext(),teacher=await context.newPage();teacher.on('pageerror',error=>errors.push(error.message));
+  await signIn(teacher,'teacher@example.test','Curriculum');
+  await teacher.getByRole('combobox',{name:'Subject',exact:true}).selectOption(subject.id);
+  await teacher.getByRole('button',{name:'Add indicators',exact:true}).click();
+  const add=teacher.getByRole('dialog');await add.getByLabel('Source',{exact:true}).fill('Class 4 scheme of work');await add.getByLabel(/^Indicators, one per line/).fill(`Teacher topic ${suffix}`);
+  await add.getByRole('button',{name:/Add 1 indicator/}).click();await expect(teacher.getByText('Added 1 indicator(s).')).toBeVisible();
+  const mine=teacher.getByRole('row').filter({hasText:`Teacher topic ${suffix}`}),theirs=teacher.getByRole('row').filter({hasText:`Head topic ${suffix}`});
+  await expect(mine.getByRole('button',{name:'Retire',exact:true})).toBeVisible();await expect(theirs.getByRole('button',{name:'Practice',exact:true})).toBeVisible();await expect(theirs.getByRole('button',{name:'Retire',exact:true})).toHaveCount(0);
+  await context.close();expect(errors).toEqual([]);
 });
 test('the headteacher’s morning view lists missing registers, this week’s fees against last term and missing scores, each linking to its page',async({page})=>{
   const {Pool}=require('pg');const path=require('node:path');

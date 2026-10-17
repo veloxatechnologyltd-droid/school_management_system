@@ -62,7 +62,7 @@ const navByRole:Record<string,NavGroup[]>={
     {group:'Administration',pinned:true,items:[nav('settings','Settings','settings')]}],
   teacher:[
     {group:'Overview',items:[nav('today','Today','today'),nav('ask','Ask','forum')]},
-    {group:'My classes',items:[nav('classes','My classes','groups'),nav('assessment','Assessment','school'),nav('progress','Performance','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]}],
+    {group:'My classes',items:[nav('classes','My classes','groups'),nav('assessment','Assessment','school'),nav('progress','Performance','insights'),nav('curriculum','Curriculum','menu_book'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]}],
   accountant:[{group:'Money',items:[nav('fees','Fees','receipt_long')]}],
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
   guardian:[
@@ -216,7 +216,7 @@ function App() {
     guardians:()=><Guardians key={`guardians:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     assessment:()=><Assessment key={`assessment:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
     progress:()=><Progress key={`progress:${sid}`} schoolId={sid} csrfToken={csrf} role={role} initialTab={subId}/>,
-    curriculum:()=><Curriculum key={`curriculum:${sid}`} schoolId={sid} csrfToken={csrf}/>,
+    curriculum:()=><Curriculum key={`curriculum:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     topics:()=><Topics key={`topics:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     'early-years':()=><EarlyYearsWork key={`early-years:${sid}:${role}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     fees:()=>role==='guardian'?<GuardianStatement key={`statement:${sid}`} schoolId={sid}/>:<Finance key={`finance:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,

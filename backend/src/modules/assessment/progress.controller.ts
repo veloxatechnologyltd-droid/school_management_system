@@ -47,15 +47,15 @@ export class ProgressController {
   }
   @Get('assessment/indicators')
   indicators(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Query() query: IndicatorQueryDto) {
-    return this.access.school(req,schoolId,staff,client => this.progress.indicators(client,schoolId,query.subjectId));
+    return this.access.school(req,schoolId,staff,(client,actor) => this.progress.indicators(client,actor,query.subjectId));
   }
   @Post('assessment/indicators')
   addIndicators(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Body() body: AddIndicatorsDto) {
-    return this.access.school(req,schoolId,head,(client,actor) => this.progress.addIndicators(client,actor,body),true);
+    return this.access.school(req,schoolId,staff,(client,actor) => this.progress.addIndicators(client,actor,body),true);
   }
   @Post('assessment/indicators/:indicatorId/retire')
   retireIndicator(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('indicatorId',new ParseUUIDPipe()) indicatorId: string,@Body() body: RetireIndicatorDto) {
-    return this.access.school(req,schoolId,head,(client,actor) => this.progress.retireIndicator(client,actor,indicatorId,body),true);
+    return this.access.school(req,schoolId,staff,(client,actor) => this.progress.retireIndicator(client,actor,indicatorId,body),true);
   }
   @Get('assessment/classes/:classId/gaps')
   gaps(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: GapsQueryDto) {

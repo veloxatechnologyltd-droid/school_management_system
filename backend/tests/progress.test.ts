@@ -144,9 +144,9 @@ test('the CA sheet shows each part, each class test, the CA, exam and total, and
 });
 
 let fractions:string,addition:string;
-test('headteachers add the school\'s indicators with their source; wording is kept and codes stay unique while current',async()=>{
+test('headteachers and teachers add the school\'s indicators with their source; wording is kept and codes stay unique while current',async()=>{
   const body={subjectId:maths,origin:'local',sourceNote:'Primary 5 scheme of work, Term 1',items:[{code:'P5.N.3',strand:'Number',subStrand:'Fractions',description:'Adds and subtracts fractions with like denominators'},{code:'P5.N.1',strand:'Number',description:'Adds whole numbers up to 1,000,000'}]};
-  assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),...body},teacher)).status,403);
+  assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),...body},guardian)).status,403);
   assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),...body,origin:'national'})).status,400);
   assert.equal((await call('/assessment/indicators','POST',{operationId:randomUUID(),...body,items:[body.items[0],{...body.items[1],code:'p5.n.3'}]})).status,400,'codes repeat within the batch');
   assert.deepEqual(await ok('/assessment/indicators','POST',body),{added:2});
@@ -157,7 +157,14 @@ test('headteachers add the school\'s indicators with their source; wording is ke
   await assert.rejects(owner.query('DELETE FROM curriculum_indicators WHERE id=$1',[fractions]),/retire one instead/);
   const spare=(await ok('/assessment/indicators','POST',{...body,items:[{code:'P5.X.9',description:'Entered by mistake'}]})).added;assert.equal(spare,1);
   const spareId=(await call(`/assessment/indicators?subjectId=${maths}`)).body.items.find((i:any)=>i.code==='P5.X.9').id;
+  // A teacher may add topics and retire their own, never the head's or a colleague's; the list says which are theirs.
   assert.equal((await call(`/assessment/indicators/${spareId}/retire`,'POST',{operationId:randomUUID(),reason:'Typed in error'},teacher)).status,403);
+  assert.equal((await call(`/assessment/indicators/${spareId}/retire`,'POST',{operationId:randomUUID(),reason:'Typed in error'},guardian)).status,403);
+  assert.deepEqual(await ok('/assessment/indicators','POST',{...body,items:[{code:'T.1',description:'Added by a teacher'}]},teacher),{added:1});
+  const own=(await call(`/assessment/indicators?subjectId=${maths}`,'GET',undefined,teacher)).body.items;
+  assert.equal(own.find((i:any)=>i.code==='T.1').mine,true);assert.equal(own.find((i:any)=>i.code==='P5.X.9').mine,false);
+  assert.equal((await call(`/assessment/indicators?subjectId=${maths}`)).body.items.find((i:any)=>i.code==='T.1').mine,false,'the head did not add it');
+  await ok(`/assessment/indicators/${own.find((i:any)=>i.code==='T.1').id}/retire`,'POST',{reason:'Teacher withdrew it'},teacher);
   await ok(`/assessment/indicators/${spareId}/retire`,'POST',{reason:'Typed in error'});
   assert.equal((await call(`/assessment/indicators/${spareId}/retire`,'POST',{operationId:randomUUID(),reason:'Again'})).status,404);
   await ok('/assessment/indicators','POST',{...body,items:[{code:'P5.X.9',description:'Entered again correctly'}]});

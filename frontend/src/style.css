@@ -391,3 +391,14 @@ a.sub[href^="tel:"]{display:inline-block;padding:7px 0}
 .roster-grid .learner-link{display:block;padding:8px 0}
 
 .settings-link{display:grid;place-items:center;margin-left:auto;text-decoration:none}.settings-link+.user{margin-left:0}
+
+/* Touch sizes found by the phone and tablet sweep (2026-10-17): a control in a crowded flex row must not shrink below its tap size,
+   and every tap target reaches the 34px minimum (44px on touch screens) */
+.icon-button,input[type=checkbox],input[type=radio]{flex:none}
+a.sub[href^="tel:"]{display:inline-flex;align-items:center;min-height:36px;padding:0}
+.learner-link{padding:8px 0}
+.report-row summary{min-height:36px}
+/* the toolbar's "width:auto" for fields left a checkbox 13px wide and 20px tall (Pickup: "Include learners with collection history") */
+.toolbar>label>input[type=checkbox],.toolbar>label>input[type=radio]{width:20px;height:20px}
+.toolbar>label:has(>input[type=checkbox]),.toolbar>label:has(>input[type=radio]){flex-wrap:nowrap;align-items:center}
+@media (pointer:coarse){a.sub[href^="tel:"]{min-height:44px}.learner-link{padding:12px 0}.report-row summary{min-height:44px}.toolbar>label>input[type=checkbox],.toolbar>label>input[type=radio]{width:24px;height:24px}}
