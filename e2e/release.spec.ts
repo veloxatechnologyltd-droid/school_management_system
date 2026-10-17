@@ -316,12 +316,12 @@ test('a new sign-up sees a setup guide instead of empty daily screens, and daily
   await page.getByLabel('Your full name',{exact:true}).fill('Esi Owusu');await page.getByLabel('School name',{exact:true}).fill(schoolName);await page.getByLabel('Email',{exact:true}).fill(`signup-${suffix}@example.test`);await page.getByLabel('Password (at least 12 characters)',{exact:true}).fill('Signup-passphrase-2026');
   await page.getByRole('button',{name:'Create account',exact:true}).click();
   const guide=page.getByRole('region',{name:`Let's get ${schoolName} ready`});await expect(guide).toBeVisible();await expect(guide).toContainText('0 of 5 done');
-  await expect(page.getByRole('combobox',{name:'School',exact:true})).toHaveCount(0);await expect(page.getByRole('heading',{name:'Attendance follow-up'})).toHaveCount(0);
+  await expect(page.getByRole('combobox',{name:'School',exact:true})).toHaveCount(0);await expect(page.getByRole('heading',{name:'Needs attention'})).toHaveCount(0);
   await guide.getByLabel('Year name',{exact:true}).fill('2026/2027');await guide.getByLabel('First day of the year',{exact:true}).fill('2026-09-01');await guide.getByLabel('Day after the last day',{exact:true}).fill('2027-08-01');
   await guide.getByRole('button',{name:'Save academic year',exact:true}).click();await expect(guide).toContainText('1 of 5 done');
   await guide.getByLabel('Class name',{exact:true}).fill('Primary 1');await guide.getByRole('button',{name:'Add class',exact:true}).click();
   await expect(guide.getByRole('status')).toContainText('Added: Primary 1');await expect(guide).toContainText('2 of 5 done');
-  await expect(guide.getByRole('link',{name:'Add teachers'})).toBeVisible();await expect(page.getByRole('heading',{name:'Attendance follow-up'})).toBeVisible();
+  await expect(guide.getByRole('link',{name:'Add teachers'})).toBeVisible();await expect(page.getByRole('heading',{name:'Needs attention'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
 test('class teacher remarks and the headteacher remark appear on the printed report card with attendance and reopening date',async({page})=>{
@@ -450,7 +450,7 @@ test('the headteacher’s morning view lists missing registers, this week’s fe
   await expect(item('1 class has no register today')).toContainText('Basic 4');await expect(item('1 class has no register today').getByRole('link',{name:'Open registers'})).toHaveAttribute('href','#/attendance');
   await expect(item('GH₵ 120.00 in fees collected this week')).toContainText('GH₵ 450.00 in the same week of Term 1');await expect(item('in fees collected this week').getByRole('link',{name:'Open accounts'})).toHaveAttribute('href','#/accounts');
   await expect(item('1 class is missing scores')).toContainText('Term 2 ends in 10 days: Basic 4 (Science)');await expect(item('missing scores').getByRole('link',{name:'Open scores'})).toHaveAttribute('href','#/assessment');
-  await expect(page.getByText('No student has been absent 3 or more days this week.')).toBeVisible();
+  await page.getByRole('tab',{name:'Registers and absences'}).click();await expect(page.getByText('No student has been absent 3 or more days this week.')).toBeVisible();await page.getByRole('tab',{name:'Overview'}).click();
   await item('missing scores').getByRole('link',{name:'Open scores'}).click();await expect(page).toHaveURL(/#\/assessment$/);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });

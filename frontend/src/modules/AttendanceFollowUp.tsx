@@ -24,16 +24,14 @@ type Attention = { icon: string; tone: Tone; text: string; detail: string; href:
 const label: Record<string, string> = { missing: 'Not started', draft: 'Draft, not submitted', submitted: 'Submitted', locked: 'Locked' };
 const tone: Record<string, Tone> = { missing: 'critical', draft: 'caution', submitted: 'positive', locked: 'neutral' };
 
-export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
+// Everything the head's day-to-day cards read: registers, absences, this week's fees, scores, support reviews and admissions.
+export function useFollowUp(schoolId: string) {
   const [follow, setFollow] = useState<FollowUp | null>(null);
   const [morning, setMorning] = useState<Morning | null>(null);
   const [classes, setClasses] = useState<ClassOption[]>([]);
-  const [printClass, setPrintClass] = useState('');
-  const [sheet, setSheet] = useState<{ title: string; learners: RosterLearner[]; date: string } | null>(null);
   const [fees, setFees] = useState<FeeSummary | null>(null);
   const [waiting, setWaiting] = useState(0);
   const [error, setError] = useState('');
-  const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
@@ -43,7 +41,7 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
         request<Morning>(`/schools/${schoolId}/home/morning`),
         request<Page<ClassOption>>(`/schools/${schoolId}/teaching/class-options?limit=100`),
       ]);
-      setFollow(f); setMorning(m); setClasses(c.items); setPrintClass(prior => prior || c.items[0]?.id || '');
+      setFollow(f); setMorning(m); setClasses(c.items);
     } catch (e) { setError((e as Error).message); }
   }, [schoolId]);
   useEffect(() => { void load(); }, [load]);
@@ -65,23 +63,12 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
     })().catch(() => undefined);
   }, [schoolId]);
 
-  async function printBlank() {
-    const chosen = classes.find(c => c.id === printClass); if (!chosen) return;
-    setError('');
-    try {
-      const date = follow?.day ?? new Date().toISOString().slice(0, 10);
-      const learners: RosterLearner[] = [];
-      for (let offset = 0; ; offset += 100) {
-        const page = await request<Page<RosterLearner>>(`/schools/${schoolId}/teaching/classes/${chosen.id}/roster?date=${date}&limit=100&offset=${offset}`);
-        learners.push(...page.items); if (learners.length >= page.total || !page.items.length) break;
-      }
-      setSheet({ title: `${chosen.name} · ${chosen.year_name}`, learners, date });
-      setTimeout(() => window.print(), 100);
-    } catch (e) { setError((e as Error).message); }
-  }
+  return { follow, morning, classes, fees, waiting, error, setError };
+}
+type FollowUpData = ReturnType<typeof useFollowUp>;
 
-  const outstanding = follow?.classes.filter(c => c.register_status === 'missing' || c.register_status === 'draft') ?? [];
-  const visibleClasses = showAll ? follow?.classes ?? [] : outstanding;
+export function NeedsAttention({ data }: { data: FollowUpData }) {
+  const { follow, morning, fees, waiting } = data;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const names = (list: string[]) => list.slice(0, 4).join(', ') + (list.length > 4 ? '…' : '');
   const missing = morning?.registers.filter(r => r.status === 'missing') ?? [], drafts = morning?.registers.filter(r => r.status === 'draft') ?? [];
@@ -103,15 +90,43 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
     ...(waiting ? [{ icon: 'how_to_reg', tone: 'info' as Tone, text: `${plural(waiting, 'admission is', 'admissions are')} waiting for a decision`, detail: 'New applications and applications under review.', href: '#/students/applications', go: 'Review applications' }] : []),
   ];
 
-  return <section aria-label="Attendance follow-up" className="page">
-    {error && <p role="alert">{error}</p>}
-    {follow && <Card title="Needs attention" hint={attention.length ? 'Today’s open items, most urgent first.' : undefined} flush>
+  return <>
+    {follow && <Card title="Needs attention" hint={attention.length ? 'Whole school · today’s open items, most urgent first.' : undefined} flush>
       {attention.length ? <ul className="attention">{attention.map(item => <li key={item.text}>
         <span className={`stat-icon tone-${item.tone}`}><Icon name={item.icon}/></span>
         <div><strong>{item.text}</strong><span className="sub">{item.detail}</span></div>
         <a className="button secondary" href={item.href}>{item.go}</a>
       </li>)}</ul> : <Empty title="Nothing needs your attention" hint="Registers, absences, fees and admissions are all up to date."/>}
     </Card>}
+  </>;
+}
+
+export function RegistersToday({ schoolId, data }: { schoolId: string; data: FollowUpData }) {
+  const { follow, morning, classes, setError } = data;
+  const [printClass, setPrintClass] = useState('');
+  const [sheet, setSheet] = useState<{ title: string; learners: RosterLearner[]; date: string } | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => { setPrintClass(prior => prior || classes[0]?.id || ''); }, [classes]);
+  async function printBlank() {
+    const chosen = classes.find(c => c.id === printClass); if (!chosen) return;
+    setError('');
+    try {
+      const date = follow?.day ?? new Date().toISOString().slice(0, 10);
+      const learners: RosterLearner[] = [];
+      for (let offset = 0; ; offset += 100) {
+        const page = await request<Page<RosterLearner>>(`/schools/${schoolId}/teaching/classes/${chosen.id}/roster?date=${date}&limit=100&offset=${offset}`);
+        learners.push(...page.items); if (learners.length >= page.total || !page.items.length) break;
+      }
+      setSheet({ title: `${chosen.name} · ${chosen.year_name}`, learners, date });
+      setTimeout(() => window.print(), 100);
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  const outstanding = follow?.classes.filter(c => c.register_status === 'missing' || c.register_status === 'draft') ?? [];
+  const visibleClasses = showAll ? follow?.classes ?? [] : outstanding;
+  const absent = morning?.absences ?? [];
+
+  return <>
     <div className="columns">
       <Card title="Attendance follow-up" hint={follow ? (follow.open ? `Registers for ${follow.day} · ${follow.outstanding} outstanding` : `${follow.day} is not an open school day`) : 'Loading…'} action={<a className="button secondary" href="#/attendance">Open registers</a>} flush>
         {follow && (follow.open
@@ -140,5 +155,14 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
       <table><thead><tr><th>Name</th><th>No.</th>{['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(d => <th key={d}>{d}</th>)}</tr></thead>
         <tbody>{sheet.learners.map(l => <tr key={l.id}><td>{l.full_name}</td><td>{l.admission_number}</td>{[0, 1, 2, 3, 4].map(i => <td key={i}/>)}</tr>)}</tbody></table>
       <p>Mark P present, L late, A absent, E excused. Enter into the system when it is available again.</p></div>}
+  </>;
+}
+
+export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
+  const data = useFollowUp(schoolId);
+  return <section aria-label="Attendance follow-up" className="page">
+    {data.error && <p role="alert">{data.error}</p>}
+    <NeedsAttention data={data}/>
+    <RegistersToday schoolId={schoolId} data={data}/>
   </section>;
 }

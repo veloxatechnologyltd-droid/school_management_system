@@ -21,7 +21,7 @@ const Teaching=lazyModule(()=>import('./modules/Teaching'),'Teaching');
 const Attendance=lazyModule(()=>import('./modules/Attendance'),'Attendance');
 const EarlyYears=lazyModule(()=>import('./modules/EarlyYears'),'EarlyYears');
 const EarlyYearsReports=lazyModule(()=>import('./modules/EarlyYearsReports'),'EarlyYearsReports');
-const AttendanceFollowUp=lazyModule(()=>import('./modules/AttendanceFollowUp'),'AttendanceFollowUp');
+const HeadHome=lazyModule(()=>import('./modules/HeadHome'),'HeadHome');
 const Assessment=lazyModule(()=>import('./modules/Assessment'),'Assessment');
 const Progress=lazyModule(()=>import('./modules/Progress'),'Progress');
 const Curriculum=lazyModule(()=>import('./modules/Curriculum'),'Curriculum');
@@ -231,7 +231,7 @@ function App() {
   const [rawTab='',rawSub]=tab.split('/'),moved=rawTab==='settings'&&rawSub?movedFromSettings[rawSub]:undefined;
   const tabId=moved??rawTab,subId=moved?undefined:rawSub,setting=settingsSteps.find(step=>step.id===subId)??settingsSteps[0];
   const views:Record<string,()=>React.ReactNode>={
-    today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} displayName={session.displayName} csrfToken={csrf}><AttendanceFollowUp key={`followup:${sid}`} schoolId={sid}/></GettingStarted>:<><SupportDue key={`support-due:${sid}`} schoolId={sid}/>{attendanceView}</>,
+    today:()=>role==='headteacher'?<GettingStarted key={`setup:${sid}`} schoolId={sid} schoolName={school?.name??''} displayName={session.displayName} csrfToken={csrf}><HeadHome key={`home:${sid}`} schoolId={sid}/></GettingStarted>:<><SupportDue key={`support-due:${sid}`} schoolId={sid}/>{attendanceView}</>,
     classes:()=>role==='headteacher'?<Admissions key={`classes:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="setup"/>:teachingView,
     teachers:()=><TeachersWork key={`teachers:${sid}`} schoolId={sid} csrfToken={csrf} role={role} sub={moved==='teachers'?'assignments':subId} onAccessRefresh={()=>setTeacherAccessRefresh(value=>value+1)}/>,
     staff:()=><><PageHeader eyebrow="People" title="Staff" blurb="The headteacher, front desk and accounts staff, and their sign-ins."/><Accounts key={`staff:${sid}`} schoolId={sid} csrfToken={csrf} only="office"/></>,

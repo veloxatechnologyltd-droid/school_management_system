@@ -59,7 +59,7 @@ export function GettingStarted({ schoolId, schoolName, displayName, csrfToken, c
     <Stat label="Teachers" value={progress.teachers} caption="With a sign-in" icon="badge"/>
     <Stat label="Assignments" value={progress.assignments} caption="Teacher to class" icon="assignment_ind" tone={progress.assignments ? 'neutral' : 'caution'}/>
   </div>;
-  if (next === -1) return <>{header}{stats}{children}</>;
+  if (next === -1) return <>{header}{children}</>;
   return <>
     {header}
     {progress.classes > 0 && stats}

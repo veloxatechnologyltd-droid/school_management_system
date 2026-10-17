@@ -6,11 +6,11 @@ import { audit, command } from '../../core/commands';
 import { AdjustmentDto, BulkAdjustmentDto, FeeItemDto, GenerateInvoicesDto, InvoiceQueryDto, PaymentDto, ReverseDto } from './finance.dto';
 
 // Paid = payments that have not been reversed. bigint sums come back as strings; they stay whole pesewas.
-const paidSql = `coalesce((SELECT sum(p.amount_pesewas) FROM payments p WHERE p.school_id=i.school_id AND p.invoice_id=i.id
+export const paidSql = `coalesce((SELECT sum(p.amount_pesewas) FROM payments p WHERE p.school_id=i.school_id AND p.invoice_id=i.id
   AND NOT EXISTS (SELECT 1 FROM payment_reversals r WHERE r.school_id=p.school_id AND r.payment_id=p.id)),0)`;
 // Due = billed fee items plus charges minus discounts recorded against the invoice.
 const adjustedSql = `coalesce((SELECT sum(CASE a.kind WHEN 'charge' THEN a.amount_pesewas ELSE -a.amount_pesewas END) FROM invoice_adjustments a WHERE a.school_id=i.school_id AND a.invoice_id=i.id),0)`;
-const dueSql = `(i.total_pesewas+${adjustedSql})`;
+export const dueSql = `(i.total_pesewas+${adjustedSql})`;
 const adjustmentsJson = `coalesce((SELECT json_agg(json_build_object('id',a.id,'kind',a.kind,'label',a.label,'amountPesewas',a.amount_pesewas::float8,'reason',a.reason,'recordedAt',a.recorded_at) ORDER BY a.recorded_at) FROM invoice_adjustments a WHERE a.school_id=i.school_id AND a.invoice_id=i.id),'[]')`;
 // Arrears: what the learner still owes on invoices of earlier terms. Shown on the new bill; never moved between invoices.
 const arrearsSql = `coalesce((SELECT sum(${dueSql.replace(/\bi\./g,'o.')}-${paidSql.replace(/\bi\./g,'o.')}) FROM invoices o JOIN terms ot ON ot.school_id=o.school_id AND ot.id=o.term_id
