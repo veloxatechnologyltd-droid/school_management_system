@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Veloxa SmartSchool flyers</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #dce4f2; font-family: Arial, Helvetica, sans-serif; }
+  .flyer { width: 1080px; height: 1350px; position: relative; overflow: hidden; margin: 24px auto; color: #fff; background: #1449a8; }
+  .brand { display: flex; align-items: center; gap: 16px; font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
+  .mark { width: 54px; height: 54px; display: grid; place-items: center; border: 2px solid currentColor; border-radius: 15px; font-size: 35px; font-weight: 900; line-height: 1; }
+  .kicker { font-size: 25px; font-weight: 800; text-transform: uppercase; letter-spacing: .14em; }
+  h1, p { margin: 0; }
+  h1 { font-size: 112px; line-height: .98; letter-spacing: -.067em; font-weight: 900; }
+  .line { width: 80px; height: 6px; background: currentColor; }
+  .cta { display: inline-flex; align-items: center; justify-content: center; min-height: 83px; padding: 0 32px; border-radius: 14px; font-size: 30px; font-weight: 800; letter-spacing: -.02em; white-space: nowrap; }
+  .contact { font-size: 25px; font-weight: 700; white-space: nowrap; }
+
+  /* 1. The headteacher's daily view. */
+  #day .photo { position: absolute; left: 0; right: 0; bottom: 0; height: 670px; background: url('assets/headteacher.png') center 57% / cover; }
+  #day .top { position: absolute; inset: 0 0 auto; height: 740px; background: #1449a8; padding: 70px 72px 0; }
+  #day .kicker { margin-top: 116px; color: #dbe8ff; }
+  #day h1 { margin-top: 34px; max-width: 850px; }
+  #day .sub { margin-top: 34px; font-size: 36px; font-weight: 700; }
+  #day .bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 170px; background: #0b2d72; display: flex; align-items: center; justify-content: space-between; padding: 0 72px; }
+  #day .cta { background: #fff; color: #1449a8; }
+
+  /* 2. The fee ledger. */
+  #fees { background: #f8faff; color: #123d8d; }
+  #fees .blue-rail { position: absolute; left: 0; top: 0; width: 24px; height: 100%; background: #1449a8; }
+  #fees .photo { position: absolute; top: 0; right: 0; width: 46%; height: 100%; background: url('assets/fees.png') right center / cover; }
+  #fees .copy { position: absolute; inset: 0 46% 0 0; padding: 72px 38px 72px 72px; display: flex; flex-direction: column; }
+  #fees .brand { font-size: 25px; white-space: nowrap; }
+  #fees .kicker { margin-top: 150px; font-size: 22px; }
+  #fees h1 { margin-top: 35px; font-size: 112px; line-height: .98; }
+  #fees .line { margin-top: 48px; }
+  #fees .sub { margin-top: 30px; font-size: 36px; line-height: 1.24; font-weight: 700; }
+  #fees .bottom { margin-top: auto; }
+  #fees .cta { background: #1449a8; color: #fff; font-size: 27px; }
+  #fees .contact { margin-top: 24px; }
+
+  /* 3. A family-facing reason for the school to adopt it. */
+  #parents .photo { position: absolute; inset: 300px 0 0; background: url('assets/parent.png') center 59% / cover; }
+  #parents .header { position: absolute; inset: 0 0 auto; height: 700px; padding: 70px 72px 0; background: linear-gradient(#1449a8 0%, #1449a8 67%, rgba(20,73,168,0) 100%); }
+  #parents .kicker { margin-top: 86px; color: #dbe8ff; }
+  #parents h1 { margin-top: 30px; max-width: 900px; font-size: 106px; }
+  #parents .footer { position: absolute; left: 0; right: 0; bottom: 0; min-height: 230px; background: #0b2d72; padding: 35px 72px 40px; }
+  #parents .sub { font-size: 31px; line-height: 1.16; font-weight: 700; }
+  #parents .footer-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 28px; }
+  #parents .cta { background: #fff; color: #1449a8; min-height: 74px; font-size: 27px; }
+  #parents .contact { font-size: 25px; }
+</style>
+
+<article class="flyer" id="day" aria-label="Run the school. See the whole day.">
+  <div class="photo"></div>
+  <div class="top">
+    <div class="brand"><span class="mark">V</span> Veloxa SmartSchool</div>
+    <div class="kicker">For Ghanaian basic schools</div>
+    <h1>Run the school.<br>See the whole day.</h1>
+    <p class="sub">Registers. Fees. Report cards.</p>
+  </div>
+  <div class="bottom"><span class="cta">See it for your school</span><span class="contact">WhatsApp +233 54 495 4643</span></div>
+</article>
+
+<article class="flyer" id="fees" aria-label="Know what's owed.">
+  <div class="blue-rail"></div><div class="photo"></div>
+  <div class="copy">
+    <div class="brand"><span class="mark">V</span> Veloxa SmartSchool</div>
+    <div class="kicker">A clearer fee picture</div>
+    <h1>Know<br>what's<br>owed.</h1>
+    <div class="line"></div>
+    <p class="sub">Bills. Receipts.<br>Balances families can see.</p>
+    <div class="bottom"><span class="cta">See it for your school</span><p class="contact">WhatsApp +233 54 495 4643</p></div>
+  </div>
+</article>
+
+<article class="flyer" id="parents" aria-label="Keep parents in the loop.">
+  <div class="photo"></div>
+  <div class="header">
+    <div class="brand"><span class="mark">V</span> Veloxa SmartSchool</div>
+    <div class="kicker">A school parents can follow</div>
+    <h1>Keep parents<br>in the loop.</h1>
+  </div>
+  <div class="footer">
+    <p class="sub">Progress, report cards and fees<br>on their own phone.</p>
+    <div class="footer-row"><span class="cta">See it for your school</span><span class="contact">WhatsApp +233 54 495 4643</span></div>
+  </div>
+</article>
+</html>

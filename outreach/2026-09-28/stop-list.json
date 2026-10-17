@@ -19,5 +19,54 @@
     "reason": "550 5.1.1 address not found",
     "bounce_message_id": "1a0ec6a5a3f8af27",
     "recorded_at_utc": "2026-09-29 09:07:18 UTC"
+  },
+  {
+    "lead_id": "VSS-0046",
+    "recipient": "boatemaa429@gmail.com",
+    "reason": "550 5.1.1 address not found",
+    "bounce_message_id": "1a10b8035d0b96ce",
+    "recorded_at_utc": "2026-10-05 09:59:20 UTC"
+  },
+  {
+    "lead_id": "VSS-0044",
+    "recipient": "leaderslightinternational@gmail.com",
+    "reason": "550 5.1.1 address not found",
+    "bounce_message_id": "1a10b8026e1f8721",
+    "recorded_at_utc": "2026-10-05 09:59:20 UTC"
+  },
+  {
+    "lead_id": "VSS-0042",
+    "recipient": "loveprepsch@gmail.com",
+    "reason": "550 5.1.1 address not found",
+    "bounce_message_id": "1a10b801886e2771",
+    "recorded_at_utc": "2026-10-05 09:59:20 UTC"
+  },
+  {
+    "lead_id": "VSS-0040",
+    "recipient": "foothillsinternationalschool@gmail.com",
+    "reason": "550 5.1.1 address not found",
+    "bounce_message_id": "1a10b80091da3d14",
+    "recorded_at_utc": "2026-10-05 09:59:20 UTC"
+  },
+  {
+    "lead_id": "VSS-0028",
+    "recipient": "cceeroyal@gmail.com",
+    "reason": "550 5.1.1 address not found",
+    "bounce_message_id": "1a10b7fbd2656df7",
+    "recorded_at_utc": "2026-10-05 09:59:20 UTC"
+  },
+  {
+    "lead_id": "VSS-0027",
+    "recipient": "godblessacadem10@gmail.com",
+    "reason": "550 5.1.1 address not found",
+    "bounce_message_id": "1a10b7fba536b8c6",
+    "recorded_at_utc": "2026-10-05 09:59:20 UTC"
+  },
+  {
+    "lead_id": "VSS-0030",
+    "recipient": "jochar76@gmail.com",
+    "reason": "School contact said not ready now; pause outreach unless they re-engage",
+    "reply_message_id": "1a1366faf60ecf55",
+    "recorded_at_utc": "2026-10-14"
   }
 ]

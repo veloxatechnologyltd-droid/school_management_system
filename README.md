@@ -55,4 +55,10 @@ npm run test:browser
 npm audit
 ```
 
+Apply pending migrations to Supabase (preview first without `--apply`):
+
+```bash
+npm run db:migrate:supabase -- --apply
+```
+
 Checks use the disposable database and synthetic fixtures. API tests deliberately expire/revoke fixture sessions; run them before browser checks. Browser tests exercise school setup, admission review/enrolment, transfer/withdrawal history and reload, superseded future transfers, exports, guardian verification/scoped views/revocation, teacher grant/scoped-roster/revocation, and denied teacher administration. They launch API/web servers if absent and may reuse this project's already-running local servers. See STATUS.md for verified features and remaining milestone gates. CI builds and tests; it does not deploy. Local screenshots/downloads stay under `.local/`; failing browser traces stay under ignored `test-results/`.

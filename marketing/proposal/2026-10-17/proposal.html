@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Veloxa SmartSchool proposal</title>
+<!-- Two A4 pages, one sheet printed front and back. Print: scripts below, or Chrome "Save as PDF" with margins None and background graphics on. -->
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  :root { --blue: #1a5fd0; --deep: #0b2d72; --ink: #16233b; --muted: #55627a; --paper: #faf5e9; --tint: #e8f0fd; --line: #d9e2f1; --red: #c5221f; }
+  html, body { margin: 0; background: #cfd8e8; font-family: "Google Sans", Inter, Arial, Helvetica, sans-serif; color: var(--ink); }
+  .page { width: 210mm; height: 297mm; margin: 10mm auto; background: #fff; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+  @media print { html, body { background: #fff; } .page { margin: 0; break-after: page; } }
+  h1, h2, h3, p { margin: 0; }
+  .pad { padding: 0 15mm; }
+
+  .band { background: var(--blue); color: #fff; padding: 11mm 15mm 10mm; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 15px; letter-spacing: -.01em; }
+  .mark { width: 26px; height: 26px; display: grid; place-items: center; border: 2px solid currentColor; border-radius: 8px; font-size: 16px; font-weight: 900; }
+  .topline { display: flex; justify-content: space-between; align-items: center; }
+  .for { font-size: 11px; color: #dbe8ff; text-align: right; line-height: 1.5; }
+  .for b { color: #fff; display: inline-block; min-width: 62mm; border-bottom: 1px solid #9fbdf0; }
+  h1 { margin-top: 9mm; font-size: 35px; line-height: 1.06; letter-spacing: -.035em; font-weight: 900; }
+  h1 em { font-style: normal; color: #ffe08a; }
+  .lede { margin-top: 4.5mm; font-size: 13.5px; line-height: 1.45; color: #e7efff; max-width: 165mm; }
+
+  .kicker { font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--blue); }
+  h2 { font-size: 21px; letter-spacing: -.025em; line-height: 1.15; margin-top: 1.5mm; }
+
+  table.change { width: 100%; border-collapse: collapse; margin-top: 3.5mm; font-size: 11.6px; line-height: 1.38; }
+  .change th { text-align: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 0 0 2mm; border-bottom: 2px solid var(--ink); }
+  .change td { padding: 2.6mm 3mm 2.6mm 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .change td:first-child { font-weight: 800; width: 25mm; }
+  .change td.old { color: var(--muted); width: 50mm; }
+  .change td.new b { color: var(--blue); }
+
+  .shot { margin-top: 7mm; display: grid; grid-template-columns: 1fr 39mm; gap: 5mm; align-items: end; }
+  .shot figure { margin: 0; }
+  .shot img { display: block; width: 100%; border-radius: 8px; border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(11,45,114,.14); }
+  .shot .wide img { height: 84mm; object-fit: cover; object-position: top left; }
+  .shot .phone img { height: 84mm; object-fit: cover; object-position: top center; border-radius: 12px; }
+  figcaption { margin-top: 1.6mm; font-size: 9.5px; color: var(--muted); }
+  .p1foot { margin-top: auto; padding: 4mm 15mm 7mm; font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; }
+
+  /* Page 2 */
+  .offer { margin-top: 13mm; }
+  .zeros { margin-top: 5mm; display: grid; grid-template-columns: repeat(3, 1fr); gap: 3.5mm; }
+  .zero { background: var(--tint); border-radius: 10px; padding: 4mm 4mm 3.5mm; }
+  .zero strong { display: block; font-size: 27px; letter-spacing: -.04em; color: var(--deep); }
+  .zero span { font-size: 11.6px; line-height: 1.35; color: var(--ink); display: block; margin-top: 1mm; }
+
+  .earn { margin-top: 5mm; background: var(--deep); color: #fff; border-radius: 12px; padding: 5mm 6mm; display: grid; grid-template-columns: 1fr 70mm; gap: 6mm; align-items: center; }
+  .earn h3 { font-size: 17px; letter-spacing: -.02em; }
+  .earn p { margin-top: 2mm; font-size: 11.3px; line-height: 1.45; color: #dbe8ff; }
+  .earn p b { color: #fff; }
+  .earn table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .earn th { text-align: right; font-weight: 600; color: #a9c3f2; padding-bottom: 1.5mm; font-size: 9.5px; }
+  .earn th:first-child, .earn td:first-child { text-align: left; }
+  .earn td { text-align: right; padding: 1.4mm 0; border-top: 1px solid rgba(255,255,255,.16); }
+  .earn td strong { color: #ffe08a; }
+  .earn .note { font-size: 9px; color: #a9c3f2; margin-top: 1.5mm; line-height: 1.35; }
+
+  .objections { margin-top: 12mm; }
+  .qa { margin-top: 5mm; display: grid; grid-template-columns: 1fr 1fr; gap: 6mm 8mm; }
+  .qa div { border-top: 2px solid var(--blue); padding-top: 2mm; }
+  .qa h4 { margin: 0; font-size: 13px; }
+  .qa p { margin-top: 1.5mm; font-size: 12px; line-height: 1.42; color: #2c3a55; }
+
+  .close { margin-top: auto; background: var(--paper); border-top: 4px solid var(--blue); padding: 6mm 15mm 8mm; display: grid; grid-template-columns: 1fr 30mm; gap: 7mm; align-items: center; }
+  .close .big { font-size: 18px; font-weight: 900; letter-spacing: -.025em; line-height: 1.2; }
+  .close .big span { color: var(--red); }
+  .close .next { margin-top: 3mm; font-size: 11.5px; line-height: 1.5; }
+  .contact { margin-top: 3mm; display: flex; gap: 6mm; align-items: baseline; flex-wrap: wrap; }
+  .contact .pill { background: var(--blue); color: #fff; font-weight: 800; border-radius: 99px; padding: 2mm 5mm; font-size: 13px; }
+  .contact .who { font-size: 11px; color: var(--muted); }
+  .qr { text-align: center; font-size: 8.5px; color: var(--muted); line-height: 1.3; }
+  .qr img { width: 30mm; height: 30mm; display: block; margin-bottom: 1.5mm; }
+</style>
+
+<section class="page">
+  <div class="band">
+    <div class="topline">
+      <div class="brand"><span class="mark">V</span> Veloxa SmartSchool</div>
+      <div class="for">A proposal for <b>&nbsp;</b><br>For the Headteacher / Director</div>
+    </div>
+    <h1>Run your whole school from one phone.<br><em>It costs your school nothing, and it earns your school money every term.</em></h1>
+    <p class="lede">Veloxa SmartSchool runs registers, fees, report cards and parents for Ghanaian basic schools, from Nursery to JHS. It also tells the head in seconds what would normally take a week of asking around.</p>
+  </div>
+
+  <div class="pad" style="margin-top:7mm">
+    <div class="kicker">What changes from next week</div>
+    <h2>The office work you do by hand, done for you.</h2>
+    <table class="change">
+      <tr><th></th><th>Today</th><th>With SmartSchool</th></tr>
+      <tr><td>Attendance</td><td class="old">Register books that nobody adds up.</td><td class="new">Teachers mark the register on their phone in two minutes. You see <b>every class, and every child who keeps missing school</b>, before break.</td></tr>
+      <tr><td>Fees</td><td class="old">Ledgers, guesswork and arguments at the gate.</td><td class="new">Bills, numbered receipts and balances by class. You know <b>exactly who owes what</b>, and each parent sees their own statement.</td></tr>
+      <tr><td>Report cards</td><td class="old">A weekend of adding, ranking and rewriting.</td><td class="new">Teachers enter scores. <b>Totals, positions and grades work themselves out</b> with your school's own weighting. You check, publish and print.</td></tr>
+      <tr><td>Parents</td><td class="old">They find out at the end of term.</td><td class="new">Report cards, fee balance, progress and school notices <b>on the parent's own phone</b>.</td></tr>
+      <tr><td>Knowing your school</td><td class="old">Asking around, then waiting.</td><td class="new">Type a question: <i>"How much in fees is outstanding?" "Who is struggling in Basic 6?"</i> <b>The answer comes from your own records in seconds.</b></td></tr>
+    </table>
+
+    <div class="shot">
+      <figure class="wide"><img src="assets/head-home.webp" alt="Headteacher's Today page"><figcaption>The headteacher's Today page (a demo school with sample data).</figcaption></figure>
+      <figure class="phone"><img src="assets/parent-progress.webp" alt="Parent's progress view on a phone"><figcaption>What a parent sees.</figcaption></figure>
+    </div>
+  </div>
+  <div class="p1foot"><span>No computers needed. Teachers use the phones they already have.</span><span>Please turn over →</span></div>
+</section>
+
+<section class="page">
+  <div class="pad offer">
+    <div class="kicker">The offer</div>
+    <h2>Your school pays nothing. Not now, not later.</h2>
+    <div class="zeros">
+      <div class="zero"><strong>GH₵0</strong><span>Setup fee. We load your classes and learners from the Excel list you already have.</span></div>
+      <div class="zero"><strong>GH₵0</strong><span>Subscription. Registers, fees, report cards, notices and questions are free to the school.</span></div>
+      <div class="zero"><strong>GH₵0</strong><span>Training. We come to your school and get your staff started.</span></div>
+    </div>
+
+    <div class="earn">
+      <div>
+        <h3>And your school earns money.</h3>
+        <p>Parents who want extra help at home can buy the <b>Home Learning Pass, GH₵50 per child per term</b>: short lessons and practice every evening on the topics their child finds hard, built on your own teachers' term topics and approved by your teachers.</p>
+        <p><b>Your school receives about GH₵15 from every pass</b> (30%), paid each term with a statement of counts and amounts.</p>
+      </div>
+      <div>
+        <table>
+          <tr><th>Learners</th><th>Each term</th><th>Each year</th></tr>
+          <tr><td>200</td><td>GH₵900</td><td><strong>GH₵2,700</strong></td></tr>
+          <tr><td>400</td><td>GH₵1,800</td><td><strong>GH₵5,400</strong></td></tr>
+          <tr><td>800</td><td>GH₵3,600</td><td><strong>GH₵10,800</strong></td></tr>
+        </table>
+        <p class="note">If 3 in 10 families take the pass. Launch partner terms, after mobile money fees. Report cards, fee statements and notices stay free for every family.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="pad objections">
+    <div class="kicker">Before you say no</div>
+    <h2>Every reason to wait, answered.</h2>
+    <div class="qa">
+      <div><h4>"We can't afford it."</h4><p>There is nothing to afford. The school pays nothing, and the school is paid.</p></div>
+      <div><h4>"Our teachers are not computer people."</h4><p>If they can use WhatsApp, they can use this. Big buttons, plain English, on the phone in their pocket.</p></div>
+      <div><h4>"Our children don't have devices."</h4><p>They don't need any. Classwork stays on paper. Home learning runs on the parent's phone.</p></div>
+      <div><h4>"What about our records?"</h4><p>Your school is sealed off from every other school. Teachers see only their classes, parents only their own children, and children's names never go to the AI.</p></div>
+      <div><h4>"We are already managing."</h4><p>Managing costs your staff hours every week and leaves fees you can't see. This gives that time back.</p></div>
+      <div><h4>"What if it doesn't suit us?"</h4><p>Then you stop. There is no fee to lose and nothing to cancel.</p></div>
+    </div>
+  </div>
+
+  <div class="close">
+    <div>
+      <p class="big">Saying yes costs nothing.<br>Saying no costs <span>hours every week, fees you can't track, and money that could come to your school.</span></p>
+      <p class="next">Next step: a 15-minute look at a full demo school on your own phone, then we set up your school. We are signing our first partner schools now.</p>
+      <div class="contact"><span class="pill">WhatsApp or call +233 54 495 4643</span><span class="who">John Evans Okyere, Veloxa SmartSchool</span></div>
+    </div>
+    <div class="qr"><img src="qr.svg" alt="QR code to the Veloxa SmartSchool website">Scan to see it now</div>
+  </div>
+</section>
+</html>
