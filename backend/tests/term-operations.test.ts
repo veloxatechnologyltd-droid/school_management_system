@@ -44,6 +44,24 @@ test('school details are kept for report cards and receipts; empty clears',async
   assert.equal((await call('','PATCH',{name:current.name,version:kept.version,phone:'0240000000'},teacher)).status,403);
 });
 
+test('the headteacher sets a school logo every member can load; others cannot change it',async()=>{
+  // A 1x1 PNG.
+  const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  assert.equal((await call('')).body.logo_tag,null);
+  const image=(actor:any,id=school)=>fetch(`${base}/schools/${id}/logo`,{headers:{cookie:actor.cookie}});
+  assert.equal((await image(head)).status,404,'no logo yet');
+  assert.equal((await call('/logo','PUT',{logo:png},teacher)).status,403);assert.equal((await call('/logo','PUT',{logo:png},acct)).status,403);
+  assert.equal((await call('/logo','PUT',{logo:'data:image/svg+xml;base64,PHN2Zz4='})).status,400,'SVG is refused');
+  assert.equal((await call('/logo','PUT',{logo:'data:image/png;base64,'+'A'.repeat(98000)})).status,400,'too large');
+  const saved=(await call('/logo','PUT',{logo:png})).body;assert.match(saved.logo_tag,/^[0-9a-f]{12}$/);
+  assert.equal((await call('')).body.logo_tag,saved.logo_tag);assert.equal((await call('','GET',undefined,guardian)).body.logo_tag,saved.logo_tag);
+  for(const actor of [head,teacher,guardian,acct]){const r=await image(actor);assert.equal(r.status,200);assert.equal(r.headers.get('content-type'),'image/png');assert.equal(Buffer.from(await r.arrayBuffer()).subarray(1,4).toString(),'PNG');}
+  assert.equal((await fetch(`${base}/schools/${school}/logo`)).status,401,'signed-out visitors cannot load it');
+  assert.equal((await image(head,randomUUID())).status,404,'another school is unavailable');
+  assert.equal((await call('/logo','PUT',{logo:null})).body.logo_tag,null);assert.equal((await image(head)).status,404);
+  const actions=(await call('/audit?limit=50')).body.items.map((row:any)=>row.action);assert.ok(actions.includes('school.logo.updated')&&actions.includes('school.logo.removed'));
+});
+
 test('report cards carry attendance, conduct, remarks and the next term date; remarks lock with the report',async()=>{
   maths=(await ok('/assessment/subjects','POST',{name:'Mathematics'})).id;
   await ok('/assessment/policy','PUT',{caWeight:30,examWeight:70,bands:[{min:50,grade:'1',remark:'Pass'},{min:0,grade:'9',remark:'Lowest'}],sourceNote:'Ops policy'},head,200);

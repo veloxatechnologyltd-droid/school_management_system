@@ -2,15 +2,15 @@ import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { recallChild, rememberChild } from '../lib/familyChild';
 import { Card, Dialog, Empty, Icon, PageHeader, Pager, Pill, Stat, Tabs, currentTerm } from '../lib/ui';
+import { Receipt, ReceiptData } from './Receipt';
 
 type Term = { id: string; name: string; year_name: string; start_date?: string; end_date?: string };
 type ClassOption = { id: string; name: string; level: string; year_name: string };
 type FeeItem = { id: string; name: string; level: string | null; class_name: string | null; amount_pesewas: number };
 type Adjustment = { id: string; kind: 'discount' | 'charge'; label: string; amountPesewas: number; reason: string };
-type Invoice = { id: string; full_name: string; admission_number: string; class_name: string; total_pesewas: number; due_pesewas: number; paid_pesewas: number; balance_pesewas: number; arrears_pesewas: number; adjustments: Adjustment[] };
+type Invoice = { id: string; full_name: string; admission_number: string; class_name: string; total_pesewas: number; due_pesewas: number; paid_pesewas: number; balance_pesewas: number; arrears_pesewas: number; adjustments: Adjustment[]; last_payment_id: string | null };
 type Summary = { invoices: number; billedPesewas: number; collectedPesewas: number; outstandingPesewas: number };
 type ClassSummary = Summary & { classId: string; className: string };
-type Receipt = { receipt_number: number; amount_pesewas: number; method: string; reference: string | null; received_on: string; full_name: string; admission_number: string; term_name: string; school_name: string; school_address: string | null; school_phone: string | null; reversal_reason: string | null };
 
 export const cedis = (pesewas: number) => `GH₵ ${(pesewas / 100).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export function toPesewas(text: string) {
@@ -26,7 +26,7 @@ export function Finance({ schoolId, csrfToken, role }: { schoolId: string; csrfT
   const [items, setItems] = useState<FeeItem[]>([]); const [invoices, setInvoices] = useState<Invoice[]>([]); const [summary, setSummary] = useState<Summary | null>(null); const [byClass, setByClass] = useState<ClassSummary[]>([]);
   const [newItem, setNewItem] = useState({ name: '', amount: '', level: '' });
   const [pay, setPay] = useState<{ invoiceId: string; amount: string; method: string; reference: string; receivedOn: string } | null>(null);
-  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   // Bills chosen for one adjustment, kept across class filters within a term (id → learner name).
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [adjust, setAdjust] = useState<{ invoiceIds: string[]; kind: 'discount' | 'charge'; label: string; amount: string; reason: string } | null>(null);
@@ -68,9 +68,10 @@ export function Finance({ schoolId, csrfToken, role }: { schoolId: string; csrfT
   const generate = () => void act(async () => { const r = await send<{ created: number; alreadyInvoiced: number }>('/finance/invoices/generate', { termId, classId }); setMessage(`Created ${r.created} invoice(s); ${r.alreadyInvoiced} already existed.`); });
   const record = (e: FormEvent) => { e.preventDefault(); if (!pay) return; void act(async () => {
     const r = await send<{ id: string; receiptNumber: number }>('/finance/payments', { invoiceId: pay.invoiceId, amountPesewas: toPesewas(pay.amount), method: pay.method, receivedOn: pay.receivedOn, ...(pay.reference.trim() ? { reference: pay.reference } : {}) });
-    setPay(null); setMessage(`Payment recorded. Receipt no. ${r.receiptNumber}.`); setReceipt(await request<Receipt>(`/schools/${schoolId}/finance/payments/${r.id}/receipt`));
+    setPay(null); setMessage(`Payment recorded. Receipt no. ${r.receiptNumber}.`); await openReceipt(r.id);
   }); };
 
+  async function openReceipt(paymentId: string) { setReceipt(await request<ReceiptData>(`/schools/${schoolId}/finance/payments/${paymentId}/receipt`)); }
   const saveAdjustment = (e: FormEvent) => { e.preventDefault(); if (!adjust) return; void act(async () => {
     const body = { kind: adjust.kind, label: adjust.label, amountPesewas: toPesewas(adjust.amount), reason: adjust.reason }, what = adjust.kind === 'discount' ? 'Discount' : 'Charge';
     if (adjust.invoiceIds.length === 1) {
@@ -91,7 +92,7 @@ export function Finance({ schoolId, csrfToken, role }: { schoolId: string; csrfT
           <label>Applies to<select value={newItem.level} onChange={e => setNewItem({ ...newItem, level: e.target.value })}><option value="">All levels</option>{['Nursery', 'KG', 'Primary', 'JHS'].map(l => <option key={l} value={l}>{l}</option>)}<optgroup label="One class only">{classes.map(c => <option key={c.id} value={`class:${c.id}`}>{c.name} · {c.year_name}</option>)}</optgroup></select></label></div><button disabled={busy}>Add fee item</button></form>;
 
   const view3 = tab || (!loadedKey ? '' : byClass.length > 1 ? 'classes' : 'bills');
-  const rowActions = (inv: Invoice) => <>{inv.balance_pesewas > 0 && <button type="button" className="secondary" onClick={() => { setError(''); setMessage(''); setPay({ invoiceId: inv.id, amount: '', method: 'cash', reference: '', receivedOn: today }); }}>Record payment</button>}<button type="button" className="secondary" onClick={() => startAdjust([inv.id])}>Adjust</button></>;
+  const rowActions = (inv: Invoice) => <>{inv.balance_pesewas > 0 && <button type="button" className="secondary" onClick={() => { setError(''); setMessage(''); setPay({ invoiceId: inv.id, amount: '', method: 'cash', reference: '', receivedOn: today }); }}>Record payment</button>}<button type="button" className="secondary" onClick={() => startAdjust([inv.id])}>Adjust</button>{inv.last_payment_id && <button type="button" className="secondary" disabled={busy} onClick={() => { setError(''); setMessage(''); void openReceipt(inv.last_payment_id!).catch(e => setError((e as Error).message)); }}><Icon name="receipt_long"/>Receipts</button>}</>;
   const openClass = (id: string) => { setClassId(id); setOffset(0); setTab('bills'); };
   const paidShare = summary && summary.billedPesewas ? Math.round(summary.collectedPesewas / summary.billedPesewas * 100) : 0;
   const payingFor = pay && invoices.find(inv => inv.id === pay.invoiceId);
@@ -155,9 +156,9 @@ export function Finance({ schoolId, csrfToken, role }: { schoolId: string; csrfT
         <label>Reason<input value={adjust.reason} onChange={e => setAdjust({ ...adjust, reason: e.target.value })} required minLength={3} maxLength={500}/></label></div>
         <div className="actions"><button disabled={busy}>Save</button><button type="button" className="secondary" onClick={() => setAdjust(null)}>Cancel</button></div></form>
     </Dialog>}
-    {receipt && <Dialog title={`Receipt no. ${receipt.receipt_number}`} onClose={() => setReceipt(null)}>
+    {receipt && <Dialog wide title={`Receipt no. ${receipt.receipt_number}`} onClose={() => setReceipt(null)}>
       {messages}
-      <div className="receipt"><h3>Receipt no. {receipt.receipt_number}</h3><p>{receipt.school_name}{(receipt.school_address || receipt.school_phone) && <><br/>{[receipt.school_address, receipt.school_phone].filter(Boolean).join(' · ')}</>}<br/>Received from the parent of {receipt.full_name} ({receipt.admission_number}) for {receipt.term_name}<br/>Amount <strong>{cedis(receipt.amount_pesewas)}</strong> by {receipt.method.replace('_', ' ')}{receipt.reference ? ` (ref ${receipt.reference})` : ''} on {receipt.received_on}</p></div>
+      <Receipt schoolId={schoolId} r={receipt} onOpen={id => void openReceipt(id).catch(e => setError((e as Error).message))}/>
       <div className="actions"><button onClick={() => window.print()}><Icon name="print"/>Print receipt</button><button className="secondary" onClick={() => setReceipt(null)}>Close</button></div>
     </Dialog>}
   </section>;

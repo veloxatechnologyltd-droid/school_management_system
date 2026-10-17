@@ -59,10 +59,20 @@ test('payments issue sequential receipts, cannot overpay, and reversals need a r
   assert.equal((await call('/finance/payments','POST',{...body,operationId:randomUUID(),method:'cheque'},acct)).status,400);
   const second=await ok('/finance/payments',{invoiceId:invoice.id,amountPesewas:27550,method:'cash',receivedOn:today});assert.equal(second.receiptNumber,2);assert.equal(second.balancePesewas,0);
   const receipt=(await call(`/finance/payments/${first.body.id}/receipt`,'GET',undefined,acct)).body;assert.equal(receipt.receipt_number,1);assert.equal(receipt.school_name,'Finance school');assert.equal(receipt.amount_pesewas,20000);
+  // The printed receipt carries the bill it was paid against, what was paid before it, what is left, and who took the money.
+  const later=(await call(`/finance/payments/${second.id}/receipt`,'GET',undefined,acct)).body;
+  assert.deepEqual(later.lines.map((line:any)=>line.name),['PTA levy','Tuition']);assert.equal(later.class_name,'Primary 2 Gold');assert.equal(later.year_name,'Finance year');
+  assert.equal(later.invoice_total,47550);assert.equal(later.paid_before_pesewas,20000);assert.equal(later.balance_after_pesewas,0);assert.ok(later.recorded_by_name,'cashier name kept');
+  assert.deepEqual(later.history.map((row:any)=>[row.receipt_number,row.amount_pesewas,row.reversed]),[[1,20000,false],[2,27550,false]]);
+  assert.equal(receipt.paid_before_pesewas,0);assert.equal(receipt.balance_after_pesewas,27550);
+  assert.equal((await call(`/finance/invoices?termId=${term}`,'GET',undefined,acct)).body.items.find((row:any)=>row.id===invoice.id).last_payment_id,second.id,'the bill links to its latest receipt');
+  assert.equal((await call(`/finance/payments/${second.id}/receipt`,'GET',undefined,teacher)).status,403);
   assert.equal((await call(`/finance/payments/${first.body.id}/reverse`,'POST',{operationId:randomUUID(),reason:'Wrong learner'},acct)).status,403);
   assert.equal((await call(`/finance/payments/${first.body.id}/reverse`,'POST',{operationId:randomUUID(),reason:'x'},head)).status,400);
   await ok(`/finance/payments/${first.body.id}/reverse`,{reason:'Recorded against the wrong learner'},head);
   assert.equal((await call(`/finance/payments/${first.body.id}/reverse`,'POST',{operationId:randomUUID(),reason:'Second attempt'},head)).status,409);
+  const reprinted=(await call(`/finance/payments/${second.id}/receipt`,'GET',undefined,acct)).body;assert.equal(reprinted.paid_before_pesewas,0,'a reversed payment no longer counts as paid before');assert.equal(reprinted.balance_after_pesewas,20000);
+  const voided=(await call(`/finance/payments/${first.body.id}/receipt`,'GET',undefined,acct)).body;assert.equal(voided.reversal_reason,'Recorded against the wrong learner');assert.equal(voided.balance_after_pesewas,47550);assert.equal(voided.history[0].reversed,true);
   const after=(await call(`/finance/invoices?termId=${term}&outstandingOnly=true`,'GET',undefined,acct)).body;assert.equal(after.total,2);
   assert.equal(after.items.find((row:any)=>row.learner_id===kids[0]).balance_pesewas,20000);
   await assert.rejects(owner.query('DELETE FROM payments WHERE id=$1',[first.body.id]),/append-only/);await assert.rejects(owner.query('UPDATE invoices SET total_pesewas=1'),/append-only/);

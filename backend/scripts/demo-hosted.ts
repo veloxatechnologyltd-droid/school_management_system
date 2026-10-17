@@ -382,7 +382,7 @@ class Person {
   register(schoolName: string) { return this.auth('register', { name: this.account.name, schoolName, email: this.account.email, password: this.account.password }); }
   async session() { await pace(); const r = await fetch(`${API}/auth/session`, { headers: { cookie: this.cookie } }); return r.json(); }
   async call<T = any>(method: 'GET' | 'POST' | 'PUT' | 'PATCH', route: string, body?: Record<string, unknown>, key?: string): Promise<T> {
-    const plain = route.startsWith('/accounts') || route.startsWith('/assistant/') || route === '';
+    const plain = route.startsWith('/accounts') || route.startsWith('/assistant/') || route === '' || route === '/logo';
     const id = key ? uuidFrom(`${state.schoolId}|${RUN}|${key}`) : randomUUID();
     const payload = method === 'GET' ? undefined : JSON.stringify(plain ? body ?? {} : { operationId: id, ...body });
     for (let attempt = 1; ; attempt++) {
@@ -1069,6 +1069,10 @@ async function finish() {
   const head = await as('head');
   step('Progress shared with families, and AI switched on for this school only');
   await head.put('/assessment/sharing', { shareWithFamilies: true }, 'sharing');
+  step('School address, motto and crest for receipts and report cards');
+  const school = await head.get<{ name: string; version: number; motto: string | null; logo_tag: string | null }>('');
+  if (!school.motto) await head.call('PATCH', '', { name: school.name, version: school.version, address: 'P.O. Box KS 45, Kasoa, Central Region', phone: '024 000 0451', motto: 'Rise and shine in learning' });
+  if (!school.logo_tag) await head.put('/logo', { logo: `data:image/png;base64,${readFileSync(path.join(__dirname, 'assets/sunrise-crest.png')).toString('base64')}` });
   await head.put('/ai/settings', { enabled: true, monthlyRunCap: 300, acknowledgement: 'Sunrise International School (Demo) is a synthetic demonstration school with no real learners or staff. AI drafting and the Ask assistant are switched on here for demonstrations only, with a monthly cap of 300 questions.' }, 'ai-settings');
   step('Shared teacher and parent logins get their demo passwords (no forced change)');
   const personas: [string, string][] = [['teacher' + BASIC6, 'Class teacher (Basic 6)'], ['family0', 'Parent (two children)']];

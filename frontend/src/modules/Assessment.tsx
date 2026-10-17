@@ -4,6 +4,7 @@ import { Card, Dialog, Empty, Icon, Pill, Tabs, currentTerm } from '../lib/ui';
 import { caPartLabels, distribute, type CaPartValues } from '../lib/caParts';
 import { dayLabel } from '../lib/dates';
 import { CaSheet, WorkSet } from './CaSheet';
+import { SchoolLogo } from '../lib/logo';
 import { ClassWork } from './ClassWork';
 import { Mocks } from './Mocks';
 
@@ -252,7 +253,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     {tab === 'ca' && classId && termId && <WorkSet schoolId={schoolId} classId={classId} termId={termId} subjectId={workSubject}/>}
     {printing && <Dialog title="Report cards" wide onClose={() => setPrinting(null)}>
       <div className="actions"><button type="button" onClick={() => window.print()}>Print all ({printing.length})</button></div>
-      <div className="report-sheet">{printing.map(r => <ReportCard key={r.id} snapshot={r.snapshot}/>)}</div>
+      <div className="report-sheet">{printing.map(r => <ReportCard key={r.id} schoolId={schoolId} snapshot={r.snapshot}/>)}</div>
     </Dialog>}
     </>}
   </section>;
@@ -262,9 +263,9 @@ const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['
 const longDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 // The Ghanaian terminal report as printed for families: school header, scores, position, attendance, conduct and remarks.
 // Reports published before these details existed show what they hold.
-export function ReportCard({ snapshot: r }: { snapshot: Snapshot }) {
+export function ReportCard({ schoolId, snapshot: r }: { schoolId: string; snapshot: Snapshot }) {
   return <article className="report-card">
-    <header className="report-card-head"><h3>{r.school?.name ?? 'Terminal report'}</h3>{r.school?.motto && <p className="report-motto">{r.school.motto}</p>}{(r.school?.address || r.school?.phone) && <p>{[r.school.address, r.school.phone].filter(Boolean).join(' · ')}</p>}<p className="report-title">Terminal report · {r.term.name}{r.yearName ? `, ${r.yearName}` : ''}</p></header>
+    <header className="report-card-head"><SchoolLogo schoolId={schoolId} className="doc-logo report-logo"/><h3>{r.school?.name ?? 'Terminal report'}</h3>{r.school?.motto && <p className="report-motto">{r.school.motto}</p>}{(r.school?.address || r.school?.phone) && <p>{[r.school.address, r.school.phone].filter(Boolean).join(' · ')}</p>}<p className="report-title">Terminal report · {r.term.name}{r.yearName ? `, ${r.yearName}` : ''}</p></header>
     <dl className="report-facts">
       <div><dt>Name</dt><dd>{r.learner?.fullName}</dd></div><div><dt>Admission no.</dt><dd>{r.learner?.admissionNumber}</dd></div><div><dt>Class</dt><dd>{r.class.name}</dd></div>
       <div><dt>Position</dt><dd>{r.position ? `${ordinal(r.position)} of ${r.classSize}` : '–'}</dd></div><div><dt>Average</dt><dd>{r.average ?? '–'}</dd></div>
@@ -305,7 +306,7 @@ export function GuardianTerminalReports({ schoolId, childId: chosenChild }: { sc
       {error && <p role="alert">{error}</p>}
       {reportChild && !reports.length && <Empty title="No terminal reports yet" hint="They appear here once the school publishes them."/>}
       {reports.length > 1 && <div className="card-body"><Tabs label="Term" value={shown!.id} onChange={setWhich} options={reports.map(r => ({ id: r.id, label: termLabel(r) }))}/></div>}
-      {shown && <ReportCard key={shown.id} snapshot={shown.snapshot}/>}
+      {shown && <ReportCard key={shown.id} schoolId={schoolId} snapshot={shown.snapshot}/>}
     </Card>
   </section>;
 }

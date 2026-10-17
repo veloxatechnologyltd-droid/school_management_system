@@ -194,9 +194,32 @@ section.my-classes{padding:0}.my-classes .card-head h2{margin:0;font-size:16px}
 .print-sheet{display:none}.print-sheet table{width:100%;border-collapse:collapse}.print-sheet th,.print-sheet td{border:1px solid #333;padding:6px;text-align:left;height:28px;text-transform:none;letter-spacing:0;background:none}
 @media print{body *{visibility:hidden}.print-sheet,.print-sheet *,.receipt,.receipt *{visibility:visible}.receipt{position:absolute;left:0;top:0;width:100%}.print-sheet{display:block;position:absolute;left:0;top:0;width:100%;background:#fff}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-.receipt h3{display:none}@media print{.receipt h3{display:block}}
+/* Printed school documents (receipt; report cards share the heading): logo, school, title on the right. */
+.doc-head{display:flex;align-items:center;gap:14px;padding-bottom:12px;border-bottom:2px solid var(--accent-deep);flex-wrap:wrap}
+.doc-logo{width:64px;height:64px;object-fit:contain;flex:none}
+.doc-school{flex:1 1 220px;min-width:0}.doc-school h3{margin:0;font-size:19px;letter-spacing:-.01em;color:var(--accent-deep)}.doc-school p{margin:2px 0;font-size:13px;color:var(--ink-2)}
+.doc-title{display:grid;gap:2px;text-align:right;font-size:13px;color:var(--ink-2)}.doc-title strong{font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink)}
+.doc-void{margin:10px 0 0;padding:8px 12px;border:1px solid var(--critical-line);background:var(--critical-soft);color:var(--critical);border-radius:8px;font-weight:600}
+.doc-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px 16px;margin:12px 0}
+.doc-facts div,.doc-sum div{display:flex;justify-content:space-between;gap:8px;min-width:0}.doc-facts div{flex-direction:column;justify-content:flex-start;gap:2px}
+.doc-facts dt,.doc-sum dt{color:var(--ink-3);font-size:13px;font-weight:600}.doc-facts dd,.doc-sum dd{margin:0;overflow-wrap:anywhere}.doc-facts dd{font-weight:600}
+.doc-body{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(200px,1fr);gap:16px;align-items:start}
+@media (max-width:620px){.doc-body{grid-template-columns:1fr}.doc-title{text-align:left}}
+.doc-table{width:100%;border-collapse:collapse;font-size:14px}.doc-table th,.doc-table td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}.doc-table th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+.doc-table .num{text-align:right}.doc-total td{font-weight:700;border-top:2px solid var(--line-strong);border-bottom:0}
+.doc-sum{display:grid;gap:8px;margin:0;padding:12px 14px;border:1px solid var(--line-strong);border-radius:10px;font-variant-numeric:tabular-nums}
+.doc-paid{padding:6px 0;border-block:1px solid var(--line)}.doc-paid dt{color:var(--ink)!important;font-size:14px!important}.doc-paid dd{font-size:18px;font-weight:800;color:var(--positive)}
+.doc-words{margin:14px 0 4px;padding:8px 12px;background:var(--sunken);border-radius:8px;font-weight:600}.doc-words span{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+.doc-method{margin:4px 0 12px;font-size:14px;color:var(--ink-2)}
+.doc-history{margin:4px 0 12px}.doc-history caption{text-align:left;font-weight:700;font-size:14px;padding:4px 0}.doc-current td{font-weight:700}.doc-history .link-button{font-size:inherit;min-height:34px}@media print{.doc-history .link-button{min-height:0}}.receipt{min-width:0;max-width:100%}@media (max-width:480px){.doc-history th:nth-child(3),.doc-history td:nth-child(3){display:none}.doc-table th,.doc-table td{padding:6px 4px}}
+.doc-sign{display:grid;grid-template-columns:1fr 1fr 120px;gap:20px;align-items:end;margin-top:28px;font-size:13px;color:var(--ink-3)}
+.doc-line{display:block;min-height:22px;border-bottom:1px solid var(--ink-2);margin-bottom:4px;color:var(--ink);font-size:14px}
+.doc-stamp{height:80px;border:1px dashed var(--line-strong);border-radius:50%;display:grid;place-items:center;text-align:center}
+@media (max-width:620px){.doc-sign{grid-template-columns:1fr 1fr}.doc-stamp{display:none}}
+.doc-printed{font-size:12px;color:var(--ink-3);margin:14px 0 0}
+@media print{.dialog-layer,.dialog,.dialog-body{position:static!important;display:block!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;padding:0!important}.receipt{padding:8mm;font-size:13px}.receipt .link-button{color:inherit;text-decoration:none}.doc-words{background:none;border:1px solid #999}.doc-sign{grid-template-columns:1fr 1fr 120px}.doc-stamp{display:grid}}
 .report-card{padding:18px 22px;border-bottom:1px solid var(--line)}.report-card:last-child{border-bottom:0}
-.report-card-head{text-align:center;margin-bottom:12px}.report-card-head h3{margin:0;font-size:20px}.report-card-head p{margin:2px 0;color:var(--ink-2)}.report-motto{font-style:italic}.report-title{font-weight:700;color:var(--ink)!important;margin-top:8px!important}
+.report-card-head{text-align:center;margin-bottom:12px}.report-card-head h3{margin:0;font-size:20px}.report-card-head p{margin:2px 0;color:var(--ink-2)}.report-motto{font-style:italic}.report-logo{display:block;margin:0 auto 6px;width:72px;height:72px}.report-title{font-weight:700;color:var(--ink)!important;margin-top:8px!important}
 .report-facts,.report-remarks{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 16px;margin:10px 0}.report-remarks{grid-template-columns:1fr}
 .report-facts div,.report-remarks div{display:flex;flex-wrap:wrap;gap:0 8px;min-width:0}.report-facts dt,.report-remarks dt{font-weight:600;color:var(--ink-2);flex:none}.report-facts dd,.report-remarks dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .card-actions{padding:12px 22px}
@@ -325,6 +348,8 @@ td .link-button{display:inline-flex;align-items:center;min-height:40px;text-alig
 .sidebar .brand{color:var(--side-text);border-bottom-color:var(--side-line)}
 .sidebar .brand-text span{color:var(--side-muted)}.sidebar .brand-text span::before{background:#9ec0ff}
 .sidebar .logo{box-shadow:none}
+.sidebar .school-mark{background:#fff;border-radius:10px;padding:3px}
+.logo-setting{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px}.logo-setting label{margin:0 0 10px}.logo-preview{width:96px;height:96px;flex:none;display:grid;place-items:center;border:1px dashed var(--line-strong);border-radius:12px;text-align:center;padding:6px}.logo-preview .doc-logo{width:80px;height:80px}
 .sidebar .school-picker{color:var(--side-muted)}
 .sidebar nav a{color:var(--side-text)}.sidebar nav a .icon{color:#dbe5f8}
 .sidebar nav a:hover{background:var(--side-hover);color:var(--side-text)}

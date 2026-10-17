@@ -1,5 +1,7 @@
 import { Pool } from 'pg';
 import { randomBytes, randomUUID, scryptSync } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { localConfig } from '../src/core/database';
 import { demoQuestionSets, playDemoWeek } from './demo-practice';
 
@@ -13,6 +15,9 @@ const PASSWORD = 'Demo-school-2026!';
 const SCHOOL = '50000000-0000-4000-8000-000000000001';
 const SCHOOL_NAME = 'Sunrise International School';
 const DOMAIN = 'sunrise.demo';
+// Printed on receipts and report cards. The crest is a made-up demo image (scripts/assets/sunrise-crest.png).
+const SCHOOL_DETAILS = { address: 'P.O. Box KS 45, Kasoa, Central Region', phone: '024 000 0451', motto: 'Rise and shine in learning' };
+const demoLogo = () => `data:image/png;base64,${readFileSync(path.join(__dirname, 'assets/sunrise-crest.png')).toString('base64')}`;
 
 // ---------------------------------------------------------------- deterministic randomness
 let seed = 20260904;
@@ -127,7 +132,7 @@ async function main() {
     const client = await owner.connect();
     try {
       await client.query('BEGIN');
-      await client.query('INSERT INTO schools(id,name) VALUES($1,$2)', [SCHOOL, SCHOOL_NAME]);
+      await client.query('INSERT INTO schools(id,name,address,phone,motto,logo) VALUES($1,$2,$3,$4,$5,$6)', [SCHOOL, SCHOOL_NAME, SCHOOL_DETAILS.address, SCHOOL_DETAILS.phone, SCHOOL_DETAILS.motto, demoLogo()]);
       const addUser = async (name: string, email: string, role: string, phone: string | null) => {
         const userId = randomUUID(), membershipId = randomUUID();
         await client.query('INSERT INTO users(id,display_name,synthetic_login,password_hash,phone) VALUES($1,$2,$3,$4,$5)', [userId, name, email, hash, phone]);

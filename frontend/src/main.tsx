@@ -6,6 +6,7 @@ import { forgetChats } from './lib/chatStore';
 import { Mfa } from './modules/Mfa';
 import { PlatformAdmin } from './modules/PlatformAdmin';
 import { Icon, PageHeader, Tabs } from './lib/ui';
+import { SchoolLogo, setLogoTag, shrinkLogo } from './lib/logo';
 // Local synthetic hints show only on the dev server, not against the cloud database (dev:cloud) or the demo school (dev:demo).
 const LOCAL=import.meta.env.DEV&&!['cloud','demo'].includes(import.meta.env.VITE_APP_MODE);
 // Demo mode (npm run dev:demo) shows the production sign-in, prefilled with the demo headteacher.
@@ -120,7 +121,7 @@ function ParentsWork({schoolId,csrfToken,role,sub}:ModuleProps&{sub?:string}) {
 // Section addresses from the earlier layouts keep working (Settings steps that became pages are mapped below).
 const legacyIds:Record<string,string>={learning:'assessment',school:'settings',teaching:'settings',promotion:'students',learners:'students',guardians:'parents',topics:'curriculum'};
 const movedFromSettings:Record<string,string>={classes:'classes',staff:'staff',assignments:'teachers',fees:'accounts'};
-type School = {id:string;name:string;role:string;version:number;address?:string|null;phone?:string|null;motto?:string|null;readOnly?:boolean};
+type School = {id:string;name:string;role:string;version:number;address?:string|null;phone?:string|null;motto?:string|null;logo_tag?:string|null;readOnly?:boolean};
 const detailsOf=(s:School)=>({address:s.address??'',phone:s.phone??'',motto:s.motto??''});
 type Session = {displayName:string;csrfToken:string;schools:School[];platformAdmin:boolean;contentRoles:string[];mustChangePassword:boolean;mfaRequired:boolean;mfaEnrolled:boolean;mfaVerified:boolean};
 type AuditPage = {items:Audit[];total:number};
@@ -137,6 +138,7 @@ function App() {
   const [name,setName] = useState('');
   const [details,setDetails] = useState({address:'',phone:'',motto:''});
   const [status,setStatus] = useState('');
+  const [logoStatus,setLogoStatus] = useState('');
   const [busy,setBusy] = useState(false);
   const [fullName,setFullName] = useState('');
   const [schoolName,setSchoolName] = useState('');
@@ -148,11 +150,11 @@ function App() {
   const selectionEpoch=useRef(0);
   async function selectSchool(id:string) {
     const epoch=++selectionEpoch.current;
-    setSchool(null);setAudit([]);setAuditTotal(0);setName('');setStatus('');
+    setSchool(null);setAudit([]);setAuditTotal(0);setName('');setStatus('');setLogoStatus('');
     try {
       const current = await request<School>(`/schools/${id}`);
       if(epoch!==selectionEpoch.current)return;
-      setSchool(current);setName(current.name);setDetails(detailsOf(current));
+      setLogoTag(current.id,current.logo_tag??null);setSchool(current);setName(current.name);setDetails(detailsOf(current));
       if(current.role==='headteacher') {const events=await request<AuditPage>(`/schools/${id}/audit`);if(epoch===selectionEpoch.current){setAudit(events.items);setAuditTotal(events.total);}}
     } catch(error) {
       if(epoch!==selectionEpoch.current)return;
@@ -191,9 +193,17 @@ function App() {
     event.preventDefault();if(!school||!session)return;setBusy(true);setStatus('Saving…');
     try {
       const saved = await request<School>(`/schools/${school.id}`,{method:'PATCH',headers:{'x-csrf-token':session.csrfToken},body:JSON.stringify({name,...details,version:school.version})});
-      setSchool({...saved,role:school.role});setName(saved.name);setDetails(detailsOf(saved));setSession({...session,schools:session.schools.map(s=>s.id===saved.id?{...s,name:saved.name}:s)});
+      setSchool({...saved,role:school.role,logo_tag:school.logo_tag});setName(saved.name);setDetails(detailsOf(saved));setSession({...session,schools:session.schools.map(s=>s.id===saved.id?{...s,name:saved.name}:s)});
       {const events=await request<AuditPage>(`/schools/${school.id}/audit`);setAudit(events.items);setAuditTotal(events.total);}setStatus('Saved. School details are up to date.');
     } catch(error) {setStatus((error as Error).message);} finally {setBusy(false);}
+  }
+  async function changeLogo(file:File|null) {
+    if(!school||!session)return;setBusy(true);setLogoStatus(file?'Saving logo…':'Removing logo…');
+    try {
+      const logo=file?await shrinkLogo(file):null;
+      const saved=await request<{logo_tag:string|null}>(`/schools/${school.id}/logo`,{method:'PUT',headers:{'x-csrf-token':session.csrfToken},body:JSON.stringify({logo})});
+      setLogoTag(school.id,saved.logo_tag);setSchool({...school,logo_tag:saved.logo_tag});setLogoStatus(file?'Logo saved. It now prints on receipts and report cards.':'Logo removed.');
+    } catch(error) {setLogoStatus((error as Error).message);} finally {setBusy(false);}
   }
   async function moreAudit() {
     if(!school)return;
@@ -214,7 +224,11 @@ function App() {
   if(session.mustChangePassword)return <main className="login"><p className="brand"><img className="logo" src="/brand/mark.svg" alt="Veloxa SmartSchool" /></p><h1>Choose a new password</h1><p>Your account was created with a temporary password. Choose your own to continue (at least 12 characters).</p><form onSubmit={changePassword}><label>Temporary password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label><label>New password<input type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={e=>setNewPassword(e.target.value)} required/></label><button disabled={busy}>{busy?'Saving…':'Save new password'}</button></form><p role="status">{status}</p></main>;
   if(session.mfaRequired&&!session.mfaVerified)return <Mfa csrfToken={session.csrfToken} enrolled={session.mfaEnrolled} onDone={restore} onSignOut={()=>void signOut()}/>;
   const detailsChanged=!!school&&(name!==school.name||JSON.stringify(details)!==JSON.stringify(detailsOf(school)));
-  const schoolDetails=school&&<><section><h2>School details</h2>{school.role==='headteacher'?<form onSubmit={save}><label>School name<input value={name} minLength={3} maxLength={120} onChange={e=>setName(e.target.value)} required/></label><label>Address (printed on report cards and receipts)<input value={details.address} maxLength={200} onChange={e=>setDetails({...details,address:e.target.value})} placeholder="P.O. Box 12, Kasoa, Central Region"/></label><label>Phone<input value={details.phone} maxLength={40} onChange={e=>setDetails({...details,phone:e.target.value})} placeholder="024 123 4567"/></label><label>Motto<input value={details.motto} maxLength={120} onChange={e=>setDetails({...details,motto:e.target.value})}/></label><div className="actions"><button disabled={busy||!detailsChanged}>{busy?'Saving…':'Save details'}</button><button className="secondary" type="button" disabled={busy} onClick={()=>selectSchool(school.id).catch(error=>setStatus(error.message))}>Reload details</button></div><p className="muted">{detailsChanged?'Unsaved changes':`Saved version ${school.version}`}</p></form>:<p>School details are maintained by the headteacher.</p>}<p role="status" aria-live="polite">{status}</p></section></>;
+  const schoolDetails=school&&<><section><h2>School details</h2>{school.role==='headteacher'?<form onSubmit={save}><label>School name<input value={name} minLength={3} maxLength={120} onChange={e=>setName(e.target.value)} required/></label><label>Address (printed on report cards and receipts)<input value={details.address} maxLength={200} onChange={e=>setDetails({...details,address:e.target.value})} placeholder="P.O. Box 12, Kasoa, Central Region"/></label><label>Phone<input value={details.phone} maxLength={40} onChange={e=>setDetails({...details,phone:e.target.value})} placeholder="024 123 4567"/></label><label>Motto<input value={details.motto} maxLength={120} onChange={e=>setDetails({...details,motto:e.target.value})}/></label><div className="actions"><button disabled={busy||!detailsChanged}>{busy?'Saving…':'Save details'}</button><button className="secondary" type="button" disabled={busy} onClick={()=>selectSchool(school.id).catch(error=>setStatus(error.message))}>Reload details</button></div><p className="muted">{detailsChanged?'Unsaved changes':`Saved version ${school.version}`}</p></form>:<p>School details are maintained by the headteacher.</p>}<p role="status" aria-live="polite">{status}</p></section>
+    {school.role==='headteacher'&&<section><h2>School logo</h2><p className="card-hint">Printed on receipts and report cards and shown at the top of the menu. A square PNG with a clear background looks best; it is shrunk to 256 pixels.</p>
+      <div className="logo-setting"><div className="logo-preview">{school.logo_tag?<SchoolLogo schoolId={school.id} className="doc-logo"/>:<span className="muted">No logo yet</span>}</div>
+        <div><label>{school.logo_tag?'Choose a new logo':'Choose a logo'}<input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void changeLogo(file);}}/></label>
+        {school.logo_tag&&<button type="button" className="secondary" disabled={busy} onClick={()=>void changeLogo(null)}>Remove logo</button>}</div></div><p role="status" aria-live="polite">{logoStatus}</p></section>}</>;
   const recentChanges=school&&<section><h2>Recent changes</h2><AuditExport key={school.id} schoolId={school.id} csrfToken={session.csrfToken}/>{audit.length?<><ul className="history">{audit.map(item=><li key={item.id}><strong>{({"school.details.updated":"School details saved","audit.export.requested":"Audit export requested"} as Record<string,string>)[item.action]??item.action.replaceAll("."," ")}</strong><span>{item.metadata.version?`Version ${item.metadata.version} · `:""}{new Date(item.created_at).toLocaleString('en-GH',{timeZone:'Africa/Accra'})}</span></li>)}</ul>{audit.length<auditTotal&&<p>Showing {audit.length} of {auditTotal} changes. <button type="button" className="secondary" onClick={()=>void moreAudit()}>Show older changes</button></p>}</>:<p>No changes recorded yet.</p>}</section>;
   const sid=school?.id??'',csrf=session.csrfToken,role=school?.role??'';
   const contentRoles=session.contentRoles??[],showContent=contentRoles.length>0&&(!school||tab.split('/')[0]==='content');
@@ -266,7 +280,7 @@ function App() {
     <PageTitle title={`${showContent?'Content library':learnerPage?'Student':current?.id==='settings'?`Settings · ${setting.label}`:current?.label??'Home'} · ${school?.name??'Veloxa SmartSchool'}`}/>
     <a href="#main" className="skip-link" onClick={e=>{e.preventDefault();document.getElementById('main')?.focus();}}>Skip to content</a>
     <aside className={menuOpen?'sidebar open':'sidebar'}>
-      <a href="#/" className="brand"><img className="logo" src="/brand/mark-white.svg" alt="" /><span className="brand-text"><strong>{school?.name??'Veloxa SmartSchool'}</strong><span>{roleName||'Signed in'}</span></span></a>
+      <a href="#/" className="brand">{school?.logo_tag?<SchoolLogo schoolId={school.id} className="logo school-mark"/>:<img className="logo" src="/brand/mark-white.svg" alt="" />}<span className="brand-text"><strong>{school?.name??'Veloxa SmartSchool'}</strong><span>{roleName||'Signed in'}</span></span></a>
       {session.schools.length>1&&<label className="school-picker">School<select value={school?.id??''} disabled={busy} onChange={e=>{setBusy(true);selectSchool(e.target.value).catch(error=>setStatus(error.message)).finally(()=>setBusy(false));}}>{!school&&<option value="">Loading…</option>}{session.schools.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
       {school&&<nav aria-label="Sections"><div className="nav-scroll">{groups.filter(g=>!g.pinned).map(navGroup)}</div>{groups.some(g=>g.pinned)&&<div className="nav-pinned">{groups.filter(g=>g.pinned).map(g=>navGroup({...g,group:''}))}</div>}</nav>}
       {contentRoles.length>0&&<nav aria-label="Content"><div className="nav-section">{school&&<p className="nav-group">Content team</p>}<a href="#/content" aria-current={showContent?'page':undefined}><Icon name="library_books"/><span className="label">Content library</span></a></div></nav>}

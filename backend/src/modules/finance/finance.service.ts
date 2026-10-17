@@ -61,7 +61,8 @@ export class FinanceService {
     const from = `FROM invoices i JOIN learners l ON l.school_id=i.school_id AND l.id=i.learner_id JOIN class_sections c ON c.school_id=i.school_id AND c.id=i.class_id`;
     const having = query.outstandingOnly ? ` AND ${dueSql} > ${paidSql}` : '';
     const total = (await client.query(`SELECT count(*) ${from} WHERE ${filter}${having}`,values)).rows[0].count;
-    const items = (await client.query(`SELECT i.id,i.learner_id,l.full_name,l.admission_number,c.name AS class_name,i.total_pesewas::float8 AS total_pesewas,${dueSql}::float8 AS due_pesewas,${paidSql}::float8 AS paid_pesewas,${arrearsSql}::float8 AS arrears_pesewas,i.lines,${adjustmentsJson} AS adjustments ${from} WHERE ${filter}${having} ORDER BY l.full_name,i.id LIMIT $5 OFFSET $6`,[...values,query.limit,query.offset])).rows
+    const items = (await client.query(`SELECT i.id,i.learner_id,l.full_name,l.admission_number,c.name AS class_name,i.total_pesewas::float8 AS total_pesewas,${dueSql}::float8 AS due_pesewas,${paidSql}::float8 AS paid_pesewas,${arrearsSql}::float8 AS arrears_pesewas,i.lines,${adjustmentsJson} AS adjustments,
+      (SELECT p.id FROM payments p WHERE p.school_id=i.school_id AND p.invoice_id=i.id ORDER BY p.receipt_number DESC LIMIT 1) AS last_payment_id ${from} WHERE ${filter}${having} ORDER BY l.full_name,i.id LIMIT $5 OFFSET $6`,[...values,query.limit,query.offset])).rows
       .map(row => ({...row,balance_pesewas:row.due_pesewas - row.paid_pesewas}));
     return {items,total:Number(total),limit:query.limit,offset:query.offset};
   }
@@ -73,7 +74,7 @@ export class FinanceService {
       const balance = invoice.total - invoice.paid;
       if (body.amountPesewas > balance) throw new ConflictException(`Payment is more than the balance of ${balance} pesewas`);
       const receipt = (await client.query('INSERT INTO receipt_counters(school_id,next_number) VALUES($1,2) ON CONFLICT(school_id) DO UPDATE SET next_number=receipt_counters.next_number+1 RETURNING next_number-1 AS number',[actor.schoolId])).rows[0].number as number;
-      const row = (await client.query('INSERT INTO payments(id,school_id,invoice_id,amount_pesewas,method,reference,received_on,receipt_number,recorded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,receipt_number',[randomUUID(),actor.schoolId,body.invoiceId,body.amountPesewas,body.method,body.reference?.trim() ?? null,body.receivedOn,receipt,actor.membershipId])).rows[0];
+      const row = (await client.query('INSERT INTO payments(id,school_id,invoice_id,amount_pesewas,method,reference,received_on,receipt_number,recorded_by,recorded_by_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,receipt_number',[randomUUID(),actor.schoolId,body.invoiceId,body.amountPesewas,body.method,body.reference?.trim() ?? null,body.receivedOn,receipt,actor.membershipId,actor.displayName?.trim() || null])).rows[0];
       await audit(client,actor,'finance.payment.recorded',row.id,{amountPesewas:body.amountPesewas,method:body.method,receiptNumber:receipt});
       return {id:row.id,receiptNumber:row.receipt_number,balancePesewas:balance - body.amountPesewas};
     });
@@ -127,14 +128,24 @@ export class FinanceService {
       return {reversed:true};
     });
   }
+  // Paid before = earlier receipts on the same bill that are not reversed, so a reprint keeps its figures.
+  // The bill total is today's (it includes any later discount or charge).
   async receipt(client: PoolClient, schoolId: string, paymentId: string) {
-    const row = (await client.query(`SELECT p.id,p.receipt_number,p.amount_pesewas::float8 AS amount_pesewas,p.method,p.reference,p.received_on::text,p.recorded_at,
-        l.full_name,l.admission_number,t.name AS term_name,s.name AS school_name,s.address AS school_address,s.phone AS school_phone,${dueSql}::float8 AS invoice_total,r.reason AS reversal_reason
+    const row = (await client.query(`SELECT p.id,p.invoice_id,p.receipt_number,p.amount_pesewas::float8 AS amount_pesewas,p.method,p.reference,p.received_on::text,p.recorded_at,p.recorded_by_name,
+        l.full_name,l.admission_number,t.name AS term_name,ay.name AS year_name,c.name AS class_name,s.name AS school_name,s.address AS school_address,s.phone AS school_phone,s.motto AS school_motto,
+        ${dueSql}::float8 AS invoice_total,i.lines,${adjustmentsJson} AS adjustments,${arrearsSql}::float8 AS arrears_pesewas,r.reason AS reversal_reason,
+        coalesce((SELECT sum(e.amount_pesewas) FROM payments e WHERE e.school_id=p.school_id AND e.invoice_id=p.invoice_id AND e.receipt_number<p.receipt_number
+          AND NOT EXISTS (SELECT 1 FROM payment_reversals x WHERE x.school_id=e.school_id AND x.payment_id=e.id)),0)::float8 AS paid_before_pesewas
       FROM payments p JOIN invoices i ON i.school_id=p.school_id AND i.id=p.invoice_id JOIN learners l ON l.school_id=i.school_id AND l.id=i.learner_id
-      JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id JOIN schools s ON s.id=p.school_id
+      JOIN terms t ON t.school_id=i.school_id AND t.id=i.term_id JOIN academic_years ay ON ay.school_id=t.school_id AND ay.id=t.academic_year_id
+      JOIN class_sections c ON c.school_id=i.school_id AND c.id=i.class_id JOIN schools s ON s.id=p.school_id
       LEFT JOIN payment_reversals r ON r.school_id=p.school_id AND r.payment_id=p.id WHERE p.school_id=$1 AND p.id=$2`,[schoolId,paymentId])).rows[0];
     if (!row) throw new NotFoundException('Payment unavailable');
-    return row;
+    const history = (await client.query(`SELECT p.id,p.receipt_number,p.amount_pesewas::float8 AS amount_pesewas,p.method,p.received_on::text,
+        EXISTS (SELECT 1 FROM payment_reversals r WHERE r.school_id=p.school_id AND r.payment_id=p.id) AS reversed
+      FROM payments p WHERE p.school_id=$1 AND p.invoice_id=$2 ORDER BY p.receipt_number`,[schoolId,row.invoice_id])).rows;
+    const {invoice_id,...receipt} = row;
+    return {...receipt,balance_after_pesewas:row.invoice_total - row.paid_before_pesewas - (row.reversal_reason ? 0 : row.amount_pesewas),history};
   }
   async summary(client: PoolClient, schoolId: string, termId: string) {
     await this.term(client,schoolId,termId);
