@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { localConfig } from '../src/core/database';
 import { demoQuestionSets, playDemoWeek } from './demo-practice';
+import { playApplications } from './demo-admissions';
 
 // Loads a realistic Ghanaian basic school into the local demo database (LOCAL_DB_NAME=school_demo) for client
 // demonstrations. Accounts and the school row are inserted directly; everything else goes through the running API
@@ -182,6 +183,7 @@ async function main() {
       const a = await head.post('/admissions', { fullName: name, classId: classes[[2, 4, 10, 5][i]!]!.id, startDate: addDays(TODAY, 14), admissionNumber: `SIS/${Y}/A${String(i + 1).padStart(3, '0')}` });
       if (i < 2) await head.post(`/admissions/${a.id}/transition`, { version: a.version, action: 'review' });
     }
+    await playApplications(who => who === 'desk' ? frontdesk : head, c => classes[c]!.id, addDays(TODAY, 14), i => `SIS/${Y}/A${String(i + 5).padStart(3, '0')}`);
 
     step('Assigning class teachers');
     for (const [i, c] of classes.entries()) await head.post('/teaching/assignments', { classId: c.id, teacherMembershipId: membership[`teacher${i}`], startDate: yearStart, endDate: yearEnd, reason: `Class teacher for ${c.name}, approved at the staff meeting` });

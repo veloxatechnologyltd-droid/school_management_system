@@ -2,7 +2,7 @@ import { Body,Controller,Get,Param,ParseUUIDPipe,Post,Query,Req } from '@nestjs/
 import { Request } from 'express';
 import { Access } from '../../core/access';
 import { LearnersService } from './learners.service';
-import { AdmissionDto,CensusDto,ClassDto,ClassPageDto,LearnerSexDto,PageDto,TransferDto,TransitionDto,WithdrawalDto,YearDto } from './learners.dto';
+import { AdmissionDto,AdmissionNoteDto,AdmissionPageDto,CensusDto,ClassDto,ClassPageDto,LearnerSexDto,PageDto,TransferDto,TransitionDto,WithdrawalDto,YearDto } from './learners.dto';
 const staff=['headteacher','frontdesk'];
 @Controller('api/v1/schools/:schoolId')
 export class LearnersController {
@@ -16,9 +16,13 @@ export class LearnersController {
   @Post('classes')
   section(@Req() req:Request,@Param('schoolId',new ParseUUIDPipe()) schoolId:string,@Body() body:ClassDto){return this.access.school(req,schoolId,['headteacher'],(client,actor)=>this.learners.createClass(client,actor,body),true);}
   @Get('admissions')
-  applications(@Req() req:Request,@Param('schoolId',new ParseUUIDPipe()) schoolId:string,@Query() page:PageDto) {return this.access.school(req,schoolId,staff,client=>this.learners.page(client,schoolId,'admissions',page));}
+  applications(@Req() req:Request,@Param('schoolId',new ParseUUIDPipe()) schoolId:string,@Query() page:AdmissionPageDto) {return this.access.school(req,schoolId,staff,client=>this.learners.page(client,schoolId,'admissions',page));}
   @Post('admissions')
   apply(@Req() req:Request,@Param('schoolId',new ParseUUIDPipe()) schoolId:string,@Body() body:AdmissionDto){return this.access.school(req,schoolId,staff,(client,actor)=>this.learners.createAdmission(client,actor,body),true);}
+  @Get('admissions/:id')
+  application(@Req() req:Request,@Param('schoolId',new ParseUUIDPipe()) schoolId:string,@Param('id',new ParseUUIDPipe()) id:string){return this.access.school(req,schoolId,staff,client=>this.learners.admission(client,schoolId,id));}
+  @Post('admissions/:id/notes')
+  note(@Req() req:Request,@Param('schoolId',new ParseUUIDPipe()) schoolId:string,@Param('id',new ParseUUIDPipe()) id:string,@Body() body:AdmissionNoteDto){return this.access.school(req,schoolId,staff,(client,actor)=>this.learners.addAdmissionNote(client,actor,id,body),true);}
   @Post('admissions/:id/transition')
   transition(@Req() req:Request,@Param('schoolId',new ParseUUIDPipe()) schoolId:string,@Param('id',new ParseUUIDPipe()) id:string,@Body() body:TransitionDto){return this.access.school(req,schoolId,staff,(client,actor)=>this.learners.transition(client,actor,id,body),true);}
   // Enrolment by class and sex on one day (default today), as the GES annual school census asks for it.

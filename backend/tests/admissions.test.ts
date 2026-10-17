@@ -181,3 +181,71 @@ test('withdrawal before or on a scheduled transfer supersedes plans without rewr
     await post(`${root}/transfer`,{version:result.version,classId:destination.id,effectiveDate:'2026-12-01',reason:'Cannot reopen withdrawn plan'},409);
   }
 });
+test('an application keeps the guardian the family gave, with the phone stored as +233',async()=>{
+  const number=`G-${randomUUID().slice(0,12)}`;
+  const created=await post('/admissions',{fullName:'Guardian learner',classId:section.id,startDate:'2026-09-01',admissionNumber:number,guardianName:'Kojo Appiah',guardianRelationship:'Father',guardianPhone:'024 401 0013'});
+  const row=(await owner.query('SELECT guardian_name,guardian_relationship,guardian_phone FROM admissions WHERE id=$1',[created.id])).rows[0];
+  assert.deepEqual(row,{guardian_name:'Kojo Appiah',guardian_relationship:'Father',guardian_phone:'+233244010013'});
+  await post('/admissions',{fullName:'Bad phone',classId:section.id,startDate:'2026-09-01',admissionNumber:`G-${randomUUID().slice(0,12)}`,guardianName:'Ama Mensah',guardianPhone:'12345'},400);
+  await post('/admissions',{fullName:'No guardian name',classId:section.id,startDate:'2026-09-01',admissionNumber:`G-${randomUUID().slice(0,12)}`,guardianPhone:'0244010013'},400);
+  const plain=await apply();assert.equal((await owner.query('SELECT guardian_name FROM admissions WHERE id=$1',[plain.id])).rows[0].guardian_name,null);
+});
+test('an application page shows every decision in order with who made it, to head and front desk only',async()=>{
+  const frontdesk=await login('frontdesk@example.test');
+  let application=await post('/admissions',{fullName:'Timeline learner',classId:section.id,startDate:'2026-09-01',admissionNumber:`T-${randomUUID().slice(0,12)}`},201,frontdesk);
+  application=await post(`/admissions/${application.id}/transition`,{version:application.version,action:'review'});
+  application=await post(`/admissions/${application.id}/transition`,{version:application.version,action:'waitlist',reason:'Class is full for now'});
+  application=await post(`/admissions/${application.id}/transition`,{version:application.version,action:'offer'},201,frontdesk);
+  application=await post(`/admissions/${application.id}/transition`,{version:application.version,action:'accept'});
+  await post(`/admissions/${application.id}/transition`,{version:application.version,action:'enrol'});
+  const [head,desk]=(await owner.query('SELECT display_name FROM users WHERE id=ANY($1::uuid[]) ORDER BY id',[[users[0],users[3]]])).rows.map(r=>r.display_name);
+  for(const actor of [account,frontdesk]){
+    const page=await (await call(`/admissions/${application.id}`,'GET',undefined,actor)).json();
+    assert.equal(page.status,'enrolled');assert.equal(page.class_name,section.name);assert.equal(page.year_name,'2026/2027');assert.ok(page.learner_id);
+    assert.deepEqual(page.timeline.map((e:any)=>[e.step,e.by]),[['created',desk],['review',head],['waitlisted',head],['offered',desk],['accepted',head],['enrolled',head]]);
+    assert.equal(page.timeline[2].reason,'Class is full for now');assert.deepEqual(page.parents,[]);
+  }
+  for(const email of ['teacher@example.test','guardian@example.test'])assert.equal((await call(`/admissions/${application.id}`,'GET',undefined,await login(email))).status,403);
+  assert.equal((await call(`/admissions/${randomUUID()}`)).status,404);
+  const cross=await fetch(`${base}/schools/${other}/admissions/${application.id}`,{headers:{cookie:account.cookie}});assert.equal(cross.status,404);
+});
+test('the application page lists parent accounts linked to the enrolled student',async()=>{
+  const record=await enrolled();
+  await owner.query("INSERT INTO guardian_links(id,school_id,learner_id,guardian_membership_id,guardian_display_name,academic,billing,pickup,contact) VALUES($1,$2,$3,$4,'Synthetic parent',true,true,false,true)",[randomUUID(),school,record.learner_id,members[2]]);
+  const page=await (await call(`/admissions/${record.id}`)).json();assert.deepEqual(page.parents,[{name:'Synthetic parent',verified:false}]);
+});
+test('staff notes on an application are kept as written, newest first, and never edited',async()=>{
+  const application=await apply(),frontdesk=await login('frontdesk@example.test');
+  const body={operationId:randomUUID(),note:'Visited on Monday with last school report.'};
+  const first=await post(`/admissions/${application.id}/notes`,body,201,frontdesk),replay=await post(`/admissions/${application.id}/notes`,body,201,frontdesk);assert.equal(first.id,replay.id);
+  await post(`/admissions/${application.id}/notes`,{note:'Birth certificate seen.'});
+  await post(`/admissions/${application.id}/notes`,{note:'  '},400);
+  await post(`/admissions/${randomUUID()}/notes`,{note:'Nobody here.'},404);
+  await post(`/admissions/${application.id}/notes`,{note:'Teacher note'},403,await login('teacher@example.test'));
+  const page=await (await call(`/admissions/${application.id}`)).json();
+  assert.deepEqual(page.notes.map((n:any)=>n.note),['Birth certificate seen.','Visited on Monday with last school report.']);
+  assert.deepEqual(page.timeline.map((e:any)=>e.step),['created']);
+  await assert.rejects(owner.query('UPDATE admission_notes SET note=$1 WHERE id=$2',['Changed',first.id]),/kept as written/);
+  await assert.rejects(owner.query('DELETE FROM admission_notes WHERE id=$1',[first.id]),/kept as written/);
+  const privileges=(await runtime.query("SELECT has_table_privilege('school_app','admission_notes','UPDATE') AS u,has_table_privilege('school_app','admission_notes','DELETE') AS d")).rows[0];assert.deepEqual(privileges,{u:false,d:false});
+  const forced=(await runtime.query("SELECT relforcerowsecurity FROM pg_class WHERE relname='admission_notes'")).rows[0];assert.equal(forced.relforcerowsecurity,true);
+  assert.equal((await runtime.query('SELECT * FROM admission_notes')).rowCount,0);
+});
+test('decision names are refused outside admissions staff',async()=>{
+  const application=await apply(),client=await runtime.connect();
+  try{
+    await client.query('BEGIN');await client.query("SELECT set_config('app.user_id',$1,true),set_config('app.school_id',$2,true)",[users[1],school]);
+    await assert.rejects(client.query('SELECT * FROM admission_actor_names($1)',[application.id]),/Admissions staff required/);
+  }finally{await client.query('ROLLBACK');client.release();}
+});
+test('applications can be narrowed to open, enrolled or declined',async()=>{
+  const prefix=`Stage-${randomUUID().slice(0,8)}`;
+  await apply(section.id,`${prefix} open`);
+  const declined=await apply(section.id,`${prefix} declined`);const reviewed=await post(`/admissions/${declined.id}/transition`,{version:declined.version,action:'review'});await post(`/admissions/${declined.id}/transition`,{version:reviewed.version,action:'decline',reason:'Family chose another school'});
+  const done=await accepted();await post(`/admissions/${done.id}/transition`,{version:done.version,action:'enrol'});
+  const names=async(stage:string)=>(await (await call(`/admissions?search=${prefix}&stage=${stage}`)).json()).items.map((r:any)=>r.full_name);
+  assert.deepEqual(await names('open'),[`${prefix} open`]);assert.deepEqual(await names('declined'),[`${prefix} declined`]);
+  assert.equal((await (await call(`/admissions?search=${prefix}`)).json()).total,2);
+  const enrolledPage=await (await call('/admissions?stage=enrolled&limit=100')).json();assert.ok(enrolledPage.items.every((r:any)=>r.status==='enrolled'));
+  assert.equal((await call('/admissions?stage=review')).status,400);
+});

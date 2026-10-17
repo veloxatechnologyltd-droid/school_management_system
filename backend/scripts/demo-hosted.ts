@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, renameSync } from '
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { demoQuestionSets, playDemoWeek } from './demo-practice';
+import { playApplications } from './demo-admissions';
 
 // Shareable demo school on the live system: "Sunrise International School (Demo)" holds a full Ghanaian school year
 // (2025/26 complete, 2026/27 Term 1 up to today) so prospects can sign in and see a working school, including Ask.
@@ -970,6 +971,7 @@ async function promote() {
     }
     mark('applications');
   }
+  await applicationsNow();
   await ensureGuardians(intake);
   step('2026/27 class teachers, Term 1 fee items');
   if (!done('assign')) {
@@ -1149,6 +1151,12 @@ async function verify() {
   writeFileSync(path.join(DIR, 'verify.txt'), out.join('\n') + '\n');
   if (bad.length) process.exitCode = 1;
 }
+// Six applications at every stage with family details and staff notes, for the application page (all by the headteacher here).
+async function applicationsNow() {
+  if (done('applications:pages')) return;
+  await playApplications(() => as('head'), c => classId(1, c), addDays(TODAY, 14), i => `SIS/26/A${String(i + 5).padStart(3, '0')}`);
+  mark('applications:pages');
+}
 async function ask() {
   const head = await as('head'), teacher = await as(teacherKey(BASIC6));
   const lines: string[] = [];
@@ -1172,7 +1180,7 @@ async function ask() {
 
 // ---------------------------------------------------------------- main
 const phases: Record<string, () => Promise<void>> = {
-  setup, roll, t1: () => pastTerm('t1'), t2: () => pastTerm('t2'), t3: () => pastTerm('t3'), promote, current, finish, verify, ask, notes: notesNow, practice: practiceNow,
+  setup, roll, t1: () => pastTerm('t1'), t2: () => pastTerm('t2'), t3: () => pastTerm('t3'), promote, current, finish, verify, ask, notes: notesNow, practice: practiceNow, applications: applicationsNow,
   year: async () => { for (const p of ['setup', 'roll', 't1', 't2', 't3', 'promote', 'current', 'finish', 'practice']) { if (!done(`phase:${p}`)) { console.log(`\n=== ${p} ===`); await phases[p]!(); mark(`phase:${p}`); flush(); } } },
   status: async () => {
     const planned = { learners: model.learners.length, families: model.families.length, openDays: TERMS.reduce((n, t) => n + openDays(t).length, 0) };

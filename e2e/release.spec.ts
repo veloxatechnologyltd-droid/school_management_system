@@ -82,9 +82,11 @@ test('admission decisions, enrolment, transfer and reload preserve history',asyn
   await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Students',exact:true}).click();
   await page.getByRole('button',{name:'New application',exact:true}).click();await page.getByLabel('Student full name',{exact:true}).fill(name);await page.getByLabel('Admission number',{exact:true}).fill(admission);await page.getByRole('combobox',{name:'Intended class',exact:true}).selectOption({label:`${first} · Primary · ${yearName}`});await page.getByLabel('Proposed start date',{exact:true}).fill('2026-09-02');await page.getByRole('button',{name:'Record application',exact:true}).click();
   const application=page.locator('tr').filter({hasText:admission});await expect(application).toContainText('Application');
-  for(const action of ['Start review','Offer place','Record acceptance','Enrol student']){await application.getByRole('button',{name:action,exact:true}).click();await expect(application.getByRole('button',{name:action,exact:true})).toHaveCount(0);}
+  await application.getByRole('link',{name,exact:true}).click();
+  for(const action of ['Start review','Offer place','Record acceptance','Enrol student']){await page.getByRole('button',{name:action,exact:true}).click();await expect(page.getByRole('button',{name:action,exact:true})).toHaveCount(0);}
+  await expect(page.locator('.admission-next')).toContainText('on the roll');await page.goBack();
   async function findLearner(){const panel=page.getByRole('region',{name:'Admissions and students'});await panel.getByRole('tab',{name:/^Student roll/}).click();await panel.getByLabel('Search students',{exact:true}).fill(admission);await panel.locator('form').filter({hasText:'Search students'}).getByRole('button',{name:'Search',exact:true}).click();await panel.getByRole('button',{name,exact:true}).click();}
-  await expect(application).toContainText('Enrolled');await findLearner();
+  await findLearner();
   await expect(page.getByRole('heading',{name:'Class history',exact:true})).toBeVisible();await page.getByRole('combobox',{name:'New class',exact:true}).selectOption({label:`${second} · Primary · ${yearName}`});await page.getByLabel('Effective date',{exact:true}).fill('2026-10-01');await page.getByLabel('Transfer reason',{exact:true}).fill('Synthetic browser transfer review');await page.getByRole('button',{name:'Record transfer',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'Previous enrolment history is retained.'})).toBeVisible();await expect(page.locator('li').filter({hasText:'Synthetic browser transfer review'})).toContainText('2026-10-01');
   await page.reload();await pickSchool(page);await findLearner();

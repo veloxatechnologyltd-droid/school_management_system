@@ -460,13 +460,13 @@ a.sub[href^="tel:"]{display:inline-block;padding:7px 0}
 /* Touch sizes found by the phone and tablet sweep (2026-10-17): a control in a crowded flex row must not shrink below its tap size,
    and every tap target reaches the 34px minimum (44px on touch screens) */
 .icon-button,input[type=checkbox],input[type=radio]{flex:none}
-a.sub[href^="tel:"]{display:inline-flex;align-items:center;min-height:36px;padding:0}
+a.sub[href^="tel:"],.doc-facts a[href^="tel:"]{display:inline-flex;align-items:center;min-height:36px;padding:0}
 .learner-link{padding:8px 0}
 .report-row summary{min-height:36px}
 /* the toolbar's "width:auto" for fields left a checkbox 13px wide and 20px tall (Pickup: "Include learners with collection history") */
 .toolbar>label>input[type=checkbox],.toolbar>label>input[type=radio]{width:20px;height:20px}
 .toolbar>label:has(>input[type=checkbox]),.toolbar>label:has(>input[type=radio]){flex-wrap:nowrap;align-items:center}
-@media (pointer:coarse){a.sub[href^="tel:"]{min-height:44px}.learner-link{padding:12px 0}.report-row summary{min-height:44px}.toolbar>label>input[type=checkbox],.toolbar>label>input[type=radio]{width:24px;height:24px}}
+@media (pointer:coarse){a.sub[href^="tel:"],.doc-facts a[href^="tel:"]{min-height:44px}.learner-link{padding:12px 0}.report-row summary{min-height:44px}.toolbar>label>input[type=checkbox],.toolbar>label>input[type=radio]{width:24px;height:24px}}
 
 /* Head home (2026-10-17): filters, five figures, charts and class bars. Charts use the brand blue only: the highlighted period
    in solid blue, earlier days or weeks in the light blue, so one colour carries both the series and its context. */
@@ -527,3 +527,14 @@ table.compact th,table.compact td{padding:10px 12px}table.compact th{letter-spac
 @media (min-width:901px) and (max-width:1100px){.search-trigger{flex:none;width:var(--tap);height:var(--tap);min-width:0;padding:0;justify-content:center;border-radius:50%}.search-trigger-text,.search-trigger kbd{display:none}.topbar .user .name{display:none}.topbar .user{padding:3px}}
 /* On the smallest phones Settings is reached from the menu, which leaves room for the search button. */
 @media (max-width:400px){.topbar .settings-link{display:none}}
+/* An application's own page: where it stands, the decision buttons, the decisions in order, and the printable blank form. */
+.admission-stand{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px 20px;margin:0 0 12px}.admission-stand div{display:grid;gap:4px;min-width:0}.admission-stand dt{color:var(--ink-3);font-size:13px;font-weight:600}.admission-stand dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.admission-stand .admission-next{grid-column:1/-1;padding:10px 14px;background:var(--accent-soft);border-radius:10px}.admission-next dd{font-weight:500}
+.admission-decide{display:grid;gap:10px}.admission-decide label{margin:0;max-width:480px}
+.timeline{list-style:none;margin:0;padding:0 0 0 18px;border-left:2px solid var(--line-strong)}.timeline li{position:relative;display:grid;gap:2px;padding:0 0 16px 6px}.timeline li:last-child{padding-bottom:0}
+.timeline li::before{content:'';position:absolute;left:-25px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--surface)}.timeline span{font-size:13px;color:var(--ink-3);overflow-wrap:anywhere}
+.history .note-text{font-size:15px;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.admission-form h4{margin:18px 0 4px}.form-lines{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px 24px;font-size:13px;color:var(--ink-3)}.form-lines .doc-line{min-height:30px}
+.admission-form .form-lines:last-of-type>div:last-child{grid-column:1/-1}
+@media (min-width:700px){.head-stats{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
+@media (max-width:699px){.head-stats .stat-label{white-space:normal}}

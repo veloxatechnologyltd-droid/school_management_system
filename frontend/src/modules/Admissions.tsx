@@ -3,8 +3,10 @@ import { request } from '../lib/api';
 import { takeFind } from '../lib/find';
 import { LearnerImports } from './LearnerImports';
 import { LearnerUpdates, fieldLabel } from './LearnerUpdates';
-import { Card, Dialog, Empty, Icon, PageHeader, Pill, Tabs, type Tone } from '../lib/ui';
+import { Card, Dialog, Empty, Icon, PageHeader, Pill, Tabs } from '../lib/ui';
 import { Promotion } from './Promotion';
+import { BlankAdmissionForm } from './AdmissionPage';
+import { nextStep, statusNames, statusTone } from '../lib/admissions';
 
 type Role = 'headteacher' | 'frontdesk' | string;
 type AcademicYear = { id: string; name: string; start_date: string; end_date: string };
@@ -17,9 +19,6 @@ type LearnerDetail = Learner & { enrolments: Enrolment[] };
 type Props = { schoolId: string; csrfToken: string; role: Role; view?: 'setup' | 'work'; initialTab?: 'roll' | 'applications' | 'promotion' };
 
 const levels: SchoolClass['level'][] = ['Nursery', 'KG', 'Primary', 'JHS'];
-const statusNames: Record<string, string> = { application: 'Application', review: 'Under review', offered: 'Offered a place', waitlisted: 'Waitlisted', declined: 'Declined', accepted: 'Accepted', enrolled: 'Enrolled' };
-const statusTone: Record<string, Tone> = { application: 'info', review: 'info', offered: 'caution', waitlisted: 'neutral', declined: 'critical', accepted: 'caution', enrolled: 'positive' };
-const actionNames: Record<string, string> = { review: 'Start review', offer: 'Offer place', waitlist: 'Waitlist', decline: 'Decline', accept: 'Record acceptance', enrol: 'Enrol student' };
 const dateToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
 const classYearQuery = (year: string) => year === 'all' ? '' : `&academicYearId=${year}`;
 
@@ -36,6 +35,8 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
   const [learnersOffset, setLearnersOffset] = useState(0);
   const [admissionsSearchInput, setAdmissionsSearchInput] = useState('');
   const [admissionsSearch, setAdmissionsSearch] = useState('');
+  // The Admissions tab opens on applications still being decided; enrolled and declined ones are a choice away.
+  const [stage, setStage] = useState<'open' | 'enrolled' | 'declined' | 'all'>('open');
   // A search from the top bar opens the roll already filtered to that student.
   const [found] = useState(() => takeFind('students')?.text ?? '');
   const [learnersSearchInput, setLearnersSearchInput] = useState(found);
@@ -45,7 +46,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
   const [selectedLearner, setSelectedLearner] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'roll' | 'applications' | 'promotion'>(initialTab);
-  const [dialog, setDialog] = useState<'' | 'application' | 'import' | 'update' | 'census'>('');
+  const [dialog, setDialog] = useState<'' | 'application' | 'import' | 'update' | 'census' | 'blank'>('');
   const [census, setCensus] = useState<{ day: string; items: { id: string; name: string; female: number; male: number; unrecorded: number }[] } | null>(null);
   const [enrolledToday, setEnrolledToday] = useState<Record<string, number>>({});
   const [classYear, setClassYear] = useState('');
@@ -55,12 +56,11 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [reviewReason, setReviewReason] = useState<Record<string, string>>({});
-  const [overrideReasons, setOverrideReasons] = useState<Record<string, string>>({});
   const [transfer, setTransfer] = useState({ classId: '', effectiveDate: dateToday(), reason: '' });
   const [withdrawalOpen,setWithdrawalOpen]=useState(false);
   const [withdrawal,setWithdrawal]=useState({effectiveDate:dateToday(),reason:''});
-  const [application, setApplication] = useState({ fullName: '', dateOfBirth: '', sex: '', classId: '', startDate: dateToday(), admissionNumber: '' });
+  const blankApplication = { fullName: '', dateOfBirth: '', sex: '', classId: '', startDate: dateToday(), admissionNumber: '', guardianName: '', guardianRelationship: '', guardianPhone: '' };
+  const [application, setApplication] = useState(blankApplication);
   const [newYear, setNewYear] = useState({ name: '', startDate: '', endDate: '' });
   const [newClass, setNewClass] = useState({ name: '', level: 'Primary' as SchoolClass['level'], capacity: '', academicYearId: '' });
   const operations = useRef(new Map<string, { payload: string; id: string }>());
@@ -93,6 +93,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
       const admissionQuery = new URLSearchParams({ offset: String(resetAdmissions ? 0 : admissionsOffset), limit: '25' });
       const learnerQuery = new URLSearchParams({ offset: String(learnersOffset), limit: '25' });
       if (admissionsSearch.trim()) admissionQuery.set('search', admissionsSearch.trim());
+      if (stage !== 'all') admissionQuery.set('stage', stage);
       if (learnersSearch.trim()) learnerQuery.set('search', learnersSearch.trim());
       const [yearRows, classRows, admissionRows, learnerRows] = await Promise.all([
         request<Page<AcademicYear>>(`/schools/${schoolId}/academic-years?limit=100`),
@@ -104,7 +105,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
       setYears(yearRows.items); setYearsTotal(yearRows.total); setClasses(classRows.items); setClassesTotal(classRows.total); setAdmissions(admissionRows.items); setAdmissionsTotal(admissionRows.total); setLearners(learnerRows.items); setLearnersTotal(learnerRows.total);
     } catch (e) { if (alive.current && workspaceEpoch.current === epoch) setError((e as Error).message); }
     finally { if (alive.current && workspaceEpoch.current === epoch && initial) setLoading(false); }
-  }, [schoolId, admissionsOffset, admissionsSearch, learnersOffset, learnersSearch]);
+  }, [schoolId, admissionsOffset, admissionsSearch, stage, learnersOffset, learnersSearch]);
 
   const loadMore = async (kind: 'academic-years' | 'classes') => {
     const loaded = kind === 'classes' ? classList?.items.length ?? 0 : years.length;
@@ -173,17 +174,10 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
 
   async function submitApplication(event: React.FormEvent) {
     event.preventDefault();
-    const payload = { fullName: application.fullName.trim(), ...(application.dateOfBirth ? { dateOfBirth: application.dateOfBirth } : {}), ...(application.sex ? { sex: application.sex } : {}), classId: application.classId, startDate: application.startDate, admissionNumber: application.admissionNumber.trim() };
-    if (await send('application', payload, `/schools/${schoolId}/admissions`, 'Application recorded. Review and enrolment remain staff decisions.')) { setApplication({ fullName: '', dateOfBirth: '', sex: '', classId: '', startDate: dateToday(), admissionNumber: '' }); setDialog(''); setTab('applications'); }
-  }
-
-  async function transition(row: Admission, action: string) {
-    const reason = reviewReason[row.id]?.trim() ?? '';
-    const override = overrideReasons[row.id]?.trim() ?? '';
-    const payload = { version: row.version, action, ...(reason ? { reason } : {}), ...(action === 'enrol' && override ? { capacityOverrideReason: override } : {}) };
-    if (await send(`transition:${row.id}:${action}`, payload, `/schools/${schoolId}/admissions/${row.id}/transition`, `${statusNames[action] ?? action} saved for ${row.full_name}.`)) {
-      setReviewReason(prev => ({ ...prev, [row.id]: '' })); setOverrideReasons(prev => ({ ...prev, [row.id]: '' }));
-    }
+    const guardian = application.guardianName.trim();
+    const payload = { fullName: application.fullName.trim(), ...(application.dateOfBirth ? { dateOfBirth: application.dateOfBirth } : {}), ...(application.sex ? { sex: application.sex } : {}), classId: application.classId, startDate: application.startDate, admissionNumber: application.admissionNumber.trim(),
+      ...(guardian ? { guardianName: guardian, ...(application.guardianRelationship ? { guardianRelationship: application.guardianRelationship } : {}), ...(application.guardianPhone.trim() ? { guardianPhone: application.guardianPhone.trim() } : {}) } : {}) };
+    if (await send('application', payload, `/schools/${schoolId}/admissions`, 'Application recorded. Open it to review and decide.')) { setApplication(blankApplication); setDialog(''); setTab('applications'); }
   }
 
   async function createYear(event: React.FormEvent) {
@@ -209,15 +203,6 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
     event.preventDefault();if(!detail)return;
     const payload={version:detail.version,effectiveDate:withdrawal.effectiveDate,reason:withdrawal.reason.trim()};
     if(await send(`withdraw:${detail.id}`,payload,`/schools/${schoolId}/learners/${detail.id}/withdraw`,'Withdrawal recorded. Student and class history are retained.'))setWithdrawalOpen(false);
-  }
-
-  function actionsFor(row: Admission) {
-    if (row.status === 'application') return ['review'];
-    if (row.status === 'review') return ['offer', 'waitlist', 'decline'];
-    if (row.status === 'offered') return ['accept'];
-    if (row.status === 'waitlisted') return ['offer', 'decline'];
-    if (row.status === 'accepted') return ['enrol'];
-    return [];
   }
 
   const messages = <>{error && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}</>;
@@ -253,7 +238,7 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
       actions={tab === 'promotion' ? undefined : <><button type="button" disabled={loading || !classes.length} onClick={() => { setError(''); setNotice(''); setDialog('application'); }}><Icon name="person_add"/>New application</button><button type="button" className="secondary" onClick={() => setDialog('import')}><Icon name="upload_file"/>Import existing students</button><button type="button" className="secondary" onClick={() => setDialog('update')}><Icon name="edit_document"/>Update from CSV</button><button type="button" className="secondary" onClick={() => { setDialog('census'); setCensus(null); request<NonNullable<typeof census>>(`/schools/${schoolId}/learners/census`).then(setCensus).catch(e => setError((e as Error).message)); }}><Icon name="groups"/>Class sizes</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void loadWorkspace(true)}>Refresh records</button></>}/>
     {!dialog && !selectedLearner && messages}
     {loading ? <p role="status">Loading admissions and student records…</p> : <>
-      <div className="actions"><Tabs label="Student lists" value={tab} onChange={setTab} options={[{ id: 'roll', label: `Student roll (${learnersTotal})` }, { id: 'applications', label: `Admissions (${admissionsTotal})` }, ...(role === 'headteacher' ? [{ id: 'promotion' as const, label: 'Year-end promotion' }] : [])]}/></div>
+      <div className="actions"><Tabs label="Student lists" value={tab} onChange={setTab} options={[{ id: 'roll', label: `Student roll (${learnersTotal})` }, { id: 'applications', label: stage === 'open' ? `Admissions (${admissionsTotal} open)` : 'Admissions' }, ...(role === 'headteacher' ? [{ id: 'promotion' as const, label: 'Year-end promotion' }] : [])]}/></div>
       {tab === 'promotion' && role === 'headteacher' ? <Promotion schoolId={schoolId} csrfToken={csrfToken} embedded/> : tab === 'roll' ? <Card flush>
         <div className="toolbar">
           <form onSubmit={event => { event.preventDefault(); setLearnersOffset(0); setLearnersSearch(learnersSearchInput.trim()); }}>
@@ -273,15 +258,16 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
             <label className="search"><span className="sr-only">Search applications</span><Icon name="search"/><input type="search" aria-label="Search applications" value={admissionsSearchInput} onChange={event => setAdmissionsSearchInput(event.target.value)} placeholder="Search name or admission number"/></label>
             <button type="submit" className="secondary" disabled={busy}>Search</button>
           </form>
+          <label>Stage<select value={stage} onChange={e => { setAdmissionsOffset(0); setStage(e.target.value as typeof stage); }}><option value="open">Still being decided</option><option value="enrolled">Enrolled</option><option value="declined">Declined</option><option value="all">All stages</option></select></label>
           <span className="count">{admissionsTotal} applications</span>
+          <button type="button" className="secondary" onClick={() => setDialog('blank')}><Icon name="print"/>Print blank form</button>
         </div>
-        {admissions.length ? <div className="table-wrap"><table><thead><tr><th>Student</th><th>Class</th><th>Starts</th><th>Status</th><th>Next step</th></tr></thead><tbody>{admissions.map(row => <tr key={row.id}>
-          <td>{row.full_name}<span className="sub">{row.admission_number}{row.date_of_birth ? ` · Born ${row.date_of_birth}` : ''}</span>{row.decision_reason && <span className="sub">Decision note: {row.decision_reason}</span>}</td>
-          <td>{row.class_name}</td><td>{row.start_date}</td><td><Pill tone={statusTone[row.status] ?? 'neutral'}>{statusNames[row.status] ?? row.status}</Pill></td>
-          <td>{actionsFor(row).length ? <div className="actions">{actionsFor(row).map(action => <button type="button" key={action} className={action === 'decline' || action === 'waitlist' ? 'secondary' : undefined} disabled={busy} onClick={() => void transition(row, action)}>{actionNames[action]}</button>)}
-            {actionsFor(row).some(action => action === 'waitlist' || action === 'decline') && <input aria-label="Decision reason" value={reviewReason[row.id] ?? ''} onChange={e => setReviewReason(prev => ({ ...prev, [row.id]: e.target.value }))} placeholder="Reason, for waitlist or decline"/>}
-            {row.status === 'accepted' && role === 'headteacher' && <input aria-label="Capacity override reason (only if the class is full)" value={overrideReasons[row.id] ?? ''} onChange={e => setOverrideReasons(prev => ({ ...prev, [row.id]: e.target.value }))} placeholder="Capacity override reason, if full"/>}</div> : <span className="muted">—</span>}</td>
-        </tr>)}</tbody></table></div> : <Empty title={admissionsSearch ? 'No applications match this search' : 'No applications yet'}/>}
+        {admissions.length ? <div className="table-wrap"><table><thead><tr><th>Student</th><th>Class</th><th className="hide-sm">Starts</th><th>Stage</th><th className="hide-sm">Next step</th><th className="hide-sm"></th></tr></thead><tbody>{admissions.map(row => <tr key={row.id}>
+          <td><a className="learner-link" href={`#/admission/${row.id}`}>{row.full_name}</a><span className="sub">{row.admission_number}</span></td>
+          <td>{row.class_name}</td><td className="hide-sm">{row.start_date}</td><td><Pill tone={statusTone[row.status] ?? 'neutral'}>{statusNames[row.status] ?? row.status}</Pill></td>
+          <td className="hide-sm">{nextStep(row.status, row.class_name)}</td>
+          <td className="num hide-sm"><a className="button secondary" href={`#/admission/${row.id}`} aria-label={`Open the application for ${row.full_name}`}>Open</a></td>
+        </tr>)}</tbody></table></div> : <Empty title={admissionsSearch ? 'No applications match this search' : stage === 'open' ? 'No applications waiting for a decision' : 'No applications at this stage'}/>}
         {pager(admissionsOffset, admissions.length, admissionsTotal, 'applications', setAdmissionsOffset)}
       </Card>}
     </>}
@@ -303,8 +289,15 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
         <label>Sex<select value={application.sex} onChange={e => setApplication({ ...application, sex: e.target.value })}><option value="">Not recorded</option><option value="female">Female</option><option value="male">Male</option></select></label></div>
         <label>Intended class<select value={application.classId} onChange={e => setApplication({ ...application, classId: e.target.value })} required><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{classLabel(c)}</option>)}</select></label>
         <label>Proposed start date<input type="date" value={application.startDate} onChange={e => setApplication({ ...application, startDate: e.target.value })} required/></label>
+        <h4>Parent or guardian</h4>
+        <div className="grid"><label>Name<input autoComplete="off" value={application.guardianName} onChange={e => setApplication({ ...application, guardianName: e.target.value })} minLength={2} maxLength={120} required={!!(application.guardianRelationship || application.guardianPhone.trim())}/></label>
+        <label>Relationship<select value={application.guardianRelationship} onChange={e => setApplication({ ...application, guardianRelationship: e.target.value })}><option value="">Not recorded</option>{['Mother', 'Father', 'Grandparent', 'Aunt or uncle', 'Brother or sister', 'Other guardian'].map(r => <option key={r}>{r}</option>)}</select></label>
+        <label>Mobile number<input type="tel" inputMode="tel" autoComplete="off" value={application.guardianPhone} onChange={e => setApplication({ ...application, guardianPhone: e.target.value })} placeholder="024 123 4567" pattern="[0-9 +()\-]{9,20}"/></label></div>
         <div className="actions"><button disabled={busy || !classes.length}>{busy ? 'Saving…' : 'Record application'}</button><button type="button" className="secondary" onClick={() => setDialog('')}>Cancel</button></div>
       </form>
+    </Dialog>}
+    {dialog === 'blank' && <Dialog title="Blank admission form" wide onClose={() => setDialog('')}>
+      <BlankAdmissionForm schoolId={schoolId}/>
     </Dialog>}
     {dialog === 'update' && <Dialog title="Correct student records from a CSV" wide onClose={() => setDialog('')}>
       <LearnerUpdates schoolId={schoolId} csrfToken={csrfToken} role={role} onApplied={() => void loadWorkspace(false, true)}/>

@@ -35,6 +35,7 @@ const GuardianStatement=lazyModule(()=>import('./modules/Finance'),'GuardianStat
 const AiSettings=lazyModule(()=>import('./modules/AiSettings'),'AiSettings');
 const Assistant=lazyModule(()=>import('./modules/Assistant'),'Assistant');
 const LearnerPage=lazyModule(()=>import('./modules/LearnerPage'),'LearnerPage');
+const AdmissionPage=lazyModule(()=>import('./modules/AdmissionPage'),'AdmissionPage');
 const Accounts=lazyModule(()=>import('./modules/Accounts'),'Accounts');
 const ContentLibrary=lazyModule(()=>import('./modules/ContentLibrary'),'ContentLibrary');
 const GettingStarted=lazyModule(()=>import('./modules/GettingStarted'),'GettingStarted');
@@ -275,12 +276,16 @@ function App() {
   // A student's own page (#/learner/<id>) for heads and teachers sits under Students (head) or Performance (teacher) in the menu.
   const learnerPage=tabId==='learner'&&!!subId&&(role==='headteacher'||role==='teacher');
   if(learnerPage)views.learner=()=><LearnerPage key={`student:${sid}:${subId}`} schoolId={sid} csrfToken={csrf} role={role} learnerId={subId!}/>;
-  const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=learnerPage?(role==='headteacher'?'students':'progress'):tabId==='fees'&&role!=='guardian'?'accounts':legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];
+  // An application's own page (#/admission/<id>) for the head and the front desk sits under Students.
+  const admissionPage=tabId==='admission'&&!!subId&&(role==='headteacher'||role==='frontdesk');
+  if(admissionPage)views.learner=()=><AdmissionPage key={`admission:${sid}:${subId}`} schoolId={sid} csrfToken={csrf} role={role} admissionId={subId!}/>;
+  const recordPage=learnerPage||admissionPage;
+  const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=admissionPage?'students':learnerPage?(role==='headteacher'?'students':'progress'):tabId==='fees'&&role!=='guardian'?'accounts':legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];
   const roleName=role==='frontdesk'?'Front desk':role.charAt(0).toUpperCase()+role.slice(1);
-  const meta=!learnerPage&&current&&pageMeta[current.id];
+  const meta=!recordPage&&current&&pageMeta[current.id];
   const navGroup=(g:NavGroup)=><div key={g.items[0].id} className="nav-section">{g.group&&<p className="nav-group">{g.group}</p>}{g.items.map(item=><a key={item.id} href={`#/${item.id}`} aria-current={!showContent&&item.id===current?.id?'page':undefined}><Icon name={item.icon}/><span className="label">{item.label}</span></a>)}</div>;
   return <div className="shell">
-    <PageTitle title={`${showContent?'Content library':learnerPage?'Student':current?.id==='settings'?`Settings · ${setting.label}`:current?.label??'Home'} · ${school?.name??'Veloxa SmartSchool'}`}/>
+    <PageTitle title={`${showContent?'Content library':admissionPage?'Application':learnerPage?'Student':current?.id==='settings'?`Settings · ${setting.label}`:current?.label??'Home'} · ${school?.name??'Veloxa SmartSchool'}`}/>
     <a href="#main" className="skip-link" onClick={e=>{e.preventDefault();document.getElementById('main')?.focus();}}>Skip to content</a>
     <aside className={menuOpen?'sidebar open':'sidebar'}>
       <a href="#/" className="brand">{school?.logo_tag?<SchoolLogo schoolId={school.id} className="logo school-mark"/>:<img className="logo" src="/brand/mark-white.svg" alt="" />}<span className="brand-text"><strong>{school?.name??'Veloxa SmartSchool'}</strong><span>{roleName||'Signed in'}</span></span></a>
@@ -292,7 +297,7 @@ function App() {
     <div className="content">
       <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}{school&&<TermChip key={school.id} schoolId={school.id}/>}{school&&<GlobalSearch key={`search:${school.id}`} schoolId={school.id} role={role} onFind={()=>setFindEpoch(value=>value+1)}/>}{role==='headteacher'&&<a className="icon-button settings-link" href="#/settings" aria-label="Settings" title="Settings"><Icon name="settings"/></a>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
       {school?.readOnly&&<p role="status" style={{margin:0,padding:'8px 16px',background:'var(--info-soft)',color:'var(--info)',fontSize:13,fontWeight:600}}>Demo school with sample data · read-only. Explore every page and try Ask; changes and password changes are switched off.</p>}
-      <main id="main" tabIndex={-1} className={current?.id==='ask'&&!learnerPage&&!showContent?'ask-main':undefined}>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{showContent&&<Suspense fallback={<p role="status">Loading…</p>}><ContentLibrary csrfToken={csrf}/></Suspense>}{school&&!showContent&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{learnerPage?views.learner!():current&&views[current.id]()}</Suspense></>}{!school&&!showContent&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
+      <main id="main" tabIndex={-1} className={current?.id==='ask'&&!recordPage&&!showContent?'ask-main':undefined}>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{showContent&&<Suspense fallback={<p role="status">Loading…</p>}><ContentLibrary csrfToken={csrf}/></Suspense>}{school&&!showContent&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{recordPage?views.learner!():current&&views[current.id]()}</Suspense></>}{!school&&!showContent&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
     </div>
   </div>;
 }

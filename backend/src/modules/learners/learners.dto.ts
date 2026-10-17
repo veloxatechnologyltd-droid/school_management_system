@@ -5,6 +5,7 @@ export class PageDto {
   @Type(()=>Number) @IsInt() @Min(1) @Max(100) limit=25;
   @IsOptional() @IsString() @MaxLength(120) search?:string;
 }
+export class AdmissionPageDto extends PageDto { @IsOptional() @IsIn(['open','enrolled','declined']) stage?:'open'|'enrolled'|'declined' }
 export class ClassPageDto extends PageDto { @IsOptional() @IsUUID() academicYearId?:string }
 export class OperationDto { @IsUUID() operationId!:string }
 export class YearDto extends OperationDto {
@@ -25,6 +26,12 @@ export class AdmissionDto extends OperationDto {
   @IsUUID() classId!:string;
   @IsDateString({strict:true}) @Matches(/^\d{4}-\d{2}-\d{2}$/) startDate!:string;
   @IsString() @Matches(/^[A-Za-z0-9][A-Za-z0-9/-]{1,39}$/) admissionNumber!:string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) @Matches(/\S.*\S/) guardianName?:string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(40) @Matches(/\S.*\S/) guardianRelationship?:string;
+  @IsOptional() @IsString() @MaxLength(20) guardianPhone?:string;
+}
+export class AdmissionNoteDto extends OperationDto {
+  @IsString() @MinLength(3) @MaxLength(1000) @Matches(/\S.{1,}\S/s) note!:string;
 }
 export class TransitionDto extends OperationDto {
   @IsInt() @Min(1) version!:number;

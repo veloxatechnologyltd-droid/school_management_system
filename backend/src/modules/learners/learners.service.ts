@@ -3,13 +3,17 @@ import { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { Actor } from '../../core/access';
 import { audit,command } from '../../core/commands';
-import { AdmissionDto,ClassDto,ClassPageDto,PageDto,TransferDto,TransitionDto,WithdrawalDto,LearnerSexDto,YearDto } from './learners.dto';
+import { normalizeGhanaPhone } from '../notices/sms.provider';
+import { AdmissionDto,AdmissionNoteDto,AdmissionPageDto,ClassDto,ClassPageDto,PageDto,TransferDto,TransitionDto,WithdrawalDto,LearnerSexDto,YearDto } from './learners.dto';
 @Injectable()
 export class LearnersService {
   async lockIdentityCatalog(client:PoolClient,schoolId:string){await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${schoolId}:learner-identity-catalog`]);}
-  async page(client:PoolClient,schoolId:string,table:'learners'|'admissions',page:PageDto) {
+  async page(client:PoolClient,schoolId:string,table:'learners'|'admissions',page:AdmissionPageDto) {
     const search=`%${(page.search??'').trim().replace(/[\\%_]/g,'\\$&')}%`;
-    const filter="a.school_id=$1 AND (a.full_name ILIKE $2 ESCAPE '\\' OR a.admission_number ILIKE $2 ESCAPE '\\')";
+    // Applications can be narrowed to a stage: open (still being decided), enrolled or declined.
+    const stages={open:" AND a.status NOT IN ('enrolled','declined')",enrolled:" AND a.status='enrolled'",declined:" AND a.status='declined'"};
+    const stage=table==='admissions'&&page.stage?stages[page.stage]:'';
+    const filter=`a.school_id=$1 AND (a.full_name ILIKE $2 ESCAPE '\\' OR a.admission_number ILIKE $2 ESCAPE '\\')${stage}`;
     const total=Number((await client.query(`SELECT count(*) FROM ${table} a WHERE ${filter}`,[schoolId,search])).rows[0].count);
     // The roll shows each learner's class today, or when they left.
     const today="(now() AT TIME ZONE 'Africa/Accra')::date";
@@ -72,7 +76,10 @@ export class LearnersService {
       if(body.dateOfBirth&&body.dateOfBirth>=body.startDate)throw new BadRequestException('Birth date must precede enrolment');
       const existing=await client.query('SELECT id FROM learners WHERE school_id=$1 AND admission_number=$2',[actor.schoolId,body.admissionNumber]);
       if(existing.rowCount)throw new ConflictException('Admission number already belongs to a learner');
-      const result=await client.query('INSERT INTO admissions(id,school_id,full_name,date_of_birth,class_id,start_date,admission_number,sex) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,full_name,status,version',[randomUUID(),actor.schoolId,body.fullName.trim(),body.dateOfBirth??null,body.classId,body.startDate,body.admissionNumber,body.sex??null]);
+      const guardianName=body.guardianName?.trim()||null,phone=body.guardianPhone?.trim()?normalizeGhanaPhone(body.guardianPhone):null;
+      if(body.guardianPhone?.trim()&&!phone)throw new BadRequestException('Enter a Ghana mobile number, for example 024 123 4567');
+      if(!guardianName&&(body.guardianRelationship?.trim()||phone))throw new BadRequestException('Give the parent or guardian\'s name with their relationship or phone');
+      const result=await client.query('INSERT INTO admissions(id,school_id,full_name,date_of_birth,class_id,start_date,admission_number,sex,guardian_name,guardian_relationship,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,full_name,status,version',[randomUUID(),actor.schoolId,body.fullName.trim(),body.dateOfBirth??null,body.classId,body.startDate,body.admissionNumber,body.sex??null,guardianName,guardianName?body.guardianRelationship?.trim()||null:null,phone]);
       await audit(client,actor,'admission.created',result.rows[0].id);return result.rows[0];
     });
   }
@@ -98,6 +105,32 @@ export class LearnersService {
       await audit(client,actor,`admission.${next}`,id,{version:result.rows[0].version,capacityOverride:!!body.capacityOverrideReason,...(body.reason?{reason:body.reason}:{})});
       if(body.capacityOverrideReason)await audit(client,actor,'class.capacity.override',record.class_id,{reason:body.capacityOverrideReason,applicationId:id});
       return result.rows[0];
+    });
+  }
+  // One application on one page: who applied for which class, the family's contact, every decision with who made it
+  // and when (from the audit log), staff notes, and the parent accounts linked once the student is enrolled.
+  async admission(client:PoolClient,schoolId:string,id:string) {
+    const row=(await client.query(`SELECT a.id,a.full_name,a.date_of_birth::text,a.sex,a.status,a.class_id,c.name AS class_name,c.level,y.name AS year_name,a.start_date::text,a.admission_number,a.version,a.learner_id,a.decision_reason,
+        a.guardian_name,a.guardian_relationship,a.guardian_phone,a.created_at
+      FROM admissions a JOIN class_sections c ON c.school_id=a.school_id AND c.id=a.class_id JOIN academic_years y ON y.school_id=c.school_id AND y.id=c.academic_year_id
+      WHERE a.school_id=$1 AND a.id=$2`,[schoolId,id])).rows[0];
+    if(!row)throw new NotFoundException('Application unavailable');
+    const names=new Map((await client.query('SELECT membership_id,display_name FROM admission_actor_names($1)',[id])).rows.map(r=>[r.membership_id as string,r.display_name as string]));
+    const timeline=(await client.query(`SELECT action,created_at,actor_membership_id,metadata FROM audit_events WHERE school_id=$1 AND target_id=$2
+        AND action IN ('admission.created','admission.review','admission.offered','admission.waitlisted','admission.declined','admission.accepted','admission.enrolled') ORDER BY created_at,id`,[schoolId,id])).rows
+      .map(e=>({step:e.action.slice('admission.'.length),at:e.created_at,by:names.get(e.actor_membership_id)??null,reason:e.metadata?.reason??null,capacityOverride:!!e.metadata?.capacityOverride}));
+    const notes=(await client.query('SELECT id,note,author_name,created_at FROM admission_notes WHERE school_id=$1 AND admission_id=$2 ORDER BY created_at DESC,id',[schoolId,id])).rows;
+    const parents=row.learner_id?(await client.query(`SELECT guardian_display_name AS name,verified_at IS NOT NULL AS verified FROM guardian_links
+        WHERE school_id=$1 AND learner_id=$2 AND revoked_at IS NULL ORDER BY verified_at IS NULL,created_at,id`,[schoolId,row.learner_id])).rows:[];
+    return {...row,timeline,notes,parents};
+  }
+  addAdmissionNote(client:PoolClient,actor:Actor,id:string,body:AdmissionNoteDto) {
+    return command(client,actor,body.operationId,'admission.note',{id,...body},async()=>{
+      const exists=await client.query('SELECT 1 FROM admissions WHERE school_id=$1 AND id=$2',[actor.schoolId,id]);
+      if(!exists.rowCount)throw new NotFoundException('Application unavailable');
+      const note=(await client.query('INSERT INTO admission_notes(id,school_id,admission_id,note,author_membership_id,author_name) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,note,author_name,created_at',[randomUUID(),actor.schoolId,id,body.note.trim(),actor.membershipId,actor.displayName??'Staff member'])).rows[0];
+      await audit(client,actor,'admission_note.added',id,{noteId:note.id});
+      return note;
     });
   }
   async learner(client:PoolClient,schoolId:string,id:string,lock=false) {
