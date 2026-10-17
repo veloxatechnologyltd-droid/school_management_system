@@ -1,5 +1,5 @@
 // Captures the product screenshots shown on the sign-in and register pages from the hosted Sunrise demo school
-// (synthetic learners, read-only). Raw PNGs go to .local/auth-shots/raw; scripts/auth-shots-to-webp.py turns them
+// (synthetic students, read-only). Raw PNGs go to .local/auth-shots/raw; scripts/auth-shots-to-webp.py turns them
 // into frontend/public/auth/*.webp. Logins are read from .local/demo-hosted/logins.txt and never printed.
 // Usage: node scripts/capture-auth-shots.mjs [shot-name ...]   (no names = every shot)
 import { chromium } from '@playwright/test';
@@ -27,11 +27,11 @@ const PHONE = { width: 390, height: 780 };
 const SHOTS = [
   ['head-home', 'head', '#/today', DESKTOP],
   ['head-attendance', 'head', '#/attendance', DESKTOP],
-  ['head-fees', 'head', '#/fees', DESKTOP],
+  ['head-fees', 'head', '#/accounts', DESKTOP],
   ['head-reportcards', 'head', '#/assessment', DESKTOP],
   ['head-ask', 'head', '#/ask', DESKTOP],
   ['head-notices', 'head', '#/notices', DESKTOP],
-  ['head-learners', 'head', '#/learners', DESKTOP],
+  ['head-learners', 'head', '#/students', DESKTOP],
   ['head-progress', 'head', '#/progress', DESKTOP],
   ['parent-home', 'localparent', '#/children', PHONE],
   ['parent-learn', 'localparent', '#/practice', PHONE],

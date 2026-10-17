@@ -166,7 +166,7 @@ async function main() {
     const lastYear = await head.post('/academic-years', { name: `${Y - 1}/${Y}`, startDate: `${Y - 1}-09-08`, endDate: `${Y}-08-01` });
     for (const c of classPlan.slice(-5)) await head.post('/classes', { name: c.name, level: c.level, capacity: c.size + 6, academicYearId: lastYear.id });
 
-    step(`Admitting and enrolling ${learnerPlan.length} learners`);
+    step(`Admitting and enrolling ${learnerPlan.length} students`);
     const learners: Learner[] = [];
     let admissionNo = 0;
     await inBatches(learnerPlan.map(p => ({ p, number: `SIS/${Y}/${String(++admissionNo).padStart(4, '0')}` })), 8, async ({ p, number }) => {
@@ -188,11 +188,11 @@ async function main() {
     step('Assigning class teachers');
     for (const [i, c] of classes.entries()) await head.post('/teaching/assignments', { classId: c.id, teacherMembershipId: membership[`teacher${i}`], startDate: yearStart, endDate: yearEnd, reason: `Class teacher for ${c.name}, approved at the staff meeting` });
 
-    step('Verifying guardians (academic, billing, pickup and contact rights)');
+    step('Verifying parents (academic, billing, pickup and contact rights)');
     const pickupLinks = new Map<string, { id: string; version: number }>();
     await inBatches(learners.filter(l => l.guardian), 8, async l => {
       const link = await head.post('/guardian-links', { learnerId: l.id, guardianMembershipId: l.guardian!.membershipId, academic: true, billing: true, pickup: true, contact: true });
-      const verified = await head.post(`/guardian-links/${link.id}/verify`, { version: link.version, reason: 'Birth certificate and guardian Ghana Card checked at admission' });
+      const verified = await head.post(`/guardian-links/${link.id}/verify`, { version: link.version, reason: 'Birth certificate and parent Ghana Card checked at admission' });
       pickupLinks.set(l.id, { id: link.id, version: verified.version ?? link.version + 1 });
     });
 
@@ -262,15 +262,15 @@ async function main() {
       });
     }
 
-    step('Notices to guardians');
+    step('Notices to parents');
     const notice = async (title: string, body: string, classId?: string, approve = true) => {
       const n = await head.post('/notices', { title, body, audience: classId ? 'class' : 'school', ...(classId ? { classId } : {}) });
       if (approve) await head.post(`/notices/${n.id}/approve`, { version: n.version });
     };
     await notice('PTA general meeting', `Dear parents, the PTA general meeting is on Saturday at 9:00 am in the school hall. We will discuss the ${current.name} budget and the new school bus.`);
     await notice('Mid-term break', `School closes for mid-term break on Friday at 12:00 noon and reopens on Tuesday. Please pick your children up on time.`);
-    await notice('JHS 3 mock examinations', 'JHS 3 mock examinations start next Monday. Learners must bring their exam card, a mathematical set and two pens.', classes[12]!.id);
-    await notice('Inter-house sports day', 'Our inter-house sports day is coming up. Each learner should come in their house T-shirt and bring a water bottle.', undefined, false);
+    await notice('JHS 3 mock examinations', 'JHS 3 mock examinations start next Monday. Students must bring their exam card, a mathematical set and two pens.', classes[12]!.id);
+    await notice('Inter-house sports day', 'Our inter-house sports day is coming up. Each student should come in their house T-shirt and bring a water bottle.', undefined, false);
 
     step('Early years observation guides and observations');
     const indicators = [
@@ -335,7 +335,7 @@ async function main() {
       for (const l of learners.filter(l => l.classIndex <= 4).slice(0, 40).filter(() => chance(0.3)).slice(0, 8)) {
         const link = pickupLinks.get(l.id); if (!link) continue;
         const detail = await frontdesk.get(`/learners/${l.id}`).catch(() => head.get(`/learners/${l.id}`));
-        await frontdesk.post(`/collection/learners/${l.id}/release`, { learnerVersion: detail.version ?? 1, guardianLinkId: link.id, guardianLinkVersion: link.version, verificationReason: 'Guardian recognised and Ghana Card checked at the gate' });
+        await frontdesk.post(`/collection/learners/${l.id}/release`, { learnerVersion: detail.version ?? 1, guardianLinkId: link.id, guardianLinkVersion: link.version, verificationReason: 'Parent recognised and Ghana Card checked at the gate' });
       }
     }
 
@@ -397,7 +397,7 @@ async function main() {
       });
     }
 
-    step('Support plans for learners who are behind');
+    step('Support plans for students who are behind');
     // Built from what Progress flags: a group plan for the class's weakest topic (review overdue), one learner's plan reviewed
     // once and continuing, and one that worked and was closed. Skipped in the first weeks of a term.
     if (addDays(TODAY, -24) >= current.start) for (const c of graded.filter((_, n) => n % 3 === 1)) {
@@ -410,8 +410,8 @@ async function main() {
       const concern = (a: typeof flagged[number]) => a.reason === 'dropping' ? `${a.subject}: last 3 marks average ${a.recent}%, down from ${a.earlier}% earlier this term.` : `${a.subject}: last 3 marks average ${a.recent}%, below 50%.`;
       const [first, second] = flagged;
       if (first) {
-        const p = await plan({ subjectId: first.subjectId, learnerIds: [first.learnerId], concern: concern(first), action: 'One-to-one help during break. Practice at home with the guardian.', startDate: addDays(TODAY, -17), reviewDate: addDays(TODAY, -7) });
-        await teacher.post(`/support-plans/${p.id}/reviews`, { reviewedOn: addDays(TODAY, -7), outcome: 'no_change', note: 'Attending the break sessions; guardian has started home practice. Too early to see a change.', decision: 'continue', nextReviewDate: addDays(TODAY, 7) });
+        const p = await plan({ subjectId: first.subjectId, learnerIds: [first.learnerId], concern: concern(first), action: 'One-to-one help during break. Practice at home with the parent.', startDate: addDays(TODAY, -17), reviewDate: addDays(TODAY, -7) });
+        await teacher.post(`/support-plans/${p.id}/reviews`, { reviewedOn: addDays(TODAY, -7), outcome: 'no_change', note: 'Attending the break sessions; parent has started home practice. Too early to see a change.', decision: 'continue', nextReviewDate: addDays(TODAY, 7) });
       }
       if (second) {
         const p = await plan({ subjectId: second.subjectId, learnerIds: [second.learnerId], concern: concern(second), action: 'Pair with a peer helper.', startDate: addDays(TODAY, -24), reviewDate: addDays(TODAY, -10) });
@@ -426,7 +426,7 @@ async function main() {
         const teacher = await new Person(`teacher@${DOMAIN}`).login();
         const flagged = (await teacher.get(`/assessment/classes/${jhs3.id}/progress?termId=${current.id}&period=week`)).attention as { learnerId: string; subjectId: string; subject: string; recent: number }[];
         const a = flagged[0];
-        if (a) await teacher.post(`/assessment/classes/${jhs3.id}/support-plans`, { termId: current.id, subjectId: a.subjectId, learnerIds: [a.learnerId], concern: `${a.subject}: last 3 marks average ${a.recent}%.`, action: 'Extra practice exercises. Meet the guardian.', startDate: addDays(TODAY, -7), reviewDate: TODAY });
+        if (a) await teacher.post(`/assessment/classes/${jhs3.id}/support-plans`, { termId: current.id, subjectId: a.subjectId, learnerIds: [a.learnerId], concern: `${a.subject}: last 3 marks average ${a.recent}%.`, action: 'Extra practice exercises. Meet the parent.', startDate: addDays(TODAY, -7), reviewDate: TODAY });
       }
     }
 
@@ -488,7 +488,7 @@ async function main() {
       if (scores.length) await head.post(`/assessment/classes/${c.id}/scores`, { termId: current.id, subjectId, scores });
     }
 
-    step('Notes on learners from teachers, the headteacher and the parent');
+    step('Notes on students from teachers, the headteacher and the parent');
     // Each of the parent persona's children has a staff-only note from the class teacher, a note the headteacher shares with
     // the family, and the parent's reply, so the learner page and the parent portal both show a conversation.
     const parent = await new Person(`parent@${DOMAIN}`).login();
@@ -508,10 +508,10 @@ async function main() {
       await scoreTerm(current, ['exam'], [jhs2]);
       const teacher = await new Person(staff[3 + jhs2.i]!.email).login();
       await teacher.post(`/assessment/classes/${jhs2.id}/remarks`, { termId: current.id, author: 'class_teacher', items: learners.filter(l => l.classIndex === jhs2.i).slice(0, 4)
-        .map((l, k) => ({ learnerId: l.id, conduct: ['Very good', 'Good', 'Respectful', 'Good'][k], interest: ['Football', 'Reading', 'Music', 'Drawing'][k], remark: ['A focused learner who helps others.', 'Works steadily; keep reading every day.', 'Polite and hardworking.', 'Shows good effort in class.'][k] })) });
+        .map((l, k) => ({ learnerId: l.id, conduct: ['Very good', 'Good', 'Respectful', 'Good'][k], interest: ['Football', 'Reading', 'Music', 'Drawing'][k], remark: ['A focused student who helps others.', 'Works steadily; keep reading every day.', 'Polite and hardworking.', 'Shows good effort in class.'][k] })) });
     }
 
-    console.log(`\n${SCHOOL_NAME} is ready: ${learners.length} learners in ${classes.length} classes, ${current.name} of ${Y}/${Y + 1}.`);
+    console.log(`\n${SCHOOL_NAME} is ready: ${learners.length} students in ${classes.length} classes, ${current.name} of ${Y}/${Y + 1}.`);
     console.log(`Sign in with any of these (password ${PASSWORD}):`);
     for (const [who, email] of [['Headteacher', `headteacher@${DOMAIN}`], ['Class teacher (JHS 3)', `teacher@${DOMAIN}`], ['Class teacher (KG 1)', `earlyyears@${DOMAIN}`], ['Accountant', `accounts@${DOMAIN}`], ['Front desk', `frontdesk@${DOMAIN}`], ['Parent (two children)', `parent@${DOMAIN}`]]) console.log(`  ${who.padEnd(24)} ${email}`);
   } finally { await owner.end(); }

@@ -554,15 +554,15 @@ async function ensureGuardians(subset: L[]) {
   await pool(todo, async l => {
     const fam = state.accounts[`family${l.family}`]!;
     const link = await head.post('/guardian-links', { learnerId: idOf(l), guardianMembershipId: fam.membershipId, academic: true, billing: true, pickup: true, contact: true }, `link:${l.key}`);
-    await head.post(`/guardian-links/${link.id}/verify`, { version: link.version, reason: 'Birth certificate and guardian Ghana Card checked against the admission file' }, `link:${l.key}:verify`);
+    await head.post(`/guardian-links/${link.id}/verify`, { version: link.version, reason: 'Birth certificate and parent Ghana Card checked against the admission file' }, `link:${l.key}:verify`);
     state.links[l.key] = link.id; save();
-  }, 'guardian links');
+  }, 'parent links');
 }
 async function roll() {
   const head = await as('head');
   const missing = model.learners.filter(l => l.csv && !state.learners[l.key]);
   if (missing.length) {
-    step(`Existing learners brought in from the admission registers, one CSV per class (${missing.length})`);
+    step(`Existing students brought in from the admission registers, one CSV per class (${missing.length})`);
     for (const c of Array.from(new Set(missing.map(l => l.c0))).sort((a, b) => a - b)) {
       const rows = missing.filter(l => l.c0 === c);
       const csv = ['Full Name,Admission No.,Date of Birth,Sex', ...rows.map(r => `${r.name},${r.admission},${r.dob},${r.sex}`)].join('\n');
@@ -578,9 +578,9 @@ async function roll() {
     for (const l of model.learners) { const found = roll.find((x: { admission_number: string }) => x.admission_number === l.admission); if (found) state.learners[l.key] = found.id; }
     save(); flush();
     const absent = model.learners.filter(l => l.csv && !state.learners[l.key]);
-    if (absent.length) throw new Error(`${absent.length} imported learners are not on the roll: ${absent.slice(0, 3).map(l => l.admission).join(', ')}`);
+    if (absent.length) throw new Error(`${absent.length} imported students are not on the roll: ${absent.slice(0, 3).map(l => l.admission).join(', ')}`);
   }
-  step('Guardian accounts and verified links for the starting roll');
+  step('Parent accounts and verified links for the starting roll');
   await ensureGuardians(model.learners.filter(l => l.csv));
   step('Early-years enrolment ids');
   await pool(model.learners.filter(l => l.csv && l.c0 < 4), async l => { await enrolmentId(l, 0, l.c0); }, 'enrolments');
@@ -773,11 +773,11 @@ async function fees(t: TermDef) {
     parts.forEach((p, n) => { if (p.amount > 0 && p.on <= TODAY && p.on <= t.end) plan.push({ l, n, amount: p.amount, on: p.on, invoiceId: inv.id }); });
   }
   if (t.key === 't2' && !done('reversal')) {
-    step('t2: the bursar posts a payment to the wrong learner and the headteacher reverses it');
+    step('t2: the bursar posts a payment to the wrong student and the headteacher reverses it');
     const target = plan.length ? invoices.find((i: { id: string; learner_id: string }) => !plan.some(p => p.invoiceId === i.id)) : null;
     if (target) {
       const wrong = await bursar.post('/finance/payments', { invoiceId: target.id, amountPesewas: 30000, method: 'cash', receivedOn: addDays(t.start, 6) }, 'reversal:wrong');
-      await head.post(`/finance/payments/${wrong.id}/reverse`, { reason: 'Posted to the wrong learner; the cash belongs to another family and was re-entered there' }, 'reversal:reverse');
+      await head.post(`/finance/payments/${wrong.id}/reverse`, { reason: 'Posted to the wrong student; the cash belongs to another family and was re-entered there' }, 'reversal:reverse');
     }
     mark('reversal');
   }
@@ -824,7 +824,7 @@ async function supportPast(t: TermDef) {
     const start = weekDate(t, p.startW), first = weekDate(t, p.reviews[0]!.w);
     const plan = await head.post(`/assessment/classes/${classId(0, p.classIdx)}/support-plans`, { termId: state.termIds[t.key], subjectId: state.subjectIds[p.s], learnerIds: [idOf(l)], concern: `${SUBJECTS[p.s]}: marks mostly below 50% in the first weeks of the term.`, action: p.reviews.length > 1 ? 'Re-teach key topics in a small group twice a week and set short practice for home.' : 'One-to-one help during break and a peer helper in class.', ownerMembershipId: owner, startDate: start, reviewDate: first }, k);
     for (const [n, r] of p.reviews.entries()) {
-      await head.post(`/support-plans/${plan.id}/reviews`, { reviewedOn: weekDate(t, r.w), outcome: r.outcome, note: r.outcome === 'improved' ? 'Class work marks have risen since the plan began and the learner is completing exercises. Closing the plan.' : 'Attending the sessions but marks have not moved yet. Continuing with a change to the practice set.', decision: r.decision, ...(r.next ? { nextReviewDate: weekDate(t, r.next) } : {}) }, `${k}:review${n}`);
+      await head.post(`/support-plans/${plan.id}/reviews`, { reviewedOn: weekDate(t, r.w), outcome: r.outcome, note: r.outcome === 'improved' ? 'Class work marks have risen since the plan began and the student is completing exercises. Closing the plan.' : 'Attending the sessions but marks have not moved yet. Continuing with a change to the practice set.', decision: r.decision, ...(r.next ? { nextReviewDate: weekDate(t, r.next) } : {}) }, `${k}:review${n}`);
     }
     mark(k);
   }
@@ -836,12 +836,12 @@ async function supportNow() {
   const d = (n: number) => weekDate(t, n);
   const specs: { k: string; c: number; s: number; topic?: string; story?: string; group?: boolean; start: string; review: string; concern: string; action: string; familyNote?: string; reviews?: { on: string; outcome: string; decision: string; note: string; next?: string }[] }[] = [
     { k: 'kwame', c: BASIC6, s: 1, topic: 'Fractions', story: 'improver', start: d(1), review: '2026-10-08', concern: 'Mathematics: Kwame\'s lowest subject; marks below 40% on fractions in the first weeks.', action: 'Small-group fractions practice on Tuesdays and Thursdays, with fraction strips.', familyNote: 'Fold a sheet of paper into halves, quarters and eighths with Kwame and ask which piece is bigger. A few minutes most evenings helps.', reviews: [{ on: '2026-10-08', outcome: 'improved', decision: 'continue', note: 'Fractions marks are rising week by week and Kwame now volunteers answers. Continuing for two more weeks.', next: '2026-10-22' }] },
-    { k: 'fractions', c: BASIC6, s: 1, topic: 'Fractions', group: true, start: d(2), review: '2026-10-12', concern: 'Several learners average below 50% on Fractions across this term\'s assessments.', action: 'Re-teach in a small group on Tuesdays and Thursdays. Extra practice exercises.' },
-    { k: 'maps', c: BASIC6, s: 3, topic: 'Map reading', group: true, start: d(2), review: TODAY, concern: 'Several learners average below 50% on Map reading across this term\'s assessments.', action: 'Draw and label the school compound map in pairs; revisit the compass directions.' },
-    { k: 'kojo', c: 7, s: 1, story: 'absentee', start: d(2), review: addDays(TODAY, 1), concern: 'Mathematics: marks have fallen since absences began in mid-September.', action: 'Catch-up sheets for missed lessons and a call to the guardian about attendance.' },
+    { k: 'fractions', c: BASIC6, s: 1, topic: 'Fractions', group: true, start: d(2), review: '2026-10-12', concern: 'Several students average below 50% on Fractions across this term\'s assessments.', action: 'Re-teach in a small group on Tuesdays and Thursdays. Extra practice exercises.' },
+    { k: 'maps', c: BASIC6, s: 3, topic: 'Map reading', group: true, start: d(2), review: TODAY, concern: 'Several students average below 50% on Map reading across this term\'s assessments.', action: 'Draw and label the school compound map in pairs; revisit the compass directions.' },
+    { k: 'kojo', c: 7, s: 1, story: 'absentee', start: d(2), review: addDays(TODAY, 1), concern: 'Mathematics: marks have fallen since absences began in mid-September.', action: 'Catch-up sheets for missed lessons and a call to the parent about attendance.' },
     { k: 'akua', c: 12, s: 0, story: 'mock26', start: d(2), review: TODAY, concern: 'English: below 50% in two or more subjects in Mock 1.', action: 'Weekly essay practice with feedback; extra comprehension passages.' },
     { k: 'closed', c: 5, s: 0, start: d(0), review: '2026-09-30', concern: 'English: reading comprehension marks below 40% in the first week.', action: 'Daily guided reading for ten minutes.', reviews: [{ on: '2026-09-30', outcome: 'improved', decision: 'close', note: 'Reads aloud with confidence and class exercises are above 55%. Closing the plan.' }] },
-    { k: 'compose', c: 11, s: 0, topic: 'Composition writing', group: true, start: d(1), review: '2026-10-08', concern: 'Several learners average below 50% on Composition writing this term.', action: 'Plan-write-check routine each Friday.', reviews: [{ on: '2026-10-08', outcome: 'no_change', decision: 'continue', note: 'Plans are done but the writing is still short. Adding a sentence-starter bank.', next: '2026-10-22' }] },
+    { k: 'compose', c: 11, s: 0, topic: 'Composition writing', group: true, start: d(1), review: '2026-10-08', concern: 'Several students average below 50% on Composition writing this term.', action: 'Plan-write-check routine each Friday.', reviews: [{ on: '2026-10-08', outcome: 'no_change', decision: 'continue', note: 'Plans are done but the writing is still short. Adding a sentence-starter bank.', next: '2026-10-22' }] },
   ];
   for (const sp of specs) {
     const key = `plan:t4:${sp.k}`; if (done(key) || sp.start > TODAY || sp.review <= sp.start) continue;
@@ -852,7 +852,7 @@ async function supportNow() {
     if (sp.group) {
       const gaps = (await teacher.get(`/assessment/classes/${cid}/gaps?termId=${termId}&subjectId=${state.subjectIds[sp.s]}`)).items as { indicatorId: string; below: { learnerId: string }[] }[];
       learnerIds = (gaps.find(g => g.indicatorId === indicatorId)?.below ?? []).map(b => b.learnerId).slice(0, 12);
-      if (learnerIds.length < 2) { finding(`Support plan ${sp.k}: fewer than two learners below 50% on the topic yet, so it was skipped`); continue; }
+      if (learnerIds.length < 2) { finding(`Support plan ${sp.k}: fewer than two students below 50% on the topic yet, so it was skipped`); continue; }
     } else {
       const l = sp.story ? byStory(sp.story) : rosterOn(1, sp.c, TODAY).sort((a, b) => a.ability - b.ability)[0]!;
       learnerIds = [idOf(l)];
@@ -878,7 +878,7 @@ const NOTICES: NoticeSpec[] = [
   { t: 't4', when: 'open', title: 'PTA general meeting', body: 'The PTA general meeting is on Saturday 17 October at 9:00 am in the school hall. We will discuss the Term 1 budget and the school library.', audience: 'school' },
   { t: 't4', when: 'open', title: 'JHS 3 mock examinations', body: 'JHS 3 Mock 2 was written on Thursday 8 October. Results are with the class teacher. Mock 3 is in November. Please check your ward\'s progress.', audience: 'class', c: 12 },
   { t: 't4', when: 'late', title: 'Fees reminder', body: 'Term 1 fees are due by Friday 30 October. Your ward still has a balance. Please see the bursar this week or call the school to agree a payment plan.', audience: 'owing' },
-  { t: 't4', when: 'open', title: 'Inter-house sports day', body: 'Our inter-house sports day is coming up. Each learner should come in their house T-shirt and bring a water bottle.', audience: 'school', approve: false },
+  { t: 't4', when: 'open', title: 'Inter-house sports day', body: 'Our inter-house sports day is coming up. Each student should come in their house T-shirt and bring a water bottle.', audience: 'school', approve: false },
 ];
 async function notices(t: TermDef, stage: 'early' | 'late') {
   const head = await as('head');
@@ -899,7 +899,7 @@ async function notices(t: TermDef, stage: 'early' | 'late') {
 async function pastTerm(key: TermKey) {
   const t = T(key), head = await as('head');
   if (key === 't2' && !done('t2:events')) {
-    step('Term 2 opens: three new admissions, and a Basic 1 learner moved up to Basic 2');
+    step('Term 2 opens: three new admissions, and a Basic 1 student moved up to Basic 2');
     const newcomers = model.learners.filter(l => !l.csv && l.joins === t.start && l.segs.some(s => s.y === 0));
     for (const l of newcomers) {
       if (state.learners[l.key]) continue;
@@ -922,7 +922,7 @@ async function pastTerm(key: TermKey) {
   await fees(t);
   await supportPast(t);
   if (key === 't2' && !done('t2:leaves')) {
-    step('End of Term 2: a Basic 3 learner transfers to another school');
+    step('End of Term 2: a Basic 3 student transfers to another school');
     const leaver = model.learners.find(l => l.leaves)!;
     const detail = await head.get(`/learners/${idOf(leaver)}`);
     await head.post(`/learners/${idOf(leaver)}/withdraw`, { version: detail.version, effectiveDate: leaver.leaves!, reason: 'Transferred to another school: family relocated to Takoradi; transfer letter and records issued' }, 'leaver');
@@ -1075,7 +1075,7 @@ async function finish() {
   const school = await head.get<{ name: string; version: number; motto: string | null; logo_tag: string | null }>('');
   if (!school.motto) await head.call('PATCH', '', { name: school.name, version: school.version, address: 'P.O. Box KS 45, Kasoa, Central Region', phone: '024 000 0451', motto: 'Rise and shine in learning' });
   if (!school.logo_tag) await head.put('/logo', { logo: `data:image/png;base64,${readFileSync(path.join(__dirname, 'assets/sunrise-crest.png')).toString('base64')}` });
-  await head.put('/ai/settings', { enabled: true, monthlyRunCap: 300, acknowledgement: 'Sunrise International School (Demo) is a synthetic demonstration school with no real learners or staff. AI drafting and the Ask assistant are switched on here for demonstrations only, with a monthly cap of 300 questions.' }, 'ai-settings');
+  await head.put('/ai/settings', { enabled: true, monthlyRunCap: 300, acknowledgement: 'Sunrise International School (Demo) is a synthetic demonstration school with no real students or staff. AI drafting and the Ask assistant are switched on here for demonstrations only, with a monthly cap of 300 questions.' }, 'ai-settings');
   step('Shared teacher and parent logins get their demo passwords (no forced change)');
   const personas: [string, string][] = [['teacher' + BASIC6, 'Class teacher (Basic 6)'], ['family0', 'Parent (two children)']];
   for (const [key] of personas) {
@@ -1105,9 +1105,9 @@ async function verify() {
   for (const y of [0, 1] as const) {
     const day = y === 0 ? '2026-06-30' : TODAY;
     const census = (await head.get(`/learners/census?day=${day}`)).items as { name: string; id: string; female: number; male: number; unrecorded: number }[];
-    say(`Learners per class on ${day}: ${census.map(c => `${c.name} ${c.female + c.male + c.unrecorded}`).join(', ')}`);
+    say(`Students per class on ${day}: ${census.map(c => `${c.name} ${c.female + c.male + c.unrecorded}`).join(', ')}`);
     const expected = CLASSES.map((_, c) => rosterOn(y, c, day).length);
-    CLASSES.forEach((cl, c) => { const got = census.find(x => x.id === classId(y, c)); const n = got ? got.female + got.male + got.unrecorded : 0; if (n !== expected[c]) bad.push(`${cl.name} ${y ? '2026/27' : '2025/26'} has ${n} learners, expected ${expected[c]}`); });
+    CLASSES.forEach((cl, c) => { const got = census.find(x => x.id === classId(y, c)); const n = got ? got.female + got.male + got.unrecorded : 0; if (n !== expected[c]) bad.push(`${cl.name} ${y ? '2026/27' : '2025/26'} has ${n} students, expected ${expected[c]}`); });
   }
   for (const t of TERMS) {
     if (t.start > TODAY) continue;
@@ -1126,8 +1126,8 @@ async function verify() {
     if (t.end <= TODAY) {
       let cards = 0, want = 0;
       for (const c of GRADED) { cards += (await head.get(`/assessment/classes/${classId(t.year, c)}/reports?termId=${state.termIds[t.key]}`)).items.length; want += model.learners.filter(l => inTerm(l, t.year, c, t)).length; }
-      say(`${t.key}: ${cards} published report cards for ${want} learners`);
-      if (cards !== want) bad.push(`${t.key}: ${cards} report cards for ${want} learners`);
+      say(`${t.key}: ${cards} published report cards for ${want} students`);
+      if (cards !== want) bad.push(`${t.key}: ${cards} report cards for ${want} students`);
     }
     const summary = await bursar.get(`/finance/summary?termId=${state.termIds[t.key]}`);
     const invoices = (await bursar.get(`/finance/invoices?termId=${state.termIds[t.key]}&limit=1`)).total;
