@@ -37,10 +37,18 @@ const Accounts=lazyModule(()=>import('./modules/Accounts'),'Accounts');
 const ContentLibrary=lazyModule(()=>import('./modules/ContentLibrary'),'ContentLibrary');
 const GettingStarted=lazyModule(()=>import('./modules/GettingStarted'),'GettingStarted');
 const Landing=lazy(()=>import('./landing/Landing'));
+const AuthPage=lazy(()=>import('./auth/AuthPage'));
 // Remembers that this browser was signed in, so a returning user waits for the session instead of seeing the landing page flash.
 const SIGNED_IN='vx-signed-in';
 const rememberSignedIn=(on:boolean)=>{try{on?localStorage.setItem(SIGNED_IN,'1'):localStorage.removeItem(SIGNED_IN);}catch{/* storage blocked */}};
 const wasSignedIn=()=>{try{return localStorage.getItem(SIGNED_IN)==='1';}catch{return false;}};
+// The shared service-problem text says "changes may not have been saved", which is wrong for a sign-in and unclear for a new account.
+const authProblem=(error:unknown,creating:boolean)=>{
+  const {message,status,retryable}=error as {message:string;status?:number;retryable?:boolean};
+  if(!retryable)return message;
+  if(status===0)return 'Connection problem. Check your internet connection and try again.';
+  return creating?'The service did not answer, so your account may not have been created. Wait a few seconds, then sign in with the same email. If that fails, create the account again.':'The service did not answer, so you were not signed in. It may be waking up: wait a few seconds and try again.';
+};
 const leaveAuthPage=()=>{if(/^#\/(signin|register)$/.test(location.hash))history.replaceState(null,'',location.pathname+location.search);};
 type NavItem={id:string;label:string;icon:string};
 const nav=(id:string,label:string,icon:string):NavItem=>({id,label,icon});
@@ -94,21 +102,21 @@ function App() {
   const [school,setSchool] = useState<School|null>(null);
   const [audit,setAudit] = useState<Audit[]>([]);
   const [auditTotal,setAuditTotal] = useState(0);
-  const [email,setEmail] = useState(LOCAL?'head@example.test':DEMO?'headteacher@sunrise.demo':'');
+  const defaultEmail=LOCAL?'head@example.test':DEMO?'headteacher@sunrise.demo':'';
+  const [email,setEmail] = useState(location.hash==='#/register'?'':defaultEmail);
   const [password,setPassword] = useState('');
   const [newPassword,setNewPassword] = useState('');
   const [name,setName] = useState('');
   const [details,setDetails] = useState({address:'',phone:'',motto:''});
   const [status,setStatus] = useState('');
   const [busy,setBusy] = useState(false);
-  const [registering,setRegistering] = useState(false);
   const [fullName,setFullName] = useState('');
   const [schoolName,setSchoolName] = useState('');
   const [teacherAccessRefresh,setTeacherAccessRefresh] = useState(0);
   const [loading,setLoading] = useState(true);
   const [tab,setTab] = useState(()=>location.hash.replace(/^#\//,''));
   const [menuOpen,setMenuOpen] = useState(false);
-  useEffect(()=>{const change=()=>{setTab(location.hash.replace(/^#\//,''));setMenuOpen(false);window.scrollTo(0,0);};addEventListener('hashchange',change);return ()=>removeEventListener('hashchange',change);},[]);
+  useEffect(()=>{const change=()=>{setTab(location.hash.replace(/^#\//,''));setMenuOpen(false);window.scrollTo(0,0);if(location.hash==='#/register')setEmail(value=>value===defaultEmail?'':value);};addEventListener('hashchange',change);return ()=>removeEventListener('hashchange',change);},[]);
   const selectionEpoch=useRef(0);
   async function selectSchool(id:string) {
     const epoch=++selectionEpoch.current;
@@ -133,12 +141,12 @@ function App() {
   async function signIn(event:FormEvent) {
     event.preventDefault();setBusy(true);setStatus('');
     try { await request('/auth/login',{method:'POST',body:JSON.stringify({email,password})});setPassword('');leaveAuthPage();setTab('');await restore(); }
-    catch(error) {setStatus((error as Error).message);} finally {setBusy(false);}
+    catch(error) {setStatus(authProblem(error,false));} finally {setBusy(false);}
   }
   async function register(event:FormEvent) {
     event.preventDefault();setBusy(true);setStatus('');
-    try { await request('/auth/register',{method:'POST',body:JSON.stringify({name:fullName,schoolName,email,password})});setPassword('');leaveAuthPage();setTab('');setRegistering(false);await restore(); }
-    catch(error) {setStatus((error as Error).message);} finally {setBusy(false);}
+    try { await request('/auth/register',{method:'POST',body:JSON.stringify({name:fullName,schoolName,email,password})});setPassword('');leaveAuthPage();setTab('');await restore(); }
+    catch(error) {setStatus(authProblem(error,true));} finally {setBusy(false);}
   }
   async function changePassword(event:FormEvent) {
     event.preventDefault();if(!session)return;setBusy(true);setStatus('');
@@ -171,9 +179,10 @@ function App() {
   const onLanding=!tab||tab.startsWith('#');
   if(loading&&onLanding&&!wasSignedIn())return <Suspense fallback={null}><Landing/></Suspense>;
   if(loading)return <main><p role="status">Loading workspace…</p></main>;
-  if(!session&&onLanding&&!registering)return <Suspense fallback={null}><Landing/></Suspense>;
-  if(!session&&(registering||tab==='register'))return <main className="login"><p className="brand"><span className="logo" aria-hidden="true">V</span>Veloxa SmartSchool</p><h1>Create your account</h1><p>Set up your school and become its headteacher. You can add staff and guardians afterwards.</p><form onSubmit={register}><label>Your full name<input autoComplete="name" minLength={2} maxLength={120} value={fullName} onChange={e=>setFullName(e.target.value)} required/></label><label>School name<input minLength={3} maxLength={120} value={schoolName} onChange={e=>setSchoolName(e.target.value)} required/></label><label>Email<input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Password (at least 12 characters)<input type="password" autoComplete="new-password" minLength={12} value={password} onChange={e=>setPassword(e.target.value)} required/></label><button disabled={busy}>{busy?'Creating…':'Create account'}</button></form><p role="status">{status}</p><p className="muted">Already have an account? <button type="button" className="secondary" onClick={()=>{setRegistering(false);setStatus('');setPassword('');if(tab==='register')location.hash='#/signin'}}>Sign in</button></p><p className="muted"><a href="#">Back to the home page</a></p></main>;
-  if(!session)return <main className="login"><p className="brand"><span className="logo" aria-hidden="true">V</span>{LOCAL?'Veloxa SmartSchool · Local':'Veloxa SmartSchool'}</p><h1>Welcome back</h1><p>{LOCAL?'Use a synthetic staff account to open your school.':'Sign in with the account your school administrator created for you.'}</p><form onSubmit={signIn}><label>Email or phone number<input autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label><button disabled={busy}>{busy?'Signing in…':'Sign in'}</button></form><p role="status">{status}</p><p className="muted">New here? <button type="button" className="secondary" onClick={()=>{setRegistering(true);setStatus('');setPassword('');if(LOCAL)setEmail('')}}>Create an account</button></p><p className="muted">{LOCAL?'Synthetic data only. Password: Synthetic-only-2026!':'Forgot your password? Ask your school administrator to reset it.'}</p>{!LOCAL&&<p className="muted"><a href="#">Back to the home page</a></p>}</main>;
+  if(!session&&onLanding)return <Suspense fallback={null}><Landing/></Suspense>;
+  const authProps={local:LOCAL,busy,status,email,onEmail:setEmail,password,onPassword:setPassword,fullName,onFullName:setFullName,schoolName,onSchoolName:setSchoolName,onSwitch:(to:'signin'|'register')=>{setStatus('');setPassword('');location.hash=`#/${to}`;}};
+  if(!session&&tab==='register')return <Suspense fallback={null}><AuthPage key="register" {...authProps} mode="register" onSubmit={register}/></Suspense>;
+  if(!session)return <Suspense fallback={null}><AuthPage key="signin" {...authProps} mode="signin" onSubmit={signIn}/></Suspense>;
   if(session.mustChangePassword)return <main className="login"><p className="brand"><span className="logo" aria-hidden="true">V</span>Veloxa SmartSchool</p><h1>Choose a new password</h1><p>Your account was created with a temporary password. Choose your own to continue (at least 12 characters).</p><form onSubmit={changePassword}><label>Temporary password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label><label>New password<input type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={e=>setNewPassword(e.target.value)} required/></label><button disabled={busy}>{busy?'Saving…':'Save new password'}</button></form><p role="status">{status}</p></main>;
   if(session.mfaRequired&&!session.mfaVerified)return <Mfa csrfToken={session.csrfToken} enrolled={session.mfaEnrolled} onDone={restore} onSignOut={()=>void signOut()}/>;
   const detailsChanged=!!school&&(name!==school.name||JSON.stringify(details)!==JSON.stringify(detailsOf(school)));
