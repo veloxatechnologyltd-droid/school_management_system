@@ -563,18 +563,34 @@ function Trust() {
   </section>;
 }
 
-function Close() {
-  return <section className="lp-close">
+/* Closing call to action and footer in one blue band, with the name set large and faint underneath. */
+function Footer() {
+  return <footer className="lp-footer lp-blue">
     <div className="lp-wrap">
-      <h2>Set up your school this afternoon.</h2>
-      <p>Create the headteacher account, add your classes, and invite your teachers. Bring your learner list from Excel: the import reads Ghanaian school spreadsheets as they are, and shows you a preview first.</p>
-      <div className="lp-cta-row center">
-        <a className="lp-btn big" href={START}>Set up your school free</a>
-        <a className="lp-btn ghost light big" href="#/signin">Sign in</a>
+      <div className="lp-footer-cta">
+        <h2>Set up your school this afternoon.</h2>
+        <p>Create the headteacher account, add your classes, and invite your teachers. Bring your learner list from Excel and see a preview first.</p>
+        <a className="lp-pill" href={START}>Set up your school free<span aria-hidden="true">↗</span></a>
       </div>
-      <p className="lp-fine">Figures on this page come from our demo school on {SNAPSHOT_DATE}.</p>
+      <div className="lp-footer-row">
+        <ul className="lp-footer-links">
+          <li><a href="#schools">For schools</a></li>
+          <li><a href="#inside">Inside the product</a></li>
+          <li><a href="#families">For parents</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#/signin">Sign in</a></li>
+        </ul>
+        <p className="lp-footer-brand"><span className="logo" aria-hidden="true">V</span>Veloxa SmartSchool</p>
+        <div className="lp-footer-meta">
+          <p>Made for schools in Ghana, KG to JHS</p>
+          <p><a href={SHARE} target="_blank" rel="noopener noreferrer">Share with a school on WhatsApp</a></p>
+          <p className="lp-fine">Figures on this page come from our demo school on {SNAPSHOT_DATE}.</p>
+          <p className="lp-fine">© 2026 Veloxa SmartSchool</p>
+        </div>
+      </div>
     </div>
-  </section>;
+    <p className="lp-footer-mark" aria-hidden="true">veloxa</p>
+  </footer>;
 }
 
 export default function Landing() {
@@ -614,8 +630,7 @@ export default function Landing() {
       <ParentScreens />
       <Pricing />
       <Trust />
-      <Close />
     </main>
-    <footer className="lp-foot"><span>© 2026 Veloxa SmartSchool</span><span>Made for schools in Ghana</span></footer>
+    <Footer />
   </div>;
 }
