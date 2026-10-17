@@ -71,7 +71,7 @@ export function CaSheet({ schoolId, classId, termId, subjects, subjectId, onSubj
               <td className="num"><Pct value={r.total}/></td>
               <td>{r.gap ? <Pill tone={r.gap.direction === 'exam_higher' ? 'caution' : 'info'}>{`Exam ${Math.round(Math.abs(r.gap.difference))} pts ${r.gap.direction === 'exam_higher' ? 'higher' : 'lower'}`}</Pill>
                 : r.exam === null ? <span className="muted">No exam yet</span> : CA_PART_KEYS.reduce((n, key) => n + r.parts[key].marked, 0) < 3 ? <span className="muted">Too little class work</span> : <span className="muted">In line</span>}</td></tr>; })}</tbody></table></div>
-        <p className="muted card-body">CA comes from each learner's marks in each part, weighted as the school sets it. A part with no marks for a learner is left out and the others count for more, so check the "of" counts. The total uses the CA saved for the report card where there is one; save it on the Assessment page ("Fill CA from assessments").
+        <p className="muted card-body">CA comes from each learner's marks in each part, weighted as the school sets it. A part with no marks for a learner is left out and the others count for more, so check the "of" counts. The total uses the CA saved for the report card where there is one; it is saved from class work when the exam marks are saved on the Exam scores tab.
           {' '}{flagged.length ? `${flagged.length} learner${flagged.length === 1 ? ' has' : 's have'}` : 'Nobody has'} an exam 20 or more points away from their class work (with at least 3 marks). That is worth a quiet look, for example a bad exam day, missed class work, or work done with help. It is not proof of anything.</p>
       </>}
   </>;
@@ -85,7 +85,7 @@ export function WorkSet({ schoolId, classId, termId, subjectId }: { schoolId: st
     return () => { live = false; }; }, [schoolId, classId, termId]);
   const subject = subjectId;
   return <Card title="Work set" hint={load ? `Exercises (with quizzes), homework, class tests and projects given to this class, counted up to ${shortDate(load.asOf)}.` : undefined} flush>
-      {error ? <p role="alert" className="card-body">{error}</p> : !load ? <p className="muted card-body" role="status">Loading…</p> : !load.items.length ? <Empty title="No class work recorded yet this term" hint="Add each exercise, homework or test on the Assessments tab."/>
+      {error ? <p role="alert" className="card-body">{error}</p> : !load ? <p className="muted card-body" role="status">Loading…</p> : !load.items.length ? <Empty title="No class work recorded yet this term" hint="Add each exercise, homework or test on the Class work tab."/>
         : <div className="table-wrap"><table><thead><tr><th>Subject</th><th>This week</th><th>This month</th><th>This term</th></tr></thead><tbody>
           {load.items.map(i => <tr key={i.subjectId} className={i.subjectId === subject ? 'selected' : undefined}><td>{i.name}</td><td>{countText(i.week)}</td><td>{countText(i.month)}</td><td>{countText(i.term)}</td></tr>)}
           <tr className="trend-total"><td>All subjects</td><td>{countText(load.all.week)}</td><td>{countText(load.all.month)}</td><td>{countText(load.all.term)}</td></tr></tbody></table></div>}

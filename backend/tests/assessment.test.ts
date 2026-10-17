@@ -66,7 +66,9 @@ test('teachers record scores for assigned classes only; entries are append-only 
 });
 
 test('results are computed deterministically with grades, positions and incomplete learners flagged',async()=>{
-  assert.equal((await call(`/assessment/classes/${cls}/results?termId=${termId}`,'GET',undefined,teacher)).status,403);
+  // Teachers read results only for classes they teach today; this teacher's assignment was revoked above.
+  assert.equal((await call(`/assessment/classes/${cls}/results?termId=${termId}`,'GET',undefined,teacher)).status,404);
+  assert.equal((await call(`/assessment/classes/${cls}/results?termId=${termId}`,'GET',undefined,guardian)).status,403);
   const results=(await call(`/assessment/classes/${cls}/results?termId=${termId}`)).body;
   const byName=(name:string)=>results.items.find((row:any)=>row.fullName===name);
   const ama=byName('Ama Top'),kojo=byName('Kojo Middle'),esi=byName('Esi Incomplete');

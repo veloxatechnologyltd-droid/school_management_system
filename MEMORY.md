@@ -379,3 +379,19 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was rejected:** Setup steps, cost block and questions on the register page (too much); a consent checkbox on sign-up (the architecture says a blanket checkbox is not enough); an uptime/alerting claim and an "export your records" claim (not verified in code or deployment).
 **Still needing Evans:** confirm the specification wording for the recovery target and for "Veloxa and the school complete a data-protection checklist before real learner records", and whether sign-in should also be trimmed to one screen. README.md has an uncommitted edit that includes the demo password in plain text; I left it alone.
 
+## 2026-10-17, Journey V logo direction favored
+**What was decided:** Evans chose the rounded-square journey V concept for further exploration and requested three colour and layout treatments. These are preview PNGs in `marketing/logos/2026-10-17-refined/`; no final production logo or application replacement was approved.
+**Why:** The selected mark reads clearly as a V and fits the Veloxa SmartSchool identity.
+**What was rejected:** Treating the other two concepts or any one refined treatment as the approved final brand before Evans reviews the variants.
+
+## 2026-10-17, Journey V icon accepted for product and artwork
+**What was decided:** Evans accepted the ivory two-line journey V treatment and asked for the icon alone across the site and generated marketing artwork. Use the standalone navy rounded-square icon in navigation, the favicon, flyers and the headteacher proposal; keep the school name visible in the signed-in sidebar so staff can identify the active school.
+**Why:** The full Veloxa SmartSchool wordmark is too long for compact page headers and images.
+**What was rejected:** Retaining the text wordmark beside the icon in page headers and artwork, or using the earlier placeholder V. The standalone asset is raster; a vector master remains open.
+
+
+## 2026-10-17, CA comes from class work and cannot be typed; recording on Assessment, Performance shows results
+**What was decided:** Evans asked why the Assessment page still accepted typed CA and said every recording belongs on the Assessment page while Progress shows performance and the real results. The CA on the Exam scores tab is now read-only: it is the weighted average of the term's class work (school's CA parts), saved with the exam marks. Class work entry, the CA sheet and mock results moved to Assessment; Progress was renamed Performance and gained Term results; teachers of the class may read those results.
+**Why:** A teacher described CA as made of exercises, homework and class tests; typing a CA beside them duplicated the work and let the two disagree.
+**What was rejected:** Keeping "Fill CA from assessments" as an optional pre-fill (this supersedes the 2026-10-14 "CA is suggested, not derived" decision); recording anything on the Performance page.
+**Still open:** the scores API still accepts a CA sent directly (only the screen enforces it); published reports keep the CA they were published with.

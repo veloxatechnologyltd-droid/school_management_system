@@ -132,6 +132,6 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
     </div>
     {planFor && data.currentClass && data.term && <SupportPlanDialog schoolId={schoolId} csrfToken={csrfToken} classId={data.currentClass.id} termId={data.term.id}
       draft={{ subjectId: planFor, learnerIds: [l.id], concern: '' }} subjects={subjects.map(s => ({ id: s.subjectId, name: s.name }))} roster={[{ learnerId: l.id, fullName: l.fullName }]}
-      onClose={() => setPlanFor('')} onSaved={() => { setPlanFor(''); setMessage('Support plan started. It appears under Support plans and on the Progress page.'); void load(); }}/>}
+      onClose={() => setPlanFor('')} onSaved={() => { setPlanFor(''); setMessage('Support plan started. It appears under Support plans and on the Performance page.'); void load(); }}/>}
   </section>;
 }

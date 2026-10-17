@@ -3,6 +3,9 @@ import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, Pill, Tabs, currentTerm } from '../lib/ui';
 import { caPartLabels } from '../lib/caParts';
 import { dayLabel } from '../lib/dates';
+import { CaSheet, WorkSet } from './CaSheet';
+import { ClassWork } from './ClassWork';
+import { Mocks } from './Mocks';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
@@ -34,13 +37,17 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const [years, setYears] = useState<Year[]>([]);
   const [policy, setPolicy] = useState<Policy>(null);
   const [classId, setClassId] = useState(''); const [termId, setTermId] = useState(''); const [subjectId, setSubjectId] = useState('');
+  // Class work opens on every subject, and the CA sheet on the first subject with work, until a subject is picked there.
+  const [workSubject, setWorkSubject] = useState('');
   const [grid, setGrid] = useState<GridRow[]>([]); const [edits, setEdits] = useState<Record<string, string>>({});
+  // Each learner's CA as worked out from this term's class work in the subject (null where nothing is marked yet).
+  const [classCa, setClassCa] = useState<Record<string, { ca: number | null; assessments: number }> | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const [remarks, setRemarks] = useState<Remark[]>([]); const [remarkEdits, setRemarkEdits] = useState<Record<string, string>>({});
   const [remarkRun, setRemarkRun] = useState<{ runId: string; drafts: Record<string, string> } | null>(null); const [remarkNote, setRemarkNote] = useState('');
   const [printing, setPrinting] = useState<{ id: string; snapshot: Snapshot }[] | null>(null);
   const [printLevel, setPrintLevel] = useState('');
-  const [tab, setTab] = useState<'scores' | 'remarks' | 'reports'>('scores');
+  const [tab, setTab] = useState<'work' | 'ca' | 'scores' | 'mocks' | 'remarks' | 'reports'>('work');
   const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [newSubject, setNewSubject] = useState(''); const [newTerm, setNewTerm] = useState({ academicYearId: '', name: '', startDate: '', endDate: '' });
   const [policyForm, setPolicyForm] = useState({ caWeight: '50', examWeight: '50', bands: '80,A,Excellent\n65,B,Good\n50,C,Credit\n0,D,Needs support', sourceNote: '', parts: { exercises: '30', homework: '30', tests: '40', projects: '0' } as Record<keyof CaParts, string> });
@@ -63,10 +70,13 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   useEffect(() => { void loadSetup(); }, [loadSetup]);
 
   const loadGrid = useCallback(async () => {
-    setGrid([]); setEdits({}); setResults([]);
+    setGrid([]); setEdits({}); setResults([]); setClassCa(null);
     if (!classId || !termId) return;
-    try { setGrid((await request<{ items: GridRow[] }>(`/schools/${schoolId}/assessment/classes/${classId}/grid?termId=${termId}${subjectId ? `&subjectId=${subjectId}` : ''}`)).items); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      const [g, c] = await Promise.all([request<{ items: GridRow[] }>(`/schools/${schoolId}/assessment/classes/${classId}/grid?termId=${termId}${subjectId ? `&subjectId=${subjectId}` : ''}`),
+        subjectId ? request<{ items: { learnerId: string; ca: number | null; assessments: number }[] }>(`/schools/${schoolId}/assessment/classes/${classId}/ca-suggestion?termId=${termId}&subjectId=${subjectId}`) : Promise.resolve({ items: [] })]);
+      setGrid(g.items); setClassCa(Object.fromEntries(c.items.map(i => [i.learnerId, { ca: i.ca, assessments: i.assessments }])));
+    } catch (e) { setError((e as Error).message); }
   }, [schoolId, classId, termId, subjectId]);
   useEffect(() => { void loadGrid(); }, [loadGrid]);
   // Only the latest request may fill the table, so a quick change of class never shows another class's learners.
@@ -94,22 +104,16 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     await send('/assessment/policy', 'PUT', { caWeight: Number(policyForm.caWeight), examWeight: Number(policyForm.examWeight), bands: parseBands(policyForm.bands), caParts, sourceNote: policyForm.sourceNote, ...(policy ? { version: policy.version } : {}) });
     await loadSetup(); setMessage('Assessment policy saved.');
   }); };
+  // The CA is never typed: it comes from the learner's class work this term, weighted by the school's parts. Saving stores
+  // the exam marks entered and, for every open report, the CA from class work where it differs from what was saved.
+  const caFor = (row: GridRow) => row.locked ? row.ca : classCa?.[row.learnerId]?.ca ?? row.ca;
   const saveScores = () => void act(async () => {
     if (!subjectId) throw new Error('Choose a subject first.');
-    const scores = grid.flatMap(row => (['ca', 'exam'] as const).flatMap(kind => { const key = `${row.learnerId}:${kind}`; return edits[key] !== undefined && edits[key] !== '' ? [{ learnerId: row.learnerId, kind, score: Number(edits[key]) }] : []; }));
-    if (!scores.length) throw new Error('Enter at least one score.');
-    const result = await send<{ written: number }>(`/assessment/classes/${classId}/scores`, 'POST', { termId, subjectId, scores });
-    await loadGrid(); setMessage(`Saved ${result.written} score(s).`);
-  });
-  // Fills the CA boxes with each learner's average over the term's dated assessments; nothing is saved until the teacher saves.
-  const fillCa = () => void act(async () => {
-    if (!subjectId) throw new Error('Choose a subject first.');
-    const r = await request<{ parts: CaParts; items: { learnerId: string; ca: number | null; assessments: number }[] }>(`/schools/${schoolId}/assessment/classes/${classId}/ca-suggestion?termId=${termId}&subjectId=${subjectId}`);
-    const filled = r.items.filter(i => i.ca !== null && grid.some(row => row.learnerId === i.learnerId && !row.locked));
-    if (!filled.length) throw new Error('No assessment marks have been recorded for this subject this term. Add them on the Progress page.');
-    setEdits(prior => ({ ...prior, ...Object.fromEntries(filled.map(i => [`${i.learnerId}:ca`, String(i.ca)])) }));
-    const parts = caPartLabels.filter(([key]) => r.parts[key]).map(([key, label]) => `${label.toLowerCase()} ${r.parts[key]}`).join(', ');
-    setMessage(`Filled the continuous assessment for ${filled.length} learner(s) from their class work this term (${parts}). Check the scores, then save.`);
+    const exams = grid.flatMap(row => { const v = edits[`${row.learnerId}:exam`]; return !row.locked && v !== undefined && v !== '' && Number(v) !== row.exam ? [{ learnerId: row.learnerId, kind: 'exam' as const, score: Number(v) }] : []; });
+    const cas = grid.flatMap(row => { const ca = classCa?.[row.learnerId]?.ca; return !row.locked && ca != null && ca !== row.ca ? [{ learnerId: row.learnerId, kind: 'ca' as const, score: ca }] : []; });
+    if (!exams.length && !cas.length) throw new Error('Nothing to save: enter an exam mark, or record class work marks first.');
+    const result = await send<{ written: number }>(`/assessment/classes/${classId}/scores`, 'POST', { termId, subjectId, scores: [...cas, ...exams] });
+    await loadGrid(); setMessage(`Saved ${exams.length} exam mark(s)${cas.length ? ` and the CA from class work for ${cas.length} learner(s)` : ''} (${result.written} score(s) written).`);
   });
   const reopen = (row: GridRow) => { const reason = window.prompt(`Why is ${row.fullName}'s published report being corrected? This is recorded.`); if (!reason || reason.trim().length < 3) return;
     void act(async () => { await send(`/assessment/classes/${classId}/reopen`, 'POST', { termId, learnerId: row.learnerId, reason }); await loadGrid(); setMessage(`${row.fullName}'s report is open for correction. Fix the scores, then publish the corrected report.`); }); };
@@ -161,10 +165,13 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
   const resultsTable = results.length > 0 && <>
     <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">Position</th><th className="num">Average</th><th>Subjects</th></tr></thead><tbody>{results.map(r => <tr key={r.learnerId}><td>{r.fullName}{!r.complete && <> <Pill tone="caution">Missing scores</Pill></>}</td><td className="num">{r.position ?? '–'}</td><td className="num">{r.complete ? r.average : '–'}</td><td>{r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</td></tr>)}</tbody></table></div>
     <div className="actions card-actions"><button disabled={busy} onClick={publish}>Publish terminal reports</button></div></>;
+  // Mock exams are a JHS matter (BECE preparation).
+  const isJhs = (classes.find(c => c.id === classId)?.level ?? 'JHS') === 'JHS';
+  useEffect(() => { if (!isJhs && tab === 'mocks') setTab('work'); }, [isJhs, tab]);
   const picks = <>
     <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
     <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
-    <Tabs label="Assessment view" value={tab} onChange={setTab} options={[{ id: 'scores', label: 'Scores' }, { id: 'remarks', label: 'Remarks' }, { id: 'reports', label: 'Report cards' }]}/></>;
+    <Tabs label="Assessment view" value={tab} onChange={setTab} options={[{ id: 'work', label: 'Class work' }, { id: 'ca', label: 'CA sheet' }, { id: 'scores', label: 'Exam scores' }, ...(isJhs ? [{ id: 'mocks' as const, label: 'Mocks' }] : []), { id: 'remarks', label: 'Remarks' }, { id: 'reports', label: 'Report cards' }]}/></>;
   return <section aria-label="Assessment and terminal reports" className="page">
     <h2 className="sr-only">{view === 'setup' ? 'Subjects, terms and grading' : 'Assessment and terminal reports'}</h2>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
@@ -195,13 +202,23 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     <Card flush>
       <div className="toolbar">{picks}</div>
       {!classId || !termId ? <Empty title={classes.length ? 'Choose a class and term' : 'No classes yet'} hint={classes.length ? undefined : head ? 'Add classes in Settings first.' : 'You have no class assigned today.'}/>
+      : tab === 'work' ? <ClassWork schoolId={schoolId} csrfToken={csrfToken} classId={classId} className={classes.find(c => c.id === classId)?.name ?? ''} termId={termId} subjects={subjects} subjectId={workSubject} onSubject={setWorkSubject} onChanged={() => void loadGrid()}/>
+      : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects} mode="record"/>
+      : tab === 'ca' ? <CaSheet schoolId={schoolId} classId={classId} termId={termId} subjects={subjects} subjectId={workSubject} onSubject={setWorkSubject}/>
       : tab === 'scores' ? <>
         <div className="toolbar"><label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">Choose a subject</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label><span className="count">{grid.length} learner{grid.length === 1 ? '' : 's'}</span></div>
-        {grid.length > 0 ? <><div className="table-wrap"><table><thead><tr><th>Learner</th><th>Continuous assessment (0–100)</th><th>Exam (0–100)</th>{head && <th>Published report</th>}</tr></thead><tbody>
-          {grid.map(row => <tr key={row.learnerId}><td>{row.fullName}</td>{(['ca', 'exam'] as const).map(kind => <td key={kind}><input type="number" min={0} max={100} step="0.01" aria-label={`${row.fullName} ${kind === 'ca' ? 'continuous assessment' : 'exam'}`} disabled={row.locked}
-            value={edits[`${row.learnerId}:${kind}`] ?? (row[kind] ?? '')} onChange={e => setEdits({ ...edits, [`${row.learnerId}:${kind}`]: e.target.value })}/></td>)}{head && <td>{row.locked ? <button type="button" className="secondary" disabled={busy} onClick={() => reopen(row)}>Correct this report</button> : row.published ? <button type="button" disabled={busy} onClick={() => reissue(row)}>Publish corrected report</button> : '–'}</td>}</tr>)}</tbody></table></div>
-          <div className="actions card-actions"><button disabled={busy || !policy} onClick={saveScores}>Save scores</button><button className="secondary" disabled={busy || !subjectId} onClick={fillCa}>Fill CA from assessments</button></div></>
-          : <Empty title={subjectId ? 'No learners in this class' : 'Choose a subject'} hint={subjectId ? undefined : 'Pick the subject whose scores you are entering.'}/>}
+        {grid.length > 0 && subjectId ? <><p className="muted card-body">Enter each learner's exam mark out of 100. The continuous assessment comes from the class work recorded on the Class work tab{policy ? ` (CA ${policy.ca_weight}%, exam ${policy.exam_weight}%)` : ''}, so it cannot be typed here; it is saved with the exam marks.</p>
+          <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">CA from class work<span className="sub">out of 100</span></th><th>Exam (0–100)</th><th className="num hide-sm">Total</th>{head && <th>Published report</th>}</tr></thead><tbody>
+          {grid.map(row => { const ca = caFor(row), fromWork = classCa?.[row.learnerId], examText = edits[`${row.learnerId}:exam`] ?? (row.exam ?? ''), exam = examText === '' ? null : Number(examText);
+            const caNote = row.locked ? 'report published' : !fromWork?.ca && fromWork?.ca !== 0 ? (row.ca === null ? 'no class work marked yet' : 'entered earlier · no class work marked') : `${fromWork.assessments} mark${fromWork.assessments === 1 ? '' : 's'}${row.ca === fromWork.ca ? ' · saved' : row.ca === null ? ' · saved with exam' : ` · was ${row.ca}, saved with exam`}`;
+            return <tr key={row.learnerId}><td>{row.fullName}</td>
+              <td className="num">{ca === null ? <span className="muted">–</span> : <strong>{ca}</strong>}<span className="sub">{caNote}</span></td>
+              <td><input type="number" min={0} max={100} step="0.01" aria-label={`${row.fullName} exam`} disabled={row.locked} value={examText} onChange={e => setEdits({ ...edits, [`${row.learnerId}:exam`]: e.target.value })}/></td>
+              <td className="num hide-sm">{policy && ca !== null && exam !== null && !Number.isNaN(exam) ? Math.round((ca * policy.ca_weight + exam * policy.exam_weight) / 10) / 10 : <span className="muted">–</span>}</td>
+              {head && <td>{row.locked ? <button type="button" className="secondary" disabled={busy} onClick={() => reopen(row)}>Correct this report</button> : row.published ? <button type="button" disabled={busy} onClick={() => reissue(row)}>Publish corrected report</button> : '–'}</td>}</tr>; })}</tbody></table></div>
+          {grid.some(row => !row.locked) ? <div className="actions card-actions"><button disabled={busy || !policy} onClick={saveScores}>Save exam scores</button></div>
+            : <p className="muted card-body">Every report in this class is published, so these marks are locked.{head ? ' Use "Correct this report" to change one.' : ''}</p>}</>
+          : <Empty title={subjectId ? 'No learners in this class' : 'Choose a subject'} hint={subjectId ? undefined : 'Pick the subject whose exam marks you are entering.'}/>}
       </> : tab === 'remarks' ? (remarks.length > 0 ? <>
         <p className="muted">{head ? 'Class teachers fill conduct, attitude, interest and their remark; you add the headteacher\'s remark. Locked once the report is published.' : 'Conduct, attitude, interest and your remark for each learner. Locked once the report is published.'}</p>
         {remarkNote && <p role="status">{remarkNote}</p>}
@@ -223,6 +240,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
             <button type="button" className="secondary" disabled={busy || !termId} onClick={openSchoolReportCards}><Icon name="print"/>Print report cards</button></div></>}
       </div>}
     </Card>
+    {tab === 'ca' && classId && termId && <WorkSet schoolId={schoolId} classId={classId} termId={termId} subjectId={workSubject}/>}
     {printing && <Dialog title="Report cards" wide onClose={() => setPrinting(null)}>
       <div className="actions"><button type="button" onClick={() => window.print()}>Print all ({printing.length})</button></div>
       <div className="report-sheet">{printing.map(r => <ReportCard key={r.id} snapshot={r.snapshot}/>)}</div>

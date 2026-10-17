@@ -298,12 +298,12 @@ test('an Excel-style class list with "Admission No." headers and DD/MM/YYYY date
 test('each role lands on its own daily work; the section stays in the address across reload at phone width',async({page,browser})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewportSize({width:375,height:812});
   const links=async(p:Page)=>p.getByRole('navigation',{name:'Sections',exact:true}).locator('a .label').allTextContents();
-  await signIn(page);expect(await links(page)).toEqual(['Home','Ask','Attendance','Learners','Guardians','Pickup','Assessment','Progress','Topics','Early years','Fees','Notices','Settings']);
+  await signIn(page);expect(await links(page)).toEqual(['Home','Ask','Attendance','Learners','Guardians','Pickup','Assessment','Performance','Topics','Early years','Fees','Notices','Settings']);
   await expect(page.getByRole('link',{name:'Home',exact:true})).toHaveAttribute('aria-current','page');await expect(page.getByRole('region',{name:'Notices to guardians'})).toHaveCount(0);
   await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('link',{name:'Notices',exact:true}).click();await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   await page.reload();await pickSchool(page);await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  for(const [email,expected] of [['teacher@example.test',['Today','Ask','My classes','Assessment','Progress','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['Home','Learn at home','Progress','Report cards','Notes','Fees','Notices']]] as const){
+  for(const [email,expected] of [['teacher@example.test',['Today','Ask','My classes','Assessment','Performance','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['Home','Learn at home','Progress','Report cards','Notes','Fees','Notices']]] as const){
     const other=await browser.newPage();await other.setViewportSize({width:375,height:812});await other.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));await signIn(other,email);expect(await links(other)).toEqual(expected);
     expect(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await other.close();
   }
@@ -363,6 +363,48 @@ test('class teacher remarks and the headteacher remark appear on the printed rep
   const levelCards=page.getByRole('dialog',{name:'Report cards',exact:true}).locator('article.report-card');await expect(levelCards).toHaveCount(1);await expect(levelCards.getByText(name)).toBeVisible();
   await page.emulateMedia({media:'print'});expect(await page.locator('.report-sheet article.report-card').first().evaluate(el=>getComputedStyle(el).breakAfter)).toBe('page');await page.emulateMedia({media:'screen'});
   await page.setViewportSize({width:375,height:812});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+test('CA cannot be typed: class work recorded on the Assessment page makes the CA, the exam is entered beside it, and Performance shows the term result',async({page})=>{
+  const {Pool}=require('pg');const path=require('node:path');
+  const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Assessment');
+  const suffix=randomUUID().slice(0,8),name=`CA Learner ${suffix}`;
+  const session=await (await page.request.get('/api/v1/auth/session')).json();
+  async function send(route:string,body:Record<string,unknown>,method='post',status=201){const response=await page.request[method as 'post'](`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
+  const year=await send('/academic-years',{name:`CA year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'}),section=await send('/classes',{name:`CA class ${suffix}`,level:'Primary',capacity:5,academicYearId:year.id});
+  const term=await send('/assessment/terms',{academicYearId:year.id,name:`CA term ${suffix}`,startDate:'2026-09-01',endDate:'2026-12-15'});
+  const subject=await send('/assessment/subjects',{name:`Science ${suffix}`});
+  let policy=(await (await page.request.get(`/api/v1/schools/${school}/assessment/policy`)).json()).policy;
+  if(!policy){await send('/assessment/policy',{caWeight:30,examWeight:70,bands:[{min:50,grade:'1',remark:'Pass'},{min:0,grade:'9',remark:'Lowest'}],sourceNote:'Synthetic policy'},'put',200);policy=(await (await page.request.get(`/api/v1/schools/${school}/assessment/policy`)).json()).policy;}
+  const learner=randomUUID();
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,$4)",[learner,school,`CA-${suffix}`,name]);
+  await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,'2026-09-01')",[randomUUID(),school,learner,section.id]);await owner.end();
+  await page.reload();await pickSchool(page);
+  const panel=page.getByRole('region',{name:'Assessment and terminal reports',exact:true});
+  await panel.getByRole('combobox',{name:'Class',exact:true}).selectOption(section.id);await panel.getByRole('combobox',{name:'Term',exact:true}).selectOption(term.id);
+  // Class work is recorded here, on its own tab: a class exercise marked 15 out of 20.
+  await expect(panel.getByRole('tab',{name:'Class work',exact:true})).toHaveAttribute('aria-selected','true');
+  await panel.getByRole('button',{name:'Add class work',exact:true}).click();
+  const add=page.getByRole('dialog',{name:'Add class work',exact:true});
+  await add.getByRole('combobox',{name:'Subject',exact:true}).selectOption(subject.id);await add.getByLabel('Title',{exact:true}).fill('Plants exercise');await add.getByLabel('Date',{exact:true}).fill('2026-09-21');
+  await add.getByRole('button',{name:'Add and enter marks',exact:true}).click();
+  const marks=page.getByRole('dialog',{name:'Plants exercise · out of 20',exact:true});await marks.getByLabel(`${name} mark`,{exact:true}).fill('15');
+  await marks.getByRole('button',{name:'Save marks',exact:true}).click();await expect(panel.getByText('Saved 1 mark(s) for Plants exercise.')).toBeVisible();
+  // The exam tab shows the CA from class work and offers no box to type it.
+  await panel.getByRole('tab',{name:'Exam scores',exact:true}).click();await panel.getByRole('combobox',{name:'Subject',exact:true}).selectOption(subject.id);
+  const row=panel.getByRole('row').filter({hasText:name});await expect(row.getByText('75',{exact:true})).toBeVisible();
+  await expect(panel.getByLabel(/continuous assessment/)).toHaveCount(0);
+  await row.getByLabel(`${name} exam`,{exact:true}).fill('60');await panel.getByRole('button',{name:'Save exam scores',exact:true}).click();
+  await expect(panel.getByText(/Saved 1 exam mark\(s\) and the CA from class work for 1 learner\(s\)/)).toBeVisible();
+  const grid=await (await page.request.get(`/api/v1/schools/${school}/assessment/classes/${section.id}/grid?termId=${term.id}&subjectId=${subject.id}`)).json();
+  expect(grid.items[0]).toMatchObject({ca:75,exam:60});
+  // Performance only shows results: the term result with the CA and exam weighted by the school's policy.
+  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Performance',exact:true}).click();
+  await page.getByRole('combobox',{name:'Class',exact:true}).selectOption(section.id);await page.getByRole('combobox',{name:'Term',exact:true}).selectOption(term.id);
+  const total=Math.round(75*policy.ca_weight+60*policy.exam_weight)/100;
+  const result=page.getByRole('row').filter({has:page.getByRole('link',{name})});await expect(result.getByText(String(total),{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:/New assessment|Add class work/})).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 test('the headteacher’s morning view lists missing registers, this week’s fees against last term and missing scores, each linking to its page',async({page})=>{
@@ -590,7 +632,7 @@ test('each page names itself in the browser tab, and a guardian reads dates as "
   await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Learners',exact:true}).click();
   await expect(page).toHaveTitle('Learners · Adinkra Synthetic School');
   await page.goto('/#/settings/curriculum');await expect(page).toHaveTitle('Settings · Curriculum & family sharing · Adinkra Synthetic School');
-  await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page).toHaveTitle('Veloxa SmartSchool');
+  await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page).toHaveTitle('Sign in · Veloxa SmartSchool');
   await signIn(page,'guardian@example.test');
   await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Home',exact:true}).click();
   await expect(page).toHaveTitle('Home · Adinkra Synthetic School');

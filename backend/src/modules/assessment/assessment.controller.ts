@@ -42,7 +42,7 @@ export class AssessmentController {
   }
   @Get('assessment/classes/:classId/results')
   results(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('classId',new ParseUUIDPipe()) classId: string,@Query() query: TermQueryDto) {
-    return this.access.school(req,schoolId,head,(client,actor) => this.assessment.results(client,actor,classId,query.termId));
+    return this.access.school(req,schoolId,staff,(client,actor) => this.assessment.results(client,actor,classId,query.termId));
   }
   @Get('assessment/reports')
   schoolReports(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Query() query: SchoolReportsQueryDto) {

@@ -12,8 +12,9 @@ const signed = (n: number | null) => n === null ? '–' : `${n > 0 ? '+' : ''}${
 
 // Mock exams (e.g. BECE mocks): rounds across all subjects, results entered from one grid, and each learner's readiness.
 // Kept apart from class work; nothing here predicts official grades.
-export function Mocks({ schoolId, csrfToken, classId, termId, subjects, onPlan }: { schoolId: string; csrfToken: string; classId: string; termId: string; subjects: { id: string; name: string }[];
-  onPlan: (learnerId: string, subjectId: string, concern: string) => void }) {
+// "record" (the Assessment page) adds rounds and enters their results; "view" (the Performance page) shows readiness only.
+export function Mocks({ schoolId, csrfToken, classId, termId, subjects, onPlan, mode }: { schoolId: string; csrfToken: string; classId: string; termId: string; subjects: { id: string; name: string }[];
+  onPlan?: (learnerId: string, subjectId: string, concern: string) => void; mode: 'record' | 'view' }) {
   const [data, setData] = useState<Data | null>(null); const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false); const [form, setForm] = useState({ title: '', heldOn: todayInAccra(), maxMark: '100', subjectIds: [] as string[] });
   const [entering, setEntering] = useState<Round | null>(null); const [grid, setGrid] = useState<Record<string, Roster>>({}); const [edits, setEdits] = useState<Record<string, string>>({});
@@ -48,11 +49,13 @@ export function Mocks({ schoolId, csrfToken, classId, termId, subjects, onPlan }
   const last = data.summary[data.summary.length - 1], prev = data.summary[data.summary.length - 2];
   const roster = Object.values(grid)[0] ?? [];
   return <>
-    <div className="toolbar"><button type="button" className="secondary" disabled={!subjects.length} onClick={openNew}><Icon name="add"/>New mock round</button>
-      {data.rounds.map(r => <button key={r.key} type="button" className="secondary" disabled={busy} onClick={() => openEntry(r)}>Results: {r.title}</button>)}
-      <span className="count">Kept apart from class work</span></div>
+    {mode === 'record' && <div className="toolbar"><button type="button" className="secondary" disabled={!subjects.length} onClick={openNew}><Icon name="add"/>New mock round</button>
+      <span className="count">Kept apart from class work and the CA</span></div>}
     {error && <p role="alert" className="card-body">{error}</p>}{message && <p role="status" className="card-body">{message}</p>}
-    {!data.rounds.length ? <Empty title="No mock exams recorded yet" hint="Add a mock round, then enter each subject's results in one grid."/> : <>
+    {!data.rounds.length ? <Empty title="No mock exams recorded yet" hint={mode === 'record' ? "Add a mock round, then enter each subject's results in one grid." : 'Mock rounds and their results are recorded on the Assessment page.'}/>
+    : mode === 'record' ? <div className="table-wrap"><table><thead><tr><th>Mock round</th><th>Date</th><th className="num">Subjects</th><th/></tr></thead><tbody>
+      {data.rounds.map(r => <tr key={r.key}><td>{r.title}</td><td>{shortDate(r.heldOn)}</td><td className="num">{r.subjects.length}</td>
+        <td><button type="button" className="secondary" disabled={busy} onClick={() => openEntry(r)}>Enter results</button></td></tr>)}</tbody></table></div> : <>
       <div className="stats card-body">
         <Stat label={`${data.rounds[data.rounds.length - 1]!.title} average`} value={last?.average === null || !last ? '–' : `${last.average}%`} caption={prev?.average != null && last?.average != null ? `${signed(Math.round((last.average - prev.average) * 10) / 10)} on the mock before` : `${last?.sat ?? 0} learners sat it`} icon="assignment"/>
         <Stat label="Needing support" value={last?.atRisk ?? 0} caption={`${data.riskSubjects}+ subjects below ${data.passLine}% in the latest mock`} icon="flag" tone={last?.atRisk ? 'caution' : 'neutral'}/>
@@ -63,7 +66,7 @@ export function Mocks({ schoolId, csrfToken, classId, termId, subjects, onPlan }
           <td className={`num tone-${l.latest?.change == null ? 'neutral' : l.latest.change < 0 ? 'critical' : 'positive'}`}>{signed(l.latest?.change ?? null)}</td>
           <td>{l.latest?.below.length ? <span className="chip-list">{(l.rounds.find(r => r.key === l.latest!.key)?.subjects ?? []).filter(x => x.percent !== null && x.percent < data.passLine).sort((a, b) => a.percent! - b.percent!).map(x => {
             const round = data.rounds.find(r => r.key === l.latest!.key)?.title ?? 'the latest mock';
-            return <button key={x.subjectId} type="button" className="link-button" onClick={() => onPlan(l.learnerId, x.subjectId, `${x.name}: ${x.percent}% in ${round}, below ${data.passLine}%.`)}>{x.name} {x.percent}%</button>; })}</span> : <span className="muted">None</span>}</td></tr>)}</tbody></table></div>
+            return !onPlan ? <span key={x.subjectId}>{x.name} {x.percent}%</span> : <button key={x.subjectId} type="button" className="link-button" onClick={() => onPlan(l.learnerId, x.subjectId, `${x.name}: ${x.percent}% in ${round}, below ${data.passLine}%.`)}>{x.name} {x.percent}%</button>; })}</span> : <span className="muted">None</span>}</td></tr>)}</tbody></table></div>
       <p className="muted card-body">Learners are listed weakest first. "Needs support" means {data.riskSubjects} or more subjects below {data.passLine}% in the latest mock; it is a prompt for the school, not a prediction of BECE grades. Select a subject to plan support.</p>
     </>}
     {creating && <Dialog title="New mock round" onClose={() => setCreating(false)}>

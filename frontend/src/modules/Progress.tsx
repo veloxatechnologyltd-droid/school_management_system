@@ -1,27 +1,23 @@
-import React, { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, Tabs, currentTerm, todayInAccra } from '../lib/ui';
 import { Plan, PlanDraft, SupportList, SupportPlanDialog, SupportPlanDrawer } from './Support';
 import { PracticeDialog } from './Practice';
 import { Mocks } from './Mocks';
 import { ClassHomePractice } from './HomePracticeStaff';
-import { CaSheet, WorkSet } from './CaSheet';
 
 type Page<T> = { items: T[] };
 type Subject = { id: string; name: string };
 type Term = { id: string; name: string; year_name: string; start_date: string; end_date: string };
 type ClassOption = { id: string; name: string; level?: string; year_name: string };
-type Assessment = { id: string; subject_id: string; subject_name: string; kind: string; title: string; held_on: string; max_mark: number; marked: number; average: number | null; indicators?: { id: string; code: string | null; description: string }[] };
-type Indicator = { id: string; grade: string | null; code: string | null; strand: string | null; sub_strand: string | null; description: string; retired_at: string | null };
 type Gap = { resources: number; indicatorId: string; subjectId: string; subject: string; code: string | null; strand: string | null; subStrand: string | null; description: string; assessments: number; learners: number; average: number | null; belowPass: number; belowShare: number | null; below: { learnerId: string; fullName: string; average: number }[] };
-type RosterRow = { learnerId: string; fullName: string; left: boolean; mark: number | null };
+type Results = { policy: { caWeight: number; examWeight: number }; classSize: number; items: { learnerId: string; fullName: string; left: boolean; complete: boolean; average: number | null; position: number | null;
+  subjects: { subjectId: string; name: string; ca: number | null; exam: number | null; total: number | null; grade: string | null }[] }[] };
 type ClassProgress = { classSize: number; buckets: string[]; overall: { start: string; average: number | null; learners: number }[]; subjects: { subjectId: string; name: string; points: { start: string; average: number | null; marks: number }[] }[];
   attention: { learnerId: string; fullName: string; subjectId: string; subject: string; reason: 'dropping' | 'below_pass'; recent: number; earlier: number | null }[] };
 type LearnerProgress = { learner: { fullName: string; admissionNumber: string }; buckets: { key: string; label: string }[]; overall: { key: string; assessmentAverage: number | null }[];
   subjects: { subjectId: string; name: string; points: { key: string; assessmentAverage: number | null; marks: number; termResult: number | null }[] }[] };
 
-const kinds = [['classwork', 'Class exercise'], ['homework', 'Homework'], ['quiz', 'Quiz'], ['class_test', 'Class test'], ['project', 'Project']] as const;
-const kindLabel = (kind: string) => kind === 'mock' ? 'Mock exam' : kinds.find(([id]) => id === kind)?.[1] ?? kind;
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short' });
 const monthName = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', month: 'short', year: 'numeric' });
 const bucketLabel = (start: string, period: string) => period === 'month' ? monthName(start) : `Week of ${shortDate(start)}`;
@@ -34,20 +30,15 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const head = role === 'headteacher';
   const [subjects, setSubjects] = useState<Subject[]>([]); const [terms, setTerms] = useState<Term[]>([]); const [classes, setClasses] = useState<ClassOption[]>([]);
   const [classId, setClassId] = useState(''); const [termId, setTermId] = useState(''); const [subjectId, setSubjectId] = useState('');
-  const [tab, setTab] = useState<'assessments' | 'trends' | 'ca' | 'gaps' | 'support' | 'mocks' | 'practice'>(initialTab === 'support' ? 'support' : initialTab === 'ca' ? 'ca' : 'trends');
+  const [tab, setTab] = useState<'results' | 'trends' | 'gaps' | 'support' | 'mocks' | 'practice'>(initialTab === 'support' ? 'support' : initialTab === 'trends' ? 'trends' : 'results');
   // Support plans: every plan this person can see (for the due-review banner), and the ones shown on the Support tab.
   const [plans, setPlans] = useState<{ today: string; items: Plan[] } | null>(null); const [planScope, setPlanScope] = useState<'class' | 'school'>(head ? 'school' : 'class'); const [planStatus, setPlanStatus] = useState<'open' | 'closed'>('open');
   const [draft, setDraft] = useState<PlanDraft | null>(null); const [practiceFor, setPracticeFor] = useState(''); const [planId, setPlanId] = useState('');
   const [gaps, setGaps] = useState<{ items: Gap[]; untaggedAssessments: number } | null>(null);
-  const [indicators, setIndicators] = useState<Indicator[]>([]); const [allGrades, setAllGrades] = useState(false); const [chosen, setChosen] = useState<string[]>([]); const [indicatorSearch, setIndicatorSearch] = useState('');
-  const [assessments, setAssessments] = useState<Assessment[]>([]); const [progress, setProgress] = useState<ClassProgress | null>(null);
+  const [results, setResults] = useState<Results | null>(null); const [progress, setProgress] = useState<ClassProgress | null>(null);
   const [period, setPeriod] = useState<'week' | 'month'>('week');
-  const [creating, setCreating] = useState(false); const [form, setForm] = useState({ subjectId: '', kind: 'classwork', title: '', heldOn: todayInAccra(), maxMark: '20' });
-  const [marking, setMarking] = useState<{ assessment: Assessment; items: RosterRow[] } | null>(null); const [marks, setMarks] = useState<Record<string, string>>({});
   const [learnerId, setLearnerId] = useState(''); const [roster, setRoster] = useState<{ learnerId: string; fullName: string }[]>([]);
-  const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(false);
-  const headers = { 'x-csrf-token': csrfToken };
-  const send = <T,>(path: string, body: object) => request<T>(`/schools/${schoolId}${path}`, { method: 'POST', headers, body: JSON.stringify({ operationId: crypto.randomUUID(), ...body }) });
+  const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [loaded, setLoaded] = useState(false);
 
   useEffect(() => { void (async () => {
     try {
@@ -62,26 +53,20 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const latest = useRef(0);
   const load = useCallback(async () => {
     const current = ++latest.current;
-    setAssessments([]); setProgress(null); setRoster([]); setGaps(null);
+    setResults(null); setProgress(null); setRoster([]); setGaps(null);
     if (!classId || !termId) return;
     try {
       const [a, p, g, gp] = await Promise.all([
-        request<Page<Assessment>>(`/schools/${schoolId}/assessment/classes/${classId}/assessments?termId=${termId}${subjectId ? `&subjectId=${subjectId}` : ''}`),
+        // A school with no grading policy yet has no term results to show.
+        request<Results>(`/schools/${schoolId}/assessment/classes/${classId}/results?termId=${termId}`).catch(() => null),
         request<ClassProgress>(`/schools/${schoolId}/assessment/classes/${classId}/progress?termId=${termId}&period=${period}`),
         request<Page<{ learnerId: string; fullName: string }>>(`/schools/${schoolId}/assessment/classes/${classId}/grid?termId=${termId}`),
         request<{ items: Gap[]; untaggedAssessments: number }>(`/schools/${schoolId}/assessment/classes/${classId}/gaps?termId=${termId}${subjectId ? `&subjectId=${subjectId}` : ''}`)]);
       if (current !== latest.current) return;
-      setAssessments(a.items); setProgress(p); setRoster(g.items); setGaps(gp);
+      setResults(a); setProgress(p); setRoster(g.items); setGaps(gp);
     } catch (e) { if (current === latest.current) setError((e as Error).message); }
   }, [schoolId, classId, termId, subjectId, period]);
   useEffect(() => { void load(); }, [load]);
-
-  // Current indicators of the subject chosen in the new-assessment dialog.
-  useEffect(() => { setIndicators([]); setChosen([]); setIndicatorSearch('');
-    if (!creating || !form.subjectId) return;
-    let live = true;
-    request<Page<Indicator>>(`/schools/${schoolId}/assessment/indicators?subjectId=${form.subjectId}`).then(r => { if (live) setIndicators(r.items.filter(i => !i.retired_at)); }).catch(e => { if (live) setError((e as Error).message); });
-    return () => { live = false; }; }, [schoolId, creating, form.subjectId]);
 
   const loadPlans = useCallback(async () => {
     try { setPlans(await request<{ today: string; items: Plan[] }>(`/schools/${schoolId}/support-plans?status=all`)); } catch (e) { setError((e as Error).message); }
@@ -91,37 +76,9 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const shownPlans = (plans?.items ?? []).filter(p => (planStatus === 'closed' ? p.closed : !p.closed) && (planScope === 'school' || p.class_id === classId));
   const planFor = (d: PlanDraft) => { setMessage(''); setDraft(d); };
 
-  // Indicators for this class's grade (named like the class, e.g. "Basic 5" for "Basic 5 Blue") and ones with no grade come first;
-  // other grades stay one tick away.
-  const className = (classes.find(c => c.id === classId)?.name ?? '').toLowerCase();
-  const ownGrade = (i: Indicator) => !i.grade || className === i.grade.toLowerCase() || className.startsWith(`${i.grade.toLowerCase()} `);
-  const otherGrades = indicators.filter(i => !ownGrade(i)).length;
-  const pickable = allGrades ? [...indicators].sort((a, b) => Number(ownGrade(b)) - Number(ownGrade(a))) : indicators.filter(ownGrade);
-
   // Mock exams are a JHS matter (BECE preparation).
   const isJhs = (classes.find(c => c.id === classId)?.level ?? 'JHS') === 'JHS';
-  useEffect(() => { if (!isJhs && tab === 'mocks') setTab('trends'); }, [isJhs, tab]);
-
-  async function act(work: () => Promise<void>) {
-    setBusy(true); setError(''); setMessage('');
-    try { await work(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }
-  const create = (e: FormEvent) => { e.preventDefault(); void act(async () => {
-    const a = await send<Assessment>(`/assessment/classes/${classId}/assessments`, { termId, subjectId: form.subjectId, kind: form.kind, title: form.title, heldOn: form.heldOn, maxMark: Number(form.maxMark), ...(chosen.length ? { indicatorIds: chosen } : {}) });
-    setCreating(false); setForm({ ...form, title: '' }); await load();
-    await openMarks({ ...a, subject_id: form.subjectId, subject_name: subjects.find(s => s.id === form.subjectId)?.name ?? '', marked: 0, average: null });
-  }); };
-  const openMarks = async (assessment: Assessment) => {
-    const r = await request<{ items: RosterRow[] }>(`/schools/${schoolId}/assessment/classes/${classId}/assessments/${assessment.id}/marks`);
-    setMarks({}); setMarking({ assessment, items: r.items });
-  };
-  const saveMarks = () => void act(async () => {
-    if (!marking) return;
-    const items = marking.items.flatMap(row => marks[row.learnerId] !== undefined && marks[row.learnerId] !== '' ? [{ learnerId: row.learnerId, mark: Number(marks[row.learnerId]) }] : []);
-    if (!items.length) throw new Error('Enter at least one mark.');
-    const r = await send<{ written: number }>(`/assessment/classes/${classId}/assessments/${marking.assessment.id}/marks`, { marks: items });
-    setMarking(null); await load(); setMessage(`Saved ${r.written} mark(s) for ${marking.assessment.title}.`);
-  });
+  useEffect(() => { if (!isJhs && tab === 'mocks') setTab('results'); }, [isJhs, tab]);
 
   const attentionCount = progress?.attention.length ?? 0;
   // One row per learner, most flags first, then the lowest recent average.
@@ -133,8 +90,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
   const lastOverall = progress?.overall.filter(o => o.average !== null && o.learners * 3 >= progress.classSize * 2).slice(-2) ?? [];
   const change = lastOverall.length === 2 ? Math.round((lastOverall[1]!.average! - lastOverall[0]!.average!) * 10) / 10 : null;
   return <section aria-label="Learner progress" className="page">
-    <PageHeader eyebrow="Teaching" title="Progress" blurb="Record class exercises, homework and tests as they happen, and follow each class and learner week by week."
-      actions={<button disabled={!classId || !termId || !subjects.length} onClick={() => { setForm(f => ({ ...f, subjectId: f.subjectId || subjectId || subjects[0]?.id || '' })); setCreating(true); }}><Icon name="add"/>New assessment</button>}/>
+    <PageHeader eyebrow="Teaching" title="Performance" blurb="How each class and learner is doing: term results, week-by-week trends, weak topics and who needs support. Marks are recorded on the Assessment page."/>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {due.length > 0 && <div className="banner"><Icon name="event_upcoming"/><span><strong>{due.length} support review{due.length === 1 ? ' is' : 's are'} due.</strong> Check whether each plan is working and record what happens next.</span>
       <button type="button" className="secondary" onClick={() => { setPlanStatus('open'); setPlanScope(due.some(p => p.class_id !== classId) ? 'school' : 'class'); setTab('support'); }}>Review now</button></div>}
@@ -142,18 +98,27 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
       <div className="toolbar">
         <label>Class<select value={classId} onChange={e => setClassId(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
         <label>Term<select value={termId} onChange={e => setTermId(e.target.value)}><option value="">Choose a term</option>{terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.year_name}</option>)}</select></label>
-        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'trends', label: 'Trends' }, { id: 'ca', label: 'CA sheet' }, { id: 'gaps', label: 'Gaps' }, { id: 'support', label: `Support${plans ? ` (${plans.items.filter(p => !p.closed).length})` : ''}` }, { id: 'assessments', label: 'Assessments' }, { id: 'practice', label: 'Home practice' }, ...(isJhs ? [{ id: 'mocks' as const, label: 'Mocks' }] : [])]}/>
+        <Tabs label="Progress view" value={tab} onChange={setTab} options={[{ id: 'results', label: 'Term results' }, { id: 'trends', label: 'Trends' }, { id: 'gaps', label: 'Gaps' }, { id: 'support', label: `Support${plans ? ` (${plans.items.filter(p => !p.closed).length})` : ''}` }, { id: 'practice', label: 'Home practice' }, ...(isJhs ? [{ id: 'mocks' as const, label: 'Mocks' }] : [])]}/>
       </div>
       {!classId || !termId ? (loaded && <Empty title={classes.length ? 'Choose a class and term' : 'No classes yet'} hint={classes.length ? undefined : head ? 'Add classes in Settings first.' : 'You have no class assigned today.'}/>)
-        : tab === 'assessments' ? <>
-          <div className="toolbar"><label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">All subjects</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label><span className="count">{assessments.length} this term</span></div>
-          {!assessments.length ? <Empty title="No assessments recorded yet" hint="Add each class exercise, homework or test with its date and marks to see progress week by week."/>
-            : <div className="table-wrap"><table><thead><tr><th>Date</th><th>Assessment</th><th>Subject</th><th className="num">Marked</th><th>Class average</th><th/></tr></thead><tbody>
-              {assessments.map(a => <tr key={a.id}><td>{shortDate(a.held_on)}</td><td>{a.title}<span className="sub">{kindLabel(a.kind)} · out of {a.max_mark}{a.indicators?.length ? ` · ${a.indicators.map(i => i.code ?? i.description).join(', ')}` : ''}</span></td><td>{a.subject_name}</td><td className="num">{a.marked}</td><td><Score value={a.average}/></td>
-                <td><button type="button" className="secondary" disabled={busy} onClick={() => void act(() => openMarks(a))}>Enter marks</button></td></tr>)}</tbody></table></div>}
-        </> : tab === 'ca' ? <CaSheet schoolId={schoolId} classId={classId} termId={termId} subjects={subjects} subjectId={subjectId} onSubject={setSubjectId}/>
+        : tab === 'results' ? (!results ? <p className="muted card-body" role="status">Loading…</p>
+          : !results.items.some(r => r.subjects.some(s => s.total !== null)) ? <Empty title="No term results yet" hint="Results appear once class work and exam marks are recorded on the Assessment page."/>
+          : (() => { const names = results.items[0]?.subjects.map(s => ({ id: s.subjectId, name: s.name })) ?? [];
+            const rows = [...results.items].filter(r => !r.left).sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9) || a.fullName.localeCompare(b.fullName));
+            const averages = rows.filter(r => r.average !== null).map(r => r.average!);
+            return <>
+              <div className="stats card-body">
+                <Stat label="Class average" value={averages.length ? `${Math.round(averages.reduce((a, b) => a + b, 0) / averages.length * 10) / 10}%` : '–'} caption={`${averages.length} of ${rows.length} learners with every subject`} icon="insights" tone={tone(averages.length ? averages.reduce((a, b) => a + b, 0) / averages.length : null)}/>
+                <Stat label="Below 50% overall" value={averages.filter(a => a < 50).length} caption="Average of all subjects" icon="flag" tone={averages.some(a => a < 50) ? 'caution' : 'neutral'}/>
+              </div>
+              <div className="table-wrap"><table className="ca-sheet"><thead><tr><th className="num">Position</th><th>Learner</th>{names.map(n => <th key={n.id} className="num">{n.name}</th>)}<th className="num">Average</th></tr></thead><tbody>
+                {rows.map(r => <tr key={r.learnerId}><td className="num">{r.position ?? '–'}</td><td><a className="learner-link" href={`#/learner/${r.learnerId}`}>{r.fullName}</a>{!r.complete && <span className="sub">Some marks missing</span>}</td>
+                  {r.subjects.map(s => <td key={s.subjectId} className="num">{s.total === null ? <span className="muted">–</span> : <span className={`tone-${tone(s.total)}`}>{s.total}</span>}{s.grade && <span className="sub">{s.grade}</span>}</td>)}
+                  <td className="num">{r.average === null ? <span className="muted">–</span> : <strong className={`tone-${tone(r.average)}`}>{r.average}</strong>}</td></tr>)}</tbody></table></div>
+              <p className="muted card-body">Each subject's total is the CA from class work ({results.policy.caWeight}%) plus the exam ({results.policy.examWeight}%), from the marks recorded so far on the Assessment page. Positions count learners with every subject complete. These are working results until the headteacher publishes the report cards.</p>
+            </>; })())
         : tab === 'practice' ? <ClassHomePractice key={`${classId}:${termId}`} schoolId={schoolId} classId={classId} termId={termId} earlyYears={['Nursery', 'KG'].includes(classes.find(c => c.id === classId)?.level ?? '')}/>
-        : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects}
+        : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects} mode="view"
           onPlan={(id, subject, concern) => planFor({ subjectId: subject, learnerIds: [id], concern })}/>
         : tab === 'support' ? <>
           <div className="toolbar"><Tabs label="Plan status" value={planStatus} onChange={setPlanStatus} options={[{ id: 'open', label: 'Open' }, { id: 'closed', label: 'Closed' }]}/>
@@ -162,7 +127,7 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
           {!plans ? <p className="muted card-body" role="status">Loading…</p> : <SupportList plans={shownPlans} today={plans.today} showClass={planScope === 'school'} onOpen={setPlanId}/>}
         </> : tab === 'gaps' ? <>
           <div className="toolbar"><label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">All subjects</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label><span className="count">Weakest first</span></div>
-          {!gaps ? <p className="muted card-body" role="status">Loading…</p> : !gaps.items.length ? <Empty title="No indicators tested yet this term" hint={head ? 'Add your curriculum indicators in Settings, then tag them when creating assessments.' : 'Tag curriculum indicators when you create an assessment to see which ones the class has not mastered.'}/>
+          {!gaps ? <p className="muted card-body" role="status">Loading…</p> : !gaps.items.length ? <Empty title="No indicators tested yet this term" hint={head ? 'Add your curriculum indicators in Settings, then tag them when adding class work on the Assessment page.' : 'Tag curriculum indicators when you add class work on the Assessment page to see which ones the class has not mastered.'}/>
             : <div className="table-wrap"><table><thead><tr><th>Indicator</th><th>Class average</th><th>Below 50%</th><th>Learners below 50%</th></tr></thead><tbody>
               {gaps.items.map(g => <tr key={g.indicatorId}><td>{g.code && <strong>{g.code} </strong>}{g.description}<span className="sub">{[g.subject, g.strand, g.subStrand].filter(Boolean).join(' · ')} · {g.assessments} assessment{g.assessments === 1 ? '' : 's'}</span>
                   <button type="button" className={g.resources ? 'secondary small' : 'link-button small-link'} onClick={() => setPracticeFor(g.indicatorId)}>{g.resources ? `Practice (${g.resources})` : 'Add practice'}</button></td>
@@ -180,13 +145,12 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
         </> : <>
           <div className="toolbar"><Tabs label="Group by" value={period} onChange={setPeriod} options={[{ id: 'week', label: 'Weekly' }, { id: 'month', label: 'Monthly' }]}/>
             <label>Learner<select value={learnerId} onChange={e => setLearnerId(e.target.value)}><option value="">View one learner…</option>{roster.map(l => <option key={l.learnerId} value={l.learnerId}>{l.fullName}</option>)}</select></label></div>
-          {!progress ? <p className="muted card-body" role="status">Loading…</p> : !progress.buckets.length ? <Empty title="No marks recorded yet this term" hint="Trends appear once assessments have marks."/>
+          {!progress ? <p className="muted card-body" role="status">Loading…</p> : !progress.buckets.length ? <Empty title="No marks recorded yet this term" hint="Trends appear once class work is marked on the Assessment page."/>
             : <div className="table-wrap"><table className="trend-table"><thead><tr><th>Subject</th>{progress.buckets.map(b => <th key={b}>{bucketLabel(b, period)}</th>)}</tr></thead><tbody>
               {progress.subjects.map(s => <tr key={s.subjectId}><td>{s.name}</td>{s.points.map(p => <td key={p.start}><Score value={p.average} sub={p.marks ? `${p.marks} mark${p.marks === 1 ? '' : 's'}` : undefined}/></td>)}</tr>)}
               <tr className="trend-total"><td>All subjects</td>{progress.overall.map(o => <td key={o.start}><Score value={o.average}/></td>)}</tr></tbody></table></div>}
         </>}
     </Card>
-    {tab === 'ca' && classId && termId && <WorkSet schoolId={schoolId} classId={classId} termId={termId} subjectId={subjectId}/>}
     {tab === 'trends' && progress && progress.buckets.length > 0 && <>
       <div className="stats">
         <Stat label="Class average" value={lastOverall.length ? `${lastOverall[lastOverall.length - 1]!.average}%` : '–'} caption={lastOverall.length ? bucketLabel(lastOverall[lastOverall.length - 1]!.start, period) : `Latest ${period}`} icon="insights" tone={tone(lastOverall[lastOverall.length - 1]?.average ?? null)}/>
@@ -203,28 +167,6 @@ export function Progress({ schoolId, csrfToken, role, initialTab }: { schoolId: 
                   : <button type="button" className="secondary small" onClick={() => planFor({ subjectId: a.subjectId, learnerIds: [a.learnerId], concern: a.reason === 'dropping' ? `${a.subject}: last 3 marks average ${a.recent}%, down from ${a.earlier}% earlier this term.` : `${a.subject}: last 3 marks average ${a.recent}%, below 50%.` })}>Plan</button>}</li>)}</ul></td></tr>)}</tbody></table></div>}
       </Card>
     </>}
-    {creating && <Dialog title="New assessment" onClose={() => setCreating(false)}>
-      <form onSubmit={create}>
-        <label>Subject<select value={form.subjectId} onChange={e => setForm({ ...form, subjectId: e.target.value })} required><option value="">Choose a subject</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-        <label>Type<select value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>{kinds.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-        <label>Title<input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required minLength={2} maxLength={120} placeholder="e.g. Fractions exercise 3"/></label>
-        <label>Date<input type="date" value={form.heldOn} onChange={e => setForm({ ...form, heldOn: e.target.value })} required/></label>
-        <label>Marked out of<input type="number" min={1} max={1000} step="0.5" value={form.maxMark} onChange={e => setForm({ ...form, maxMark: e.target.value })} required/></label>
-        {indicators.length > 0 && <fieldset className="indicator-picker"><legend>Curriculum indicators tested (optional)</legend>
-          {otherGrades > 0 && <label className="check"><input type="checkbox" checked={allGrades} onChange={e => setAllGrades(e.target.checked)}/><span>Show other grades too ({otherGrades} more)</span></label>}
-          {pickable.length > 8 && <input type="search" aria-label="Search indicators" placeholder="Search by code or words" value={indicatorSearch} onChange={e => setIndicatorSearch(e.target.value)}/>}
-          <div className="indicator-options">{pickable.filter(i => !indicatorSearch || `${i.code ?? ''} ${i.description} ${i.strand ?? ''} ${i.sub_strand ?? ''}`.toLowerCase().includes(indicatorSearch.toLowerCase())).slice(0, 40).map(i =>
-            <label key={i.id} className="check"><input type="checkbox" checked={chosen.includes(i.id)} disabled={!chosen.includes(i.id) && chosen.length >= 10} onChange={e => setChosen(e.target.checked ? [...chosen, i.id] : chosen.filter(id => id !== i.id))}/><span>{i.code && <strong>{i.code} </strong>}{i.description}</span></label>)}</div>
-          {chosen.length > 0 && <p className="muted">{chosen.length} chosen</p>}</fieldset>}
-        <button disabled={busy}>Add and enter marks</button>
-      </form>
-    </Dialog>}
-    {marking && <Dialog title={`${marking.assessment.title} · out of ${marking.assessment.max_mark}`} onClose={() => setMarking(null)}>
-      <p className="muted">{marking.assessment.subject_name} · {kindLabel(marking.assessment.kind)} · {shortDate(marking.assessment.held_on)}. Leave a box empty if the learner did not take it.</p>
-      <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Mark</th></tr></thead><tbody>{marking.items.map(row => <tr key={row.learnerId}><td>{row.fullName}{row.left && <> <Pill>left</Pill></>}</td>
-        <td><input type="number" min={0} max={marking.assessment.max_mark} step="0.5" aria-label={`${row.fullName} mark`} value={marks[row.learnerId] ?? (row.mark ?? '')} onChange={e => setMarks({ ...marks, [row.learnerId]: e.target.value })}/></td></tr>)}</tbody></table></div>
-      <div className="actions"><button disabled={busy} onClick={saveMarks}>Save marks</button></div>
-    </Dialog>}
     {draft && <SupportPlanDialog schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} draft={draft} subjects={subjects} roster={roster} onClose={() => setDraft(null)}
       onSaved={id => { setDraft(null); setMessage('Support plan started.'); void loadPlans(); setPlanId(id); }}/>}
     {planId && <SupportPlanDrawer schoolId={schoolId} csrfToken={csrfToken} planId={planId} onClose={() => setPlanId('')} onChanged={() => void loadPlans()}

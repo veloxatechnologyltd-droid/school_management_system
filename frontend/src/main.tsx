@@ -57,12 +57,12 @@ const navByRole:Record<string,NavGroup[]>={
   headteacher:[
     {group:'Overview',items:[nav('today','Home','space_dashboard'),nav('ask','Ask','forum')]},
     {group:'People',items:[nav('attendance','Attendance','event_available'),nav('learners','Learners','groups'),nav('guardians','Guardians','family_restroom'),nav('collection','Pickup','directions_walk')]},
-    {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]},
+    {group:'Teaching',items:[nav('assessment','Assessment','school'),nav('progress','Performance','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]},
     {group:'Office',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]},
     {group:'Administration',pinned:true,items:[nav('settings','Settings','settings')]}],
   teacher:[
     {group:'Overview',items:[nav('today','Today','today'),nav('ask','Ask','forum')]},
-    {group:'My classes',items:[nav('classes','My classes','groups'),nav('assessment','Assessment','school'),nav('progress','Progress','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]}],
+    {group:'My classes',items:[nav('classes','My classes','groups'),nav('assessment','Assessment','school'),nav('progress','Performance','insights'),nav('topics','Topics','checklist'),nav('early-years','Early years','child_care')]}],
   accountant:[{group:'Money',items:[nav('fees','Fees','receipt_long')]}],
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
   guardian:[
@@ -71,7 +71,7 @@ const navByRole:Record<string,NavGroup[]>={
 };
 // Page headers for modules that do not draw their own (the other pages do).
 const pageMeta:Record<string,{eyebrow:string;title:string;blurb:string}>={
-  assessment:{eyebrow:'Teaching',title:'Assessment',blurb:'Class scores, terminal results and published report cards.'},
+  assessment:{eyebrow:'Teaching',title:'Assessment',blurb:'Record class work and exam marks; the CA is worked out from class work. Then remarks and report cards.'},
   ask:{eyebrow:'Assistant',title:'Ask',blurb:'Plain-language questions about your school, answered from your own records.'},
   settings:{eyebrow:'Administration',title:'Settings',blurb:'Set up your school once, in this order. Daily pages stay for daily work.'},
 };
