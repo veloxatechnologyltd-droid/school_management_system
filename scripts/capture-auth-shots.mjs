@@ -104,8 +104,9 @@ try {
       try { await step(page); await page.waitForTimeout(500); await settle(page, 20_000); }
       catch (error) { console.log('step failed for', name, String(error.message).split('\n')[0]); }
     }
-    // The read-only demo banner is about the demo, not the product.
-    await page.evaluate(() => { for (const p of document.querySelectorAll('p[role=status]')) if (p.textContent?.startsWith('Demo school')) p.remove(); });
+    // The read-only demo banner and the dev server's local note are about the setup, not the product. Hide them rather than
+    // remove them: the page is React's, and a removed node breaks the next navigation.
+    await page.evaluate(() => { for (const p of document.querySelectorAll('p[role=status], .local-note')) if (p.classList.contains('local-note') || p.textContent?.startsWith('Demo school')) p.style.display = 'none'; });
     await page.evaluate(() => { window.scrollTo(0, 0); (document.activeElement instanceof HTMLElement) && document.activeElement.blur(); });
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${OUT}/${name}.png` });
