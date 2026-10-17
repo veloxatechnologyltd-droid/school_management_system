@@ -19,22 +19,15 @@
 .au .icon{font-size:20px;width:20px;height:20px}
 .au-wrap{max-width:1180px;margin:0 auto;padding:0 var(--gutter)}
 .au-kicker{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
-.au-kicker.light,.au-hero .au-kicker{color:var(--accent-night)}
-.au h2.au-h2,.au h2.au-display{font-family:'Google Sans Flex','Google Sans',Roboto,system-ui,sans-serif;letter-spacing:-.03em;font-weight:800}
-.au h2.au-h2{font-size:clamp(30px,3.4vw,48px);line-height:1.06;margin-bottom:16px}
-.au-sub{font-size:18px;line-height:1.6;color:var(--ink-soft);max-width:62ch;margin-bottom:36px}
+.au-hero .au-kicker{color:var(--accent-night)}
+.au h2.au-display{font-family:'Google Sans Flex','Google Sans',Roboto,system-ui,sans-serif;letter-spacing:-.03em;font-weight:800}
 .au-lede{font-size:clamp(17px,1.4vw,19px);line-height:1.6;color:var(--ink-soft);max-width:62ch}
-.au-fine{font-size:13px;color:var(--ink-soft);margin-top:28px}
-.au-ico{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--accent-soft);color:var(--accent-deep);flex:none}
 
 /* Top bar sits on the hero. */
 .au-header{position:absolute;inset:0 0 auto;z-index:5}
 .au-nav{display:flex;align-items:center;gap:18px;height:72px;max-width:1320px;margin:0 auto;padding:0 var(--gutter)}
 .au .au-brand{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:700;font-size:17px;color:#fff;text-decoration:none}
 .au .au-brand .logo{background:#fff;color:var(--accent)}
-.au-links{display:flex;gap:4px;margin-left:20px}
-.au .au-links button{background:none;border:0;border-radius:10px;height:40px;padding:0 12px;color:#fff;font-weight:500;font-size:15px;opacity:.92}
-.au .au-links button:hover{background:rgba(255,255,255,.14);box-shadow:none;opacity:1}
 .au .au-nav-cta{margin-left:auto;display:inline-flex;align-items:center;height:40px;padding:0 18px;border:1px solid rgba(255,255,255,.55);border-radius:999px;color:#fff;font-weight:600;font-size:15px;text-decoration:none;transition:background-color .15s}
 .au .au-nav-cta:hover{background:rgba(255,255,255,.14)}
 
@@ -85,107 +78,28 @@
 .au-aside li{display:flex;gap:10px;align-items:flex-start}
 .au-aside .icon{color:var(--accent-night);margin-top:1px;flex:none}
 
-/* Trust strip */
-.au-strip{background:var(--surface);border-bottom:1px solid var(--line)}
-.au-strip ul{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;padding:26px 0}
-.au-strip li{display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.45;color:var(--ink-soft)}
-.au-strip li b{display:block;color:var(--ink);font-size:15px;margin-bottom:2px}
-
-/* Sections */
-.au-section{padding:clamp(64px,9vw,112px) 0}
-.au-section.tint{background:var(--sunk)}
-.au-section.dark{background:radial-gradient(900px 520px at 88% -8%,rgba(143,180,255,.32),transparent 62%),linear-gradient(165deg,#0b2260 0%,#123f8c 58%,#1a56bd 100%);color:#fff}
-.au-section.dark .au-sub,.au-section.dark .au-phones span{color:#d4e0f7}
-
-/* Tour */
-.au-tour{display:grid;gap:20px}
-.au-tablist{display:flex;flex-wrap:wrap;gap:8px}
-.au .au-tablist button{height:var(--control-h);padding:0 16px;border-radius:999px;border:1px solid #c5d4ee;background:transparent;color:var(--accent-deep);font-weight:600;gap:8px}
-.au .au-tablist button:hover{background:var(--accent-soft);box-shadow:none}
-.au .au-tablist button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:#fff}
-.au-tourpanel{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr);gap:clamp(24px,4vw,56px);align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:28px;padding:clamp(20px,3vw,40px);box-shadow:var(--e2)}
-.au-tourtext h3{font-size:clamp(22px,2.2vw,28px);line-height:1.15;letter-spacing:-.02em;font-weight:800;margin-bottom:12px}
-.au-tourtext p{color:var(--ink-soft);line-height:1.6;margin-bottom:16px}
-.au-tourtext li{display:flex;gap:8px;align-items:flex-start;line-height:1.45;margin-top:8px;font-size:15px}
-.au-tourtext .icon{color:var(--ok);margin-top:1px;flex:none}
-.au-tourpanel .au-browser{min-width:0}
-
-/* Families: phones */
-.au-phones{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(16px,3vw,40px);align-items:start}
-.au-phones li{display:grid;gap:6px;justify-items:center;text-align:center}
-.au-phones .au-phone{width:min(100%,230px);margin-bottom:12px}
-.au-phones b{font-size:17px}
-.au-phones span{font-size:14px;line-height:1.5;color:var(--on-night-soft);max-width:26ch}
-
-/* Roles and help */
-.au-roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:16px}
-.au-roles li,.au-help li{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 1px 2px rgba(20,33,61,.06)}
-.au-roles h3,.au-help h3{font-size:18px;font-weight:700;margin:14px 0 8px}
-.au-roles p,.au-help p{font-size:15px;line-height:1.55;color:var(--ink-soft)}
-.au-roles small{display:block;margin-top:14px;font-size:13px;font-weight:600;color:var(--accent-deep)}
-.au-help{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px;margin-top:28px}
-.au .au-big{height:56px;padding:0 30px;font-size:17px;font-weight:600;box-shadow:0 10px 22px -12px rgba(26,95,208,.9)}
-
-/* Specification */
-.au-specsub{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin:8px 0 16px}
-.au-modules{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin-bottom:44px}
-.au-fold{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:0 22px}
-.au .au-fold summary{display:flex;align-items:center;gap:12px;min-height:72px;padding:16px 0;color:var(--ink);cursor:pointer;list-style:none}
-.au-fold summary::-webkit-details-marker{display:none}
-.au-fold summary::after{content:'+';margin-left:auto;font-size:24px;line-height:1;color:var(--accent)}
-.au-fold[open] summary::after{content:'\2212'}
-.au-fold h4{font-size:18px;font-weight:700}
-.au-fold[open]>summary{padding-bottom:6px}
-.au-fold>ul,.au-fold>dl{padding-bottom:16px}
-.au-modules ul li{position:relative;padding-left:18px;font-size:15px;line-height:1.5;color:var(--ink-soft);margin-top:8px}
-.au-modules ul li::before{content:'';position:absolute;left:0;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
-.au-prod{columns:2 380px;column-gap:16px}
-.au-prodgroup{break-inside:avoid;margin-bottom:16px}
-.au-prodgroup dl>div{padding:14px 0;border-top:1px solid var(--line)}
-.au-prodgroup dl>div:first-child{border-top:0;padding-top:6px}
-.au-prodgroup dt{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-weight:700;font-size:15px;margin-bottom:6px}
-.au-prodgroup dd{font-size:15px;line-height:1.55;color:var(--ink-soft)}
-.au-tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.02em;background:var(--ok-soft);color:var(--ok)}
-.au-tag.optional{background:var(--accent-soft);color:var(--accent-deep)}
-.au-tag.target,.au-tag.before-real-records{background:var(--warn-soft);color:var(--warn)}
-.au-tag.not-yet{background:#e9e6dc;color:#4a4a42}
-
-/* Close and footer */
-.au-close{background:var(--night);color:var(--on-night);padding:clamp(64px,9vw,104px) 0;text-align:center}
-.au-close h2{font-size:clamp(30px,3.6vw,50px);margin-bottom:12px}
-.au-close p{max-width:56ch;margin:0 auto;color:var(--on-night-soft);font-size:18px;line-height:1.6}
-.au-closebtns{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:28px}
-.au-foot{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;padding:22px var(--gutter);background:var(--night);color:var(--on-night-soft);font-size:13px;border-top:1px solid rgba(255,255,255,.08)}
-
-/* Register is one screen: the pitch and the form, nothing to scroll to. The card stays compact so it fits a laptop. */
-.au[data-mode=register] .au-hero{min-height:100vh;min-height:100svh}
-.au[data-mode=register] .au-visual{flex:1 1 0;height:auto;min-height:220px}
-.au[data-mode=register] .au-card{padding:28px 30px 24px;margin-bottom:20px}
-.au[data-mode=register] .au-card label{margin-top:12px}
-.au[data-mode=register] .au-card h1{font-size:26px}
-.au[data-mode=register] .au-submit{margin-top:18px}
-@media (max-height:860px){.au[data-mode=register] .au-aside{display:none}}
-@media (max-height:760px){.au[data-mode=register] .au-card{margin-bottom:8px}.au[data-mode=register] .au-visual{min-height:130px;padding-top:24px}.au[data-mode=register] .au-hero{padding-top:84px}.au[data-mode=register] .au-card-sub{display:none}.au[data-mode=register] .au-display{font-size:clamp(34px,4vw,52px)}}
+/* Sign-in and register are one screen each: the pitch and the form, nothing to scroll to. The card stays compact so it fits a laptop. */
+.au .au-hero{min-height:100vh;min-height:100svh}
+.au .au-visual{flex:1 1 0;height:auto;min-height:220px}
+.au .au-card{padding:28px 30px 24px;margin-bottom:20px}
+.au .au-card label{margin-top:12px}
+.au .au-card h1{font-size:26px}
+.au .au-submit{margin-top:18px}
+@media (max-height:860px){.au .au-aside{display:none}}
+@media (max-height:760px){.au .au-card{margin-bottom:8px}.au .au-visual{min-height:130px;padding-top:24px}.au .au-hero{padding-top:84px}.au .au-card-sub{display:none}.au .au-display{font-size:clamp(34px,4vw,52px)}}
 
 /* Narrower screens: the form first, then the pitch. */
 @media (max-width:980px){
-  .au-links{display:none}
   .au-hero{grid-template-columns:minmax(0,1fr);padding-top:88px;gap:28px}
   .au-hero>.au-card,.au-hero>.au-aside,.au-pitch{grid-column:1}
   .au-hero>.au-card{grid-row:1;margin-bottom:0}
   .au-hero>.au-aside{grid-row:2;margin-bottom:0}
   .au-pitch{grid-row:3}
   .au-visual{height:clamp(240px,52vw,360px)}
-  .au[data-mode=register] .au-hero{min-height:0}
-  .au[data-mode=register] .au-visual,.au[data-mode=register] .au-aside{display:none}
-  .au-strip ul{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .au-tourpanel{grid-template-columns:minmax(0,1fr)}
-  .au-phones{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:40px}
+  .au .au-hero{min-height:0}
+  .au .au-visual,.au .au-aside{display:none}
 }
 @media (max-width:560px){
   .au-card{padding:26px 20px 24px;border-radius:20px}
-  .au-strip ul{grid-template-columns:minmax(0,1fr);gap:16px}
   .au-visual-phone{width:34%;right:0}
-  .au .au-big{width:100%}
-  .au-closebtns{flex-direction:column}
 }

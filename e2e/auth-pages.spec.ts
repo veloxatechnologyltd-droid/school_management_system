@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// The sign-in and register pages are the first thing a school sees: the form works, the product pictures load,
-// the specification is on the page, and an API outage says what happened instead of "changes may not have been saved".
+// The sign-in and register pages are the first thing a school sees: each is one screen, the form works,
+// the product pictures load, and an API outage says what happened instead of "changes may not have been saved".
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 const loadAllImages = async (page: Page) => {
   await page.evaluate(async () => {
@@ -11,11 +11,17 @@ const loadAllImages = async (page: Page) => {
   await expect.poll(() => page.evaluate(() => [...document.images].filter(image => !image.complete || image.naturalWidth === 0).length)).toBe(0);
 };
 
-test('the sign-in page shows the product and the specification, and the form still works', async ({ page }) => {
+test('sign-in is one screen with nothing to scroll to, and the password can be shown and hidden', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  for (const [width, height] of [[1440, 900], [1280, 720]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/#/signin');
+    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+    await loadAllImages(page);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), `${width}x${height} fits one screen`).toBe(true);
+  }
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/#/signin');
-  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   expect(await noOverflow(page)).toBe(true);
   // The password can be shown and hidden without changing the field's name.
   const password = page.getByLabel('Password', { exact: true });
@@ -25,20 +31,6 @@ test('the sign-in page shows the product and the specification, and the form sti
   await expect(password).toHaveAttribute('type', 'text');
   await page.getByRole('button', { name: 'Hide password' }).click();
   await expect(password).toHaveAttribute('type', 'password');
-  // Product pictures: choosing a tab swaps the real screen.
-  const panel = page.getByRole('tabpanel', { name: 'Fees' });
-  await page.getByRole('tab', { name: 'Fees' }).click();
-  await expect(panel.getByRole('img', { name: /The Fees page/ })).toBeVisible();
-  // The specification says plainly what is live, optional, a target or not built.
-  const spec = page.locator('#spec');
-  await spec.scrollIntoViewIfNeeded();
-  // On a phone the groups start closed so the page stays short; opening one shows its rows.
-  await spec.locator('summary', { hasText: 'Security' }).click();
-  await expect(spec.getByText('School isolation')).toBeVisible();
-  await spec.locator('summary', { hasText: 'Reliability and limits' }).click();
-  await expect(spec.locator('.au-tag', { hasText: 'Not yet' }).first()).toBeVisible();
-  await loadAllImages(page);
-  expect(await noOverflow(page)).toBe(true);
   expect(errors).toEqual([]);
 });
 

@@ -1,7 +1,5 @@
-// Words and pictures for the sign-in and register pages.
+// Pictures for the sign-in, register and home pages, and the product tour shown on the home page.
 // The screenshots are real pages of the Sunrise demo school (sample learners), captured by scripts/capture-auth-shots.mjs.
-// The specification rows describe what is built and deployed today, from docs/ARCHITECTURE.md, docs/DEPLOYMENT.md and the code;
-// anything that is a target, optional or not built yet carries its own tag, so the page never promises more than the system does.
 
 export type Shot = { file: string; alt: string; phone?: boolean };
 const desktop = (file: string, alt: string): Shot => ({ file, alt });
@@ -32,61 +30,4 @@ export const tour: TourItem[] = [
   { id: 'notices', label: 'Notices', icon: 'campaign', shot: shots.notices, title: 'One notice to every family, once you approve it.', text: 'Draft a short message, approve it, and it reaches the guardians who have a verified contact right. The office sees how many it reached.', points: ['Nothing is sent until the head approves it', 'Only verified guardians receive a notice', 'Families with no phone number still get it in the app'] },
   { id: 'learners', label: 'Learners', icon: 'groups', shot: shots.learners, title: 'Every learner, with their whole history.', text: 'The roll, admissions and year-end promotion in one place. Bring existing class lists in from a CSV file.', points: ['Import with a preview and duplicate review', 'Class history keeps every move and withdrawal', 'Guardian rights are verified by the head'] },
   { id: 'progress', label: 'Progress', icon: 'insights', shot: shots.progress, title: 'See a class week by week, not once a term.', text: 'Record class exercises, homework and tests as they happen and follow each class and learner.', points: ['Trends, gaps and support plans', 'Learners who need help are flagged early', 'Home practice results sit beside class work'] },
-];
-
-export const roles = [
-  { icon: 'space_dashboard', name: 'Headteacher', text: "Today's open items, registers, fees, report cards, staff accounts and who can see what.", first: 'Home' },
-  { icon: 'groups', name: 'Teacher', text: 'Your own classes only: take the register, enter scores, choose what your class practises.', first: 'My classes' },
-  { icon: 'receipt_long', name: 'Accounts', text: 'Fee items, bills, payments and receipts. Nothing else is shown.', first: 'Fees' },
-  { icon: 'directions_walk', name: 'Front desk', text: 'The learner roll and pickup: who may collect each child.', first: 'Pickup' },
-  { icon: 'family_restroom', name: 'Parent', text: "Your child's progress, report cards, fees, notices and practice, on your own phone.", first: 'Home' },
-];
-
-export const help = [
-  { icon: 'lock_reset', title: 'Forgot your password?', text: 'Ask your school administrator to reset it. They give you a temporary password, and you choose your own at your next sign-in.' },
-  { icon: 'key', title: 'First time here?', text: 'Use the email or phone number your school registered for you, and the temporary password they gave you. You will be asked to choose your own (at least 12 characters).' },
-  { icon: 'phonelink_lock', title: 'Asked for a code?', text: 'If your school requires two-step sign-in, enter the 6-digit code from your authenticator app after your password. Lost your phone? Use a recovery code.' },
-];
-
-export const strip = [
-  { icon: 'shield_lock', title: 'Each school sealed off', text: "The database itself refuses to show one school's records to another." },
-  { icon: 'verified_user', title: 'Teachers approve what children see', text: 'The AI drafts; a teacher or the head reads and approves.' },
-  { icon: 'smartphone', title: 'Made for the phone in your hand', text: 'Large buttons and plain words, at the front desk or in class.' },
-  { icon: 'payments', title: 'Made for Ghana', text: 'GH₵ to the pesewa, GES grading bands, Africa/Accra time.' },
-];
-
-export const modules = [
-  { icon: 'groups', title: 'People', items: ['Admissions and enrolment, with a dated history of every class move', 'Learners and guardians, with rights the head verifies: academic, billing, pickup, contact', 'Staff accounts by role: headteacher, teacher, accountant, front desk', 'Pickup: who may collect each child, with exceptions the head reviews'] },
-  { icon: 'school', title: 'Teaching', items: ['Attendance registers: draft, submit, lock, and corrections with a reason', 'Class scores that add up to continuous assessment with your own weighting', 'Terminal results and report cards on GES 1 to 9 bands or your own policy', 'JHS mocks, topics, support plans, and early years observations and reports'] },
-  { icon: 'receipt_long', title: 'Money', items: ['Fee items, bills and numbered receipts', 'Payments reversed with a reason, never erased', 'Amounts kept to the pesewa', 'Statements families can read, and notices the head approves'] },
-  { icon: 'family_restroom', title: 'Families and learning', items: ['Report cards, fee statements and notices on the parent\'s own phone', 'Practice and short lessons on topics the school is teaching, approved by teachers', 'No learner logins: children use the family\'s phone and account', 'Practice results sit beside class work and never change a mark'] },
-  { icon: 'forum', title: 'Assistant', items: ['Ask: plain-language questions answered from your own records', 'It reads only; it cannot change a record', 'It answers inside what each person may see', 'Off until the head switches it on, with a monthly limit'] },
-];
-
-export type Tag = 'Live' | 'Optional' | 'Target' | 'Before real records' | 'Not yet';
-export const production: { group: string; icon: string; rows: { tag: Tag; title: string; text: string }[] }[] = [
-  { group: 'Platform', icon: 'cloud', rows: [
-    { tag: 'Live', title: 'Hosting', text: 'Web app on Vercel, API on Render, PostgreSQL on Supabase. Everything travels over HTTPS with HSTS, and the database connection uses TLS.' },
-    { tag: 'Live', title: 'Devices', text: 'Any current browser, no app to install. Pages are built for a phone first, with touch targets of 44 px or more.' },
-    { tag: 'Live', title: 'Time and money', text: 'Times kept in UTC and shown in Africa/Accra. Money is stored as whole pesewas; grades use exact decimals.' },
-  ] },
-  { group: 'Security', icon: 'shield_lock', rows: [
-    { tag: 'Live', title: 'School isolation', text: "Every record carries its school. PostgreSQL row-level security is enforced, and the app connects as a restricted role that is not the owner and cannot bypass it. Tested with more than one school." },
-    { tag: 'Live', title: 'Passwords', text: 'Salted scrypt hashes, at least 12 characters, and a temporary password must be replaced at first sign-in. Ten failed attempts lock an email for 15 minutes.' },
-    { tag: 'Live', title: 'Sessions', text: 'HttpOnly, SameSite=Strict, Secure cookies that last 8 hours. Every change needs a CSRF token. Sign-in and sign-up attempts are rate limited.' },
-    { tag: 'Optional', title: 'Two-step sign-in', text: 'Authenticator-app codes (TOTP) with recovery codes are built and can be required for staff roles. Pilot schools start with it off.' },
-    { tag: 'Live', title: 'Roles and scope', text: 'A teacher sees only classes assigned to them, a parent only their own children, accounts only fees. Access is checked on every request.' },
-  ] },
-  { group: 'Data and privacy', icon: 'database', rows: [
-    { tag: 'Live', title: 'History kept', text: 'Enrolments, scores, payments and published reports keep their history. A correction is a new entry with a name and a reason.' },
-    { tag: 'Live', title: 'Audit trail', text: 'School detail changes, exports and platform support access are logged, and the head can read the activity log.' },
-    { tag: 'Live', title: 'AI guardrails', text: "Children's names are replaced before anything is sent to the AI. It never publishes marks, posts money or sends messages. Nothing reaches a child until a teacher or the head approves it." },
-    { tag: 'Before real records', title: 'Data protection', text: "Built with Ghana's Data Protection Act, 2012 (Act 843) in mind. Before real learner records are loaded, the school and Veloxa complete a data-protection checklist: registration with the Data Protection Commission, a controller and processor agreement, and guardian notices." },
-  ] },
-  { group: 'Reliability and limits', icon: 'monitoring', rows: [
-    { tag: 'Target', title: 'Recovery', text: 'We aim to lose at most 1 hour of records and be back within 4 hours, and we rehearse a restore before a school goes live. These are targets, not a guarantee.' },
-    { tag: 'Live', title: 'Health and logs', text: 'The API reports its own database and migration readiness. Each request is logged with an ID, route, status and time, and never with child data.' },
-    { tag: 'Not yet', title: 'Mobile money', text: 'Your accountant records payments. Collecting fees through mobile money is not built yet.' },
-    { tag: 'Not yet', title: 'SMS and offline', text: 'Notices appear in the app; SMS is off. There is no offline mode, so keep the paper register for days the network is down.' },
-  ] },
 ];
