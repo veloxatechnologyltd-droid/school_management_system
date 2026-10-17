@@ -3,6 +3,7 @@
 .lp{
   --canvas:#faf5e9;--surface:#fffdf8;--sunk:#f1ead8;--ink:#14213d;--ink-soft:#4a5570;--line:#e4dcc8;
   --accent:#1a5fd0;--accent-deep:#123f8c;--accent-soft:#e2ebfa;--night:#0e1b36;--night-2:#16264a;--on-night:#eef2fb;--on-night-soft:#b6c3dd;--accent-night:#8fb4ff;
+  --blue:radial-gradient(900px 520px at 88% -8%,rgba(143,180,255,.32),transparent 62%),radial-gradient(700px 420px at 0% 100%,rgba(143,180,255,.14),transparent 60%),linear-gradient(165deg,#0b2260 0%,#123f8c 58%,#1a56bd 100%);--on-blue-soft:#d4e0f7;
   --ok:#1b6e37;--ok-soft:#e1f0e4;--due:#b3261e;--due-soft:#fce8e6;
   --gutter:clamp(16px,4vw,48px);--radius:18px;--measure:62ch;
   --e1:0 1px 2px rgba(20,33,61,.06),0 1px 1px rgba(20,33,61,.04);
@@ -101,9 +102,9 @@
   opacity:clamp(0, (var(--p,0) - .62) * 6, 1);transform:translateY(calc((1 - clamp(0, (var(--p,0) - .62) * 6, 1)) * 12px))}
 
 /* Ask: dark ground, live typing. */
-.lp .lp-ask{background:var(--night);color:var(--on-night);padding:clamp(96px,12vw,160px) 0}
+.lp .lp-ask{background:var(--blue);color:var(--on-night);padding:clamp(96px,12vw,160px) 0}
 .lp-ask-head{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:40px;align-items:end;margin-bottom:40px}
-.lp-ask-head p{color:var(--on-night-soft);font-size:18px;line-height:1.6;margin:0 0 20px}
+.lp-ask-head p{color:var(--on-blue-soft);font-size:18px;line-height:1.6;margin:0 0 20px}
 .lp-chat{background:var(--night-2);border-radius:28px;padding:clamp(16px,3vw,32px);box-shadow:0 40px 90px -40px rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.07)}
 .lp-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
 .lp .lp-chips button{height:40px;padding:0 16px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:transparent;color:var(--on-night);font:inherit;font-size:14px;cursor:pointer;transition:background-color .2s,border-color .2s;box-shadow:none}
@@ -122,7 +123,45 @@
 .lp-msg th{color:var(--on-night-soft);font-weight:500}
 .lp-caret{display:inline-block;width:8px;height:18px;background:var(--accent-night);vertical-align:-3px;animation:lp-blink 1s steps(2) infinite}
 @keyframes lp-blink{50%{opacity:0}}
-.lp-chat-note{color:var(--on-night-soft);font-size:14px;margin:18px 0 0;max-width:70ch}
+.lp-chat-note{color:var(--on-blue-soft);font-size:14px;margin:18px 0 0;max-width:70ch}
+
+/* Blue bands: the hero, Ask, the product tour and the parent's phones. Text on them is white or the soft blue-white. */
+.lp .lp-blue{background:var(--blue);color:#fff}
+.lp-blue .lp-kicker{color:var(--accent-night)}
+.lp-blue .lp-lede,.lp-blue .lp-fine,.lp-band-lede{color:var(--on-blue-soft)}
+.lp-band-lede{font-size:18px;line-height:1.6;max-width:62ch;margin:0 0 32px}
+.lp-hero.lp-blue h1 span{color:var(--accent-night)}
+.lp-hero.lp-blue .lp-btn:not(.ghost){background:#fff;border-color:#fff;color:var(--accent-deep);box-shadow:0 10px 24px -12px rgba(0,0,0,.5)}
+.lp-hero.lp-blue .lp-btn:not(.ghost):hover{background:var(--accent-soft)}
+.lp-hero.lp-blue .lp-btn.ghost{color:#fff;border-color:rgba(255,255,255,.5)}.lp-hero.lp-blue .lp-btn.ghost:hover{background:rgba(255,255,255,.12)}
+.lp-nav.on-blue .lp-brand,.lp-nav.on-blue .lp-links a,.lp-nav.on-blue .lp-signin{color:#fff}
+.lp-nav.on-blue .lp-links a:hover,.lp-nav.on-blue .lp-signin:hover{color:var(--accent-night)}
+.lp-nav.on-blue .lp-brand .logo{background:#fff;color:var(--accent)}
+.lp .lp-nav.on-blue .lp-btn{background:#fff;border-color:#fff;color:var(--accent-deep);box-shadow:none}
+
+/* Inside the product: real pages in a browser frame. */
+.lp .lp-screens{padding:clamp(96px,12vw,150px) 0}
+.lp-screens h2,.lp-parents h2{font-size:clamp(32px,3.6vw,52px);line-height:1.04;letter-spacing:-.03em;font-weight:800;margin:0 0 16px;max-width:22ch}
+.lp-shot{display:grid;grid-template-columns:minmax(0,.75fr) minmax(0,1.6fr);gap:clamp(24px,4vw,56px);align-items:center}
+.lp-shot-text h3{font-size:clamp(22px,2.2vw,28px);line-height:1.15;letter-spacing:-.02em;font-weight:800;margin:0 0 12px}
+.lp-shot-text p{color:var(--on-blue-soft);line-height:1.6;margin:0 0 14px}
+.lp-shot-text ul{margin:0;padding:0;list-style:none}
+.lp-shot-text li{position:relative;padding-left:20px;margin-top:8px;line-height:1.45;font-size:15px}
+.lp-shot-text li::before{content:'';position:absolute;left:0;top:.5em;width:8px;height:8px;border-radius:50%;background:var(--accent-night)}
+.lp-browser{margin:0;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 40px 90px -36px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.1);min-width:0}
+.lp-browser-bar{display:flex;align-items:center;gap:6px;height:34px;padding:0 14px;background:#eef2f8;border-bottom:1px solid #dde4ee}
+.lp-browser-bar i{width:10px;height:10px;border-radius:50%;background:#c4cddb}
+.lp-browser-bar span{margin-left:10px;font-size:12px;color:#5a667f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-browser img,.lp-shotphone img{display:block;width:100%;height:auto}
+
+/* The parent's phones. */
+.lp .lp-parents{padding:clamp(96px,12vw,150px) 0}
+.lp-phones{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(16px,3vw,40px);align-items:start}
+.lp-phones li{display:grid;gap:6px;justify-items:center;text-align:center}
+.lp-phones .lp-reveal:nth-child(2){transition-delay:.1s}.lp-phones .lp-reveal:nth-child(3){transition-delay:.2s}.lp-phones .lp-reveal:nth-child(4){transition-delay:.3s}
+.lp-shotphone{margin:0 0 12px;width:min(100%,230px);border-radius:30px;border:5px solid #0a1a45;background:var(--night);overflow:hidden;box-shadow:0 36px 70px -30px rgba(0,0,0,.6)}
+.lp-phones b{font-size:17px}
+.lp-phones span{font-size:14px;line-height:1.5;color:var(--on-blue-soft);max-width:26ch}
 
 /* A school day: horizontal track pinned to the viewport. */
 .lp .lp-day{height:330vh;position:relative}
@@ -300,6 +339,8 @@
   .lp-day-track{transform:none !important;padding:12px var(--gutter) 24px}
   .lp-card{scroll-snap-align:center}
   .lp-trust-list{grid-template-columns:1fr}
+  .lp-shot{grid-template-columns:minmax(0,1fr)}
+  .lp-phones{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:40px}
 }
 @media (max-width:600px){
   .lp-nav{height:60px;gap:12px}.lp-brand{font-size:15px}.lp-signin{font-size:14px}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import './landing.css';
+import { shots, tour, type Shot } from '../auth/content';
 import { ask, basic6, basic6Weeks, fees, fractions, kwame, lesson, lessonCheck, notice, school, SNAPSHOT_DATE, type Question } from './data';
 
 const cedi = (n: number) => 'GH₵' + Math.round(n).toLocaleString('en-GB');
@@ -65,7 +66,7 @@ function Hero() {
     };
     addEventListener('pointermove', move); return () => removeEventListener('pointermove', move);
   }, []);
-  return <header className="lp-hero" ref={ref}>
+  return <header className="lp-hero lp-blue" ref={ref}>
     <div className="lp-hero-sticky">
       <div className="lp-hero-copy">
         <p className="lp-kicker">For Ghanaian basic schools, KG to JHS</p>
@@ -199,7 +200,7 @@ function Ask() {
     return (text.match(/\*\*/g) ?? []).length % 2 ? text.replace(/\*\*(?!.*\*\*)/s, '') : text.replace(/\*$/, '');
   }, [shown, answer]);
   const done = shown >= answer.length;
-  return <section className="lp-ask" id="try">
+  return <section className="lp-ask lp-blue" id="try">
     <div className="lp-wrap">
       <div className="lp-ask-head">
         <h2>Ask your school a question. Get an answer you can act on.</h2>
@@ -366,6 +367,55 @@ function Families() {
       </div>
     </div>
     <p className="lp-demo-note lp-wrap">Kwame is a sample learner in our demo school, Sunrise International School. The screens, rules, lesson and questions are the live platform.</p>
+  </section>;
+}
+
+/* ---------- Inside the product: real pages of the demo school, the same pictures the sign-in page uses. */
+function Browser({ shot }: { shot: Shot }) {
+  return <figure className="lp-browser"><div className="lp-browser-bar" aria-hidden="true"><i /><i /><i /><span>Sunrise International School · demo school</span></div>
+    <img src={`/auth/${shot.file}.webp`} alt={shot.alt} width={1100} height={720} loading="lazy" decoding="async" /></figure>;
+}
+function Screens() {
+  const [pick, setPick] = useState(0);
+  const item = tour[pick];
+  return <section className="lp-screens lp-blue" id="inside">
+    <div className="lp-wrap">
+      <p className="lp-kicker">Inside the product</p>
+      <h2>Every page your staff will use, before you sign up.</h2>
+      <p className="lp-band-lede">These are real pages of our demo school, with sample learners. Choose one.</p>
+      <div className="lp-chips" role="tablist" aria-label="Pages of the product">
+        {tour.map((t, i) => <button key={t.id} role="tab" id={`lp-tab-${t.id}`} aria-selected={i === pick} aria-controls="lp-shot" className={i === pick ? 'on' : ''} onClick={() => setPick(i)}>{t.label}</button>)}
+      </div>
+      <div className="lp-shot" role="tabpanel" id="lp-shot" aria-labelledby={`lp-tab-${item.id}`}>
+        <div className="lp-shot-text">
+          <h3>{item.title}</h3>
+          <p>{item.text}</p>
+          <ul>{item.points.map(point => <li key={point}>{point}</li>)}</ul>
+        </div>
+        <Browser shot={item.shot} />
+      </div>
+    </div>
+  </section>;
+}
+
+/* ---------- The rest of the parent's side, on their own phone. */
+function ParentScreens() {
+  const list: [Shot, string, string][] = [
+    [shots.parentHome, 'Home', 'How their child is doing, at a glance.'],
+    [shots.parentLearn, 'Learn at home', "Lessons and practice on this term's topics, approved by teachers."],
+    [shots.parentProgress, 'Progress', 'Class work and tests, term by term.'],
+    [shots.parentReports, 'Report cards', 'Published report cards, kept as issued.'],
+  ];
+  return <section className="lp-parents lp-blue" aria-labelledby="lp-parents-h">
+    <div className="lp-wrap">
+      <p className="lp-kicker">On the phone they already have</p>
+      <h2 id="lp-parents-h">A parent signs in once and sees all of it.</h2>
+      <p className="lp-band-lede">Children never get their own logins. Each child's progress, report cards, fees and notices sit on the parent's phone, in plain words.</p>
+      <ul className="lp-phones">{list.map(([shot, title, text]) => <Reveal as="li" key={title}>
+        <figure className="lp-shotphone"><img src={`/auth/${shot.file}.webp`} alt={shot.alt} width={390} height={780} loading="lazy" decoding="async" /></figure>
+        <b>{title}</b><span>{text}</span>
+      </Reveal>)}</ul>
+    </div>
   </section>;
 }
 
@@ -549,7 +599,7 @@ export default function Landing() {
     scrollTo({ top, behavior: reduced() ? 'auto' : 'smooth' });
   };
   return <div className="lp" onClick={jump}>
-    <nav className={`lp-nav ${solid ? 'solid' : ''}`} aria-label="Main">
+    <nav className={`lp-nav ${solid ? 'solid' : 'on-blue'}`} aria-label="Main">
       <a className="lp-brand" href="#"><span className="logo" aria-hidden="true">V</span>Veloxa SmartSchool</a>
       <div className="lp-links"><a href="#schools">Schools</a><a href="#families">Parents</a><a href="#pricing">Pricing</a></div>
       <div className="lp-nav-cta"><a className="lp-signin" href="#/signin">Sign in</a><a className="lp-btn small" href={START}>Start free</a></div>
@@ -559,7 +609,9 @@ export default function Landing() {
       <Fees />
       <Ask />
       <Day />
+      <Screens />
       <Families />
+      <ParentScreens />
       <Pricing />
       <Trust />
       <Close />
