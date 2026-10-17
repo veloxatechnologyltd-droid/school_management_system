@@ -25,7 +25,7 @@ const enrolmentStatus = (startDate: string, endDate?: string | null) => {
 const pages: Record<FamilySection, { title: string; blurb: (first: string) => string }> = {
   children: { title: 'Home', blurb: first => `Everything for ${first || 'your child'} in one place. Pick a page to look at.` },
   practice: { title: 'Learn at home', blurb: first => `Short lessons and practice for ${first}, from the topics the school is teaching. Class marks never change.` },
-  'my-progress': { title: 'Progress', blurb: () => 'How each subject is going, from class exercises, homework and tests, and how terms compare.' },
+  'my-progress': { title: 'Performance', blurb: () => 'How each subject is going, from class exercises, homework and tests, and how terms compare.' },
   reports: { title: 'Report cards', blurb: () => 'Reports the school has published, newest first.' },
   notes: { title: 'Notes', blurb: first => `Write to ${first}'s teachers and read what the school shares with you.` },
 };
@@ -90,7 +90,7 @@ function Home({ child, detail, first, schoolId, refresh }: { child: Child; detai
   const doors: [string, string, string, string][] = [
     ...(child.academic ? [
       ['practice', 'menu_book', 'Learn at home', `Short lessons and practice for ${first}.`],
-      ['my-progress', 'insights', 'Progress', 'How each subject is going this term.'],
+      ['my-progress', 'insights', 'Performance', 'How each subject is going this term.'],
       ['reports', 'description', 'Report cards', 'Published terminal and progress reports.'],
       ['notes', 'forum', 'Notes', `Write to ${first}'s teachers.`]] as [string, string, string, string][] : []),
     ...(child.billing ? [['fees', 'receipt_long', 'Fees', 'What has been billed and paid.'] as [string, string, string, string]] : []),

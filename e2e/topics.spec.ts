@@ -112,8 +112,12 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
 
     // The child can also choose any other topic approved for their class this term; its questions are Claude's and say so.
     await family.keyboard.press('Escape');
-    await expect(card.getByRole('heading',{name:'Choose a topic',exact:true})).toBeVisible();
+    // The child picks a subject first; its topics are listed once each, and a topic approved only for another class is not among them.
+    await expect(card.getByRole('heading',{name:'Choose a subject',exact:true})).toBeVisible();await expect(card.locator('li').filter({hasText:second})).toHaveCount(0);
+    await card.getByRole('button',{name:new RegExp(`^Maths ${suffix}`)}).click();
+    await expect(card.getByRole('heading',{name:`Maths ${suffix}`,exact:true})).toBeVisible();await expect(card.getByRole('button',{name:'All subjects',exact:true})).toBeVisible();
     await expect(card.locator('li').filter({hasText:second})).toBeVisible();await expect(card.locator('li').filter({hasText:elsewhere})).toHaveCount(0);
+    await expect(card.locator('li').filter({hasText:topic})).toHaveCount(1);expect(await noOverflow(family)).toBe(true);
     await card.locator('li').filter({hasText:second}).getByRole('button',{name:'Start practice',exact:true}).click();
     const chosen=family.getByRole('dialog',{name:`Practice: ${second}`});await expect(chosen.getByText('Question 1 of 5')).toBeVisible();
     await expect(chosen.getByText("Made by AI from your school's topics")).toBeVisible();
@@ -150,6 +154,9 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
       if(i<4)await finishing.getByRole('button',{name:'Next question',exact:true}).click();
     }
     await expect(finishing.getByText(/of 5 correct/)).toBeVisible();await finishing.getByRole('button',{name:'Finish',exact:true}).click();
+    // The topic row now shows how the practice went: the last score out of five and a word for how the child is doing, never a percentage.
+    const progress=card.locator('li').filter({hasText:second});await expect(progress.getByText(/Last time \d of 5 right · 1 session in all/)).toBeVisible();
+    await expect(progress.getByText(/Doing well|Getting there|Needs more practice/)).toBeVisible();await expect(card.getByText(/\d+%/)).toHaveCount(0);
     await family.getByRole('tab',{name:'Looking back',exact:true}).click();
     const history=family.locator('.card').filter({has:family.getByRole('heading',{name:/^What .* has learned$/})});await history.scrollIntoViewIfNeeded();
     await expect(history.locator('li').filter({hasText:third}).getByText('Lesson read')).toBeVisible();

@@ -1,12 +1,13 @@
 import React, { FormEvent, useEffect, useState } from 'react';
 import { request } from '../lib/api';
-import { AiLabel, Card, Dialog, Empty, Icon, Pill, Tabs, todayInAccra } from '../lib/ui';
+import { AiLabel, Card, Dialog, Empty, Icon, Pill, Tabs, Tone, todayInAccra } from '../lib/ui';
 import { FamilyHistory } from './LearningHistory';
 
+type Standing = 'new' | 'doing_well' | 'getting_there' | 'needs_practice' | 'finished';
 type Topic = { indicatorId: string; subject: string; topic: string; hasLesson: boolean; level: number; levels: number; sessionsThisWeek: number; lastPracticedOn: string | null;
-  open: { sessionId: string; answered: number; total: number } | null; availableToday: boolean };
-type Practised = { indicatorId: string; subject: string; topic: string; level: number; levels: number; done: boolean; sessionsThisWeek: number; lastPracticedOn: string };
-type Overview = { enabled: false } | { enabled: true; firstName: string; topics: Topic[]; explore: Topic[]; practised: Practised[] };
+  open: { sessionId: string; answered: number; total: number } | null; availableToday: boolean; done: boolean; standing: Standing; lastResult: { correct: number; total: number } | null; sessionsAll: number;
+  onList?: boolean };
+type Overview = { enabled: false } | { enabled: true; firstName: string; topics: Topic[]; subjects: { subject: string; topics: Topic[] }[] };
 type Question = { questionId: string; position: number; kind: 'choice' | 'number'; prompt: string; options: string[] | null; madeByAi: boolean };
 type Summary = { correct: number; total: number; outcome: 'up' | 'stay' | 'down' | 'done'; levelAfter: number };
 type View = { sessionId: string; subject: string; topic: string; level: number; total: number; answered: number; next: Question | null; summary: Summary | null };
@@ -19,10 +20,30 @@ export const ago = (iso: string) => { const n = Math.round((Date.parse(`${todayI
 export const times = (n: number) => n === 1 ? '1 session' : `${n} sessions`;
 export const Dots = ({ level, levels }: { level: number; levels: number }) => <span className="level-dots" role="img" aria-label={`Level ${level} of ${levels}`}>{Array.from({ length: levels }, (_, i) => <span key={i} className={i < level ? 'on' : ''}/>)}</span>;
 
+const standings: Record<Standing, { tone: Tone; text: string }> = {
+  new: { tone: 'neutral', text: 'Not started' }, doing_well: { tone: 'positive', text: 'Doing well' }, getting_there: { tone: 'info', text: 'Getting there' },
+  needs_practice: { tone: 'caution', text: 'Needs more practice' }, finished: { tone: 'positive', text: 'Finished all levels' },
+};
+// A subject at a glance: how many of this term's topics the child has started, and how many are going well or need help. Topics practised earlier but no longer listed do not count.
+const summarise = (topics: Topic[]) => { const listed = topics.filter(t => t.onList !== false);
+  return { listed, started: listed.filter(t => t.sessionsAll > 0).length, well: topics.filter(t => t.standing === 'doing_well' || t.standing === 'finished').length, help: topics.filter(t => t.standing === 'needs_practice').length }; };
+
+// One subject's topics, each once, with how the child is doing. Topics practised earlier that the term's list no longer has stay visible below, without a way to start them.
+function SubjectTopics({ subject, topics, firstName, row, onBack }: { subject: string; topics: Topic[]; firstName: string; row: (t: Topic, showSubject: boolean) => React.ReactNode; onBack: () => void }) {
+  const { listed, started } = summarise(topics), earlier = topics.filter(t => t.onList === false);
+  return <>
+    <div className="actions"><button type="button" className="secondary" onClick={onBack}><Icon name="arrow_back"/>All subjects</button></div>
+    <Card title={subject} hint={listed.length ? `${started} of ${listed.length} ${listed.length === 1 ? 'topic' : 'topics'} started. Pick any topic to study or practise: five questions at a time, at ${firstName}'s own level.` : `Topics ${firstName} practised earlier.`}>
+      {listed.length > 0 && <ul className="practice-topics">{listed.map(t => row(t, false))}</ul>}
+      {earlier.length > 0 && <><h4 className="topic-subject">Practised earlier</h4><ul className="practice-topics">{earlier.map(t => row(t, false))}</ul></>}
+    </Card>
+  </>;
+}
+
 // Practice at home: short sessions for a child on the topics class work shows are hardest, from questions a teacher approved.
-// Families see the topic, the level reached and sessions this week. Never marks, percentages, ranks or other children.
+// Families choose a subject, then a topic, and see the level reached, a word for how the last few sessions went and the last session's score out of five. Never class marks, percentages, ranks or other children.
 export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: string; csrfToken: string; childId: string }) {
-  const [data, setData] = useState<Overview | null>(null); const [error, setError] = useState(''); const [session, setSession] = useState<{ topic: Topic; view: View } | null>(null); const [busy, setBusy] = useState(''); const [rev, setRev] = useState(0); const [tab, setTab] = useState<'practise' | 'back'>('practise');
+  const [data, setData] = useState<Overview | null>(null); const [error, setError] = useState(''); const [session, setSession] = useState<{ topic: Topic; view: View } | null>(null); const [busy, setBusy] = useState(''); const [rev, setRev] = useState(0); const [tab, setTab] = useState<'practise' | 'back'>('practise'); const [subject, setSubject] = useState<string | null>(null);
   const base = `/schools/${schoolId}/guardian/children/${childId}/practice`;
   const load = () => request<Overview>(base).then(setData).catch(e => setError((e as Error).message));
   useEffect(() => { let live = true; setData(null); setError(''); request<Overview>(base).then(r => { if (live) setData(r); }).catch(e => { if (live) setError((e as Error).message); }); return () => { live = false; }; }, [schoolId, childId]);
@@ -37,40 +58,43 @@ export function HomePractice({ schoolId, csrfToken, childId }: { schoolId: strin
   if (error && !data) return <p role="alert">{error}</p>;
   if (!data) return <p role="status">Loading…</p>;
   if (!data.enabled) return <Card><Empty title="Practice at home is not switched on" hint="Your school has not turned on home practice yet. Ask the school if you would like it."/></Card>;
-  const { firstName, topics, explore } = data;
-  // Topics on offer already show their level and sessions; this list is for the ones finished or no longer on the list.
-  const practised = data.practised.filter(p => !topics.some(t => t.indicatorId === p.indicatorId));
-  const row = (t: Topic) => <li key={t.indicatorId}>
-          <div><strong>{t.topic}</strong><span className="sub">{t.subject}</span>
-            <span className="practice-meta"><Dots level={t.level} levels={t.levels}/> Level {t.level} of {t.levels}{t.sessionsThisWeek > 0 && <> · {times(t.sessionsThisWeek)} this week</>}{t.lastPracticedOn && <> · last practised {ago(t.lastPracticedOn)}</>}</span></div>
-          <div className="row-actions">{t.hasLesson && !t.open && t.availableToday && <button className="secondary" disabled={busy === t.indicatorId} onClick={() => study_(t)}>Study first</button>}
-          {t.open ? <button disabled={busy === t.indicatorId} onClick={() => void begin(t).catch(e => { setError((e as Error).message); void load(); })}>Continue</button>
-            : t.availableToday ? <button disabled={busy === t.indicatorId} onClick={() => void begin(t).catch(e => { setError((e as Error).message); void load(); })}>{t.lastPracticedOn ? 'Practise again' : 'Start practice'}</button>
-            : <Pill tone="positive">Done for today</Pill>}</div>
-        </li>;
-  // The child's own choices, grouped by subject.
-  const subjects = [...new Set(explore.map(t => t.subject))];
+  // An API not yet updated sends no subjects or standings (the web app and the API deploy a few minutes apart): show what it does send rather than fail.
+  const { firstName, topics } = data, subjects = data.subjects ?? [];
+  const picked = subjects.find(s => s.subject === subject) ?? null;
+  const begin_ = (t: Topic) => void begin(t).catch(e => { setError((e as Error).message); void load(); });
+  const actions = (t: Topic) => {
+    if (t.done || t.onList === false) return null;
+    return <>{t.hasLesson && !t.open && t.availableToday && <button className="secondary" disabled={busy === t.indicatorId} onClick={() => study_(t)}>Study first</button>}
+      {t.open ? <button disabled={busy === t.indicatorId} onClick={() => begin_(t)}>Continue</button>
+        : t.availableToday ? <button disabled={busy === t.indicatorId} onClick={() => begin_(t)}>{t.lastPracticedOn ? 'Practise again' : 'Start practice'}</button>
+        : <Pill tone="positive">Done for today</Pill>}</>;
+  };
+  // One topic: where the child is (level and how the last few sessions went), then what they can do next.
+  const row = (t: Topic, showSubject: boolean) => { const how = t.standing ? standings[t.standing] : null; return <li key={t.indicatorId}>
+    <div><strong>{t.topic}</strong>{showSubject && <span className="sub">{t.subject}</span>}
+      <span className="practice-meta">{how && <Pill tone={how.tone}>{how.text}</Pill>}{!t.done && <><Dots level={t.level} levels={t.levels}/> Level {t.level} of {t.levels}</>}</span>
+      {t.sessionsAll > 0 && <span className="practice-meta">{t.lastResult && <>Last time {t.lastResult.correct} of {t.lastResult.total} right · </>}{times(t.sessionsAll)} in all{t.sessionsThisWeek > 0 && <> · {t.sessionsThisWeek} this week</>}{t.lastPracticedOn && <> · last practised {ago(t.lastPracticedOn)}</>}</span>}</div>
+    <div className="row-actions">{actions(t)}</div>
+  </li>; };
   return <section aria-label="Practice at home" className="page">
     <div className="actions"><Tabs label="Learn at home" value={tab} onChange={setTab} options={[{ id: 'practise', label: 'Practise' }, { id: 'back', label: 'Looking back' }]}/></div>
     {error && <p role="alert">{error}</p>}
-    {tab === 'practise' && <>
-      <Card title="Practice at home" hint={`Short practice for ${firstName}, five questions at a time, starting with the topics to try first. The questions come from the school's own topics; the ones written by AI say so.`}>
-        {!topics.length ? <Empty title="Nothing to practise right now" hint={`When the school has approved the term's topics, the ones to try first will appear here.`}/>
-          : <ul className="practice-topics">{topics.map(row)}</ul>}
-      </Card>
-      {explore.length > 0 && <Card title="Choose a topic" hint={`The topics ${firstName}'s class is learning this term. Pick any one to practise: five questions at a time, at ${firstName}'s own level. This never changes class marks.`}>
-        {subjects.map(subject => <div key={subject}><h4 className="topic-subject">{subject}</h4><ul className="practice-topics">{explore.filter(t => t.subject === subject).map(row)}</ul></div>)}
+    {tab === 'practise' && (picked ? <SubjectTopics subject={picked.subject} topics={picked.topics} firstName={firstName} row={row} onBack={() => setSubject(null)}/> : <>
+      {!topics.length && !subjects.length && <Card><Empty title="Nothing to practise right now" hint={`When the school has approved the term's topics, they will appear here by subject.`}/></Card>}
+      {subjects.length > 0 && <Card title="Choose a subject" hint={`Pick a subject, then a topic ${firstName}'s class is learning this term. Practice is at ${firstName}'s own level and never changes class marks.`}>
+        <div className="subject-grid">{subjects.map(s => { const { listed, started, well, help } = summarise(s.topics);
+          return <button key={s.subject} type="button" className="subject-card" onClick={() => setSubject(s.subject)}>
+            <span className="subject-name"><strong>{s.subject}</strong><Icon name="chevron_right"/></span>
+            <span className="practice-bar" aria-hidden="true"><span style={{ width: `${listed.length ? Math.round(started * 100 / listed.length) : 0}%` }}/></span>
+            <span className="practice-meta">{listed.length ? `${started} of ${listed.length} ${listed.length === 1 ? 'topic' : 'topics'} started` : 'Practised earlier'}</span>
+            {(well > 0 || help > 0) && <span className="pill-row">{well > 0 && <Pill tone="positive">{well} doing well</Pill>}{help > 0 && <Pill tone="caution">{help} need{help === 1 ? 's' : ''} practice</Pill>}</span>}
+          </button>; })}</div>
       </Card>}
-    </>}
-    {tab === 'back' && <>
-      <FamilyHistory schoolId={schoolId} childId={childId} firstName={firstName} version={rev}/>
-      {practised.length > 0 && <Card title="Earlier practice">
-        <ul className="practice-topics">{practised.map(p => <li key={p.indicatorId}>
-          <div><strong>{p.topic}</strong><span className="sub">{p.subject}</span>
-            <span className="practice-meta">{p.done ? <Pill tone="positive">Finished all levels</Pill> : <><Dots level={p.level} levels={p.levels}/> Level {p.level} of {p.levels}</>} · {times(p.sessionsThisWeek)} this week · last practised {ago(p.lastPracticedOn)}</span></div>
-        </li>)}</ul>
+      {topics.length > 0 && <Card title="Try these first" hint={`Topics ${firstName} could try next. The questions come from the school's own topics; the ones written by AI say so.`}>
+        <ul className="practice-topics">{topics.map(t => row(t, true))}</ul>
       </Card>}
-    </>}
+    </>)}
+    {tab === 'back' && <FamilyHistory schoolId={schoolId} childId={childId} firstName={firstName} version={rev}/>}
     {study && <StudyLesson studyBase={studyBase} csrfToken={csrfToken} firstName={firstName} topic={study.topic} study={study.lesson} onClose={() => { setStudy(null); setRev(n => n + 1); void load(); }}
       onCheck={(studySessionId) => begin(study.topic,studySessionId).then(() => setStudy(null))}/>}
     {session && <PracticeSession base={base} csrfToken={csrfToken} firstName={firstName} start={session.view} onClose={() => { setSession(null); setRev(n => n + 1); void load(); }}/>}

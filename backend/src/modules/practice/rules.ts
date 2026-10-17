@@ -15,6 +15,17 @@ export function afterSession(level: number, correct: number, previous: { level: 
   return { outcome: 'stay', levelAfter: level };
 }
 
+// How a child is doing on a topic, from the last few finished sessions (newest first, each the number right out of SESSION_SIZE). Families see this word beside the
+// level, never a percentage. The cut-offs sit half a question inside the level rules: an average of UP_AT or better is doing well, WEAK_AT_MOST or worse needs practice.
+export const RECENT_SESSIONS = 3;
+export type Standing = 'new' | 'doing_well' | 'getting_there' | 'needs_practice' | 'finished';
+export function standing(recent: number[], done: boolean): Standing {
+  if (done) return 'finished';
+  if (!recent.length) return 'new';
+  const average = recent.reduce((sum, n) => sum + n, 0) / recent.length;
+  return average >= UP_AT - 0.5 ? 'doing_well' : average > WEAK_AT_MOST + 0.5 ? 'getting_there' : 'needs_practice';
+}
+
 // A typed number: digits with an optional minus and decimal point; spaces and thousands commas are ignored ("1,200" is 1200).
 export function parseNumber(text: string): number | null {
   const clean = text.trim().replace(/\s+/g, '').replace(/,(?=\d{3}(\D|$))/g, '');

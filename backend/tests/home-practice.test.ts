@@ -190,6 +190,26 @@ test('two weak sessions in a row at a level move the child down; finishing Level
   assert.equal((await start(kid.ama,topic.measures)).status,404);
 });
 
+test('the family sees every topic once, by subject, with how the child is doing on it and no marks',async()=>{
+  const view=(await call(route(kid.ama),'GET',undefined,guardian)).body;
+  const cards=view.subjects.flatMap((s:any)=>s.topics.map((t:any)=>({...t,group:s.subject})));
+  const ids=cards.map((t:any)=>t.indicatorId);
+  assert.equal(new Set(ids).size,ids.length,'a topic is listed once, however much the child has practised it');
+  assert.deepEqual(view.subjects.map((s:any)=>s.subject),[...view.subjects.map((s:any)=>s.subject)].sort((a:string,b:string)=>a.localeCompare(b)),'subjects in name order');
+  assert.ok(cards.every((t:any)=>t.group===t.subject),'each topic sits under its own subject');
+  for(const t of [...view.topics,...view.explore])assert.ok(ids.includes(t.indicatorId),`${t.topic} on offer is in its subject's list`);
+  for(const p of view.practised)assert.ok(ids.includes(p.indicatorId),`${p.topic} practised before is still in its subject's list`);
+  // A topic with finished sessions says how the last one went (out of five) and gives a word for how the child is doing; one with none is "new".
+  for(const t of cards){
+    if(t.sessionsAll===0){assert.equal(t.standing,'new');assert.equal(t.lastResult,null);}
+    else{assert.equal(t.lastResult.total,5);assert.ok(t.lastResult.correct>=0&&t.lastResult.correct<=5);assert.ok(t.done?t.standing==='finished':['doing_well','getting_there','needs_practice'].includes(t.standing),`${t.topic}: ${t.standing}`);}
+  }
+  assert.ok(cards.some((t:any)=>t.sessionsAll>0),'earlier tests left Ama with practice, so at least one topic shows progress');
+  // Topic names can say "Percentages", so look at what the cards carry, not at their words.
+  assert.ok(![...new Set(cards.flatMap((t:any)=>Object.keys(t)))].some(k=>/average|percent|rank|position|score/i.test(k)),'no marks, averages or ranks on a card');
+  assert.doesNotMatch(JSON.stringify(view),/\d+%/,'no percentages');
+});
+
 test('staff see practice as evidence: the head and the class teacher for their own learners and class, never families or other teachers\' classes',async()=>{
   const cls2=randomUUID(),outsider=randomUUID();
   await owner.query("INSERT INTO class_sections(id,school_id,academic_year_id,name,level,capacity) VALUES($1,$2,$3,'Basic 6','Primary',30)",[cls2,school,year]);
@@ -266,4 +286,13 @@ test('in a read-only demo school a family can still try practice, but staff cann
   const first=await answer(child,tried.body.sessionId,tried.body.next);assert.equal(first.status,201,`answering is not blocked either: ${JSON.stringify(first.body)}`);
   assert.equal((await call(`/assessment/indicators/${topic.fractions}/questions`,'POST',{operationId:randomUUID(),questions:fullSet()},teacher)).body.code,'READ_ONLY_DEMO','approving questions is a staff change and stays blocked');
   delete process.env.READ_ONLY_SCHOOL_IDS;
+});
+
+test('how a child is doing on a topic comes from the last three finished sessions, with the same cut-offs as the levels',()=>{
+  const {standing,RECENT_SESSIONS}=require('../dist/modules/practice/rules');
+  assert.equal(RECENT_SESSIONS,3);
+  assert.equal(standing([],false),'new');assert.equal(standing([5],true),'finished','finishing every level wins over the scores');
+  assert.equal(standing([4],false),'doing_well','4 of 5 is what moves a child up');assert.equal(standing([5,4,3],false),'doing_well');
+  assert.equal(standing([3],false),'getting_there');assert.equal(standing([4,3,1],false),'getting_there','one weak session in three does not sink a topic');
+  assert.equal(standing([2],false),'needs_practice','2 of 5 is a weak session');assert.equal(standing([2,2,3],false),'needs_practice');assert.equal(standing([0,5,1],false),'needs_practice');
 });

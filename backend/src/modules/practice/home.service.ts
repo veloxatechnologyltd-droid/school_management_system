@@ -11,12 +11,12 @@ import { gradeMatches } from '../learning/scope';
 import { historyEntry, historyList } from './history';
 import { AnswerDto, HomePracticeSettingsDto, StartSessionDto, StartStudyDto } from './practice.dto';
 import { LEVEL_COUNT } from './questions';
-import { SESSIONS_PER_TOPIC_PER_DAY, SESSION_SIZE, TOPICS_OFFERED, afterSession, parseNumber, sameNumber } from './rules';
+import { RECENT_SESSIONS, SESSIONS_PER_TOPIC_PER_DAY, SESSION_SIZE, TOPICS_OFFERED, afterSession, parseNumber, sameNumber, standing } from './rules';
 
 const accraToday = (client: PoolClient) => client.query("SELECT (now() AT TIME ZONE 'Africa/Accra')::date::text AS d").then(r => r.rows[0].d as string);
 const STUDIES_PER_TOPIC_PER_DAY = 3;
 type Pick = { indicatorId: string; subject: string; topic: string; setId: string; lessonId: string | null };
-type Learned = { indicatorId: string; subject: string; topic: string; level: number; done: boolean; sessionsThisWeek: number; sessionsToday: number; lastPracticedOn: string | null; openSessionId: string | null; answeredInOpen: number };
+type Learned = { indicatorId: string; subject: string; topic: string; level: number; done: boolean; sessionsThisWeek: number; sessionsToday: number; sessionsAll: number; recent: number[]; lastPracticedOn: string | null; openSessionId: string | null; answeredInOpen: number };
 
 // Home practice for families: the school's switch, what a verified guardian's child is offered, and the sessions themselves.
 // Families never see percentages, ranks or other children; staff read the same records as evidence beside class work.
@@ -53,13 +53,15 @@ export class HomePracticeService {
         (SELECT x.level_after FROM practice_sessions x WHERE x.school_id=i.school_id AND x.learner_id=$2 AND x.indicator_id=i.id AND x.completed_at IS NOT NULL ORDER BY x.completed_at DESC,x.id DESC LIMIT 1) AS level_after,
         count(p.id) FILTER (WHERE p.completed_at IS NOT NULL AND (p.completed_at AT TIME ZONE 'Africa/Accra')::date>=$3::date)::int AS this_week,
         count(p.id) FILTER (WHERE (p.started_at AT TIME ZONE 'Africa/Accra')::date=$4::date)::int AS today,
+        count(p.id) FILTER (WHERE p.completed_at IS NOT NULL)::int AS finished,
+        (array_agg(p.correct ORDER BY p.completed_at DESC,p.id DESC) FILTER (WHERE p.completed_at IS NOT NULL))[1:${RECENT_SESSIONS}] AS recent,
         max(p.completed_at) FILTER (WHERE p.completed_at IS NOT NULL) AS last_at,
         (array_agg(p.id) FILTER (WHERE p.completed_at IS NULL))[1] AS open_id
       FROM practice_sessions p JOIN curriculum_indicators i ON i.school_id=p.school_id AND i.id=p.indicator_id JOIN subjects s ON s.school_id=i.school_id AND s.id=i.subject_id
       WHERE p.school_id=$1 AND p.learner_id=$2 GROUP BY i.id,i.school_id,s.name,i.description`,[schoolId,learnerId,mondayOf(today),today])).rows;
     const answered = new Map((await client.query(`SELECT i.session_id,count(*) FILTER (WHERE i.answered_at IS NOT NULL)::int AS n FROM practice_session_items i
       WHERE i.school_id=$1 AND i.session_id=ANY($2::uuid[]) GROUP BY i.session_id`,[schoolId,rows.flatMap(r => r.open_id ? [r.open_id] : [])])).rows.map(r => [r.session_id as string,r.n as number]));
-    return rows.map(r => ({indicatorId:r.indicator_id,subject:r.subject,topic:r.topic,done:r.last_outcome === 'done',level:r.level_after ?? 1,sessionsThisWeek:r.this_week,sessionsToday:r.today,
+    return rows.map(r => ({indicatorId:r.indicator_id,subject:r.subject,topic:r.topic,done:r.last_outcome === 'done',level:r.level_after ?? 1,sessionsThisWeek:r.this_week,sessionsToday:r.today,sessionsAll:r.finished,recent:(r.recent ?? []) as number[],
       lastPracticedOn:r.last_at ? new Date(r.last_at).toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}) : null,openSessionId:r.open_id ?? null,answeredInOpen:r.open_id ? answered.get(r.open_id) ?? 0 : 0}));
   }
 
@@ -152,14 +154,23 @@ export class HomePracticeService {
     const lessonIds = new Map([...picks.weak,...picks.approved].map(p => [p.indicatorId,p.lessonId]));
     const card = (o: { indicatorId: string; subject: string; topic: string }) => { const l = byTopic.get(o.indicatorId);
       return {indicatorId:o.indicatorId,subject:o.subject,topic:o.topic,hasLesson:!!lessonIds.get(o.indicatorId),level:l?.level ?? 1,levels:LEVEL_COUNT,sessionsThisWeek:l?.sessionsThisWeek ?? 0,lastPracticedOn:l?.lastPracticedOn ?? null,
-        open:l?.openSessionId ? {sessionId:l.openSessionId,answered:l.answeredInOpen,total:SESSION_SIZE} : null,availableToday:!!l?.openSessionId || (l?.sessionsToday ?? 0) < SESSIONS_PER_TOPIC_PER_DAY}; };
+        open:l?.openSessionId ? {sessionId:l.openSessionId,answered:l.answeredInOpen,total:SESSION_SIZE} : null,availableToday:!!l?.openSessionId || (l?.sessionsToday ?? 0) < SESSIONS_PER_TOPIC_PER_DAY,
+        done:l?.done ?? false,standing:standing(l?.recent ?? [],l?.done ?? false),lastResult:l && l.recent.length ? {correct:l.recent[0]!,total:SESSION_SIZE} : null,sessionsAll:l?.sessionsAll ?? 0}; };
     const topics = offered.map(card);
     // The child's own choices: every other topic approved for their class this term that has questions to practise and is not finished.
     const done = new Set(learned.filter(l => l.done).map(l => l.indicatorId)), shown = new Set(offered.map(o => o.indicatorId));
     const explore = picks.approved.filter(a => !shown.has(a.indicatorId) && !done.has(a.indicatorId)).map(card);
     const practised = learned.filter(l => l.lastPracticedOn).sort((a,b) => (b.lastPracticedOn ?? '').localeCompare(a.lastPracticedOn ?? ''))
       .map(l => ({indicatorId:l.indicatorId,subject:l.subject,topic:l.topic,level:l.level,levels:LEVEL_COUNT,done:l.done,sessionsThisWeek:l.sessionsThisWeek,lastPracticedOn:l.lastPracticedOn}));
-    return {enabled:true as const,firstName,topics,explore,practised};
+    // The same topics once each, by subject, so the page does not grow as the child practises: everything on offer (finished topics too), then topics practised
+    // earlier that are no longer on the term's list, which show how the child did but cannot be started.
+    const onList = new Map([...offered,...picks.approved].map(p => [p.indicatorId,p] as const));
+    const earlier = learned.filter(l => l.lastPracticedOn && !onList.has(l.indicatorId));
+    const everything = [...[...onList.values()].map(o => ({...card(o),onList:true})),
+      ...earlier.map(o => ({...card(o),onList:false,hasLesson:false,open:null,availableToday:false}))];
+    const subjects = [...new Set(everything.map(t => t.subject))].sort((a,b) => a.localeCompare(b))
+      .map(subject => ({subject,topics:everything.filter(t => t.subject === subject).sort((a,b) => a.topic.localeCompare(b.topic))}));
+    return {enabled:true as const,firstName,topics,explore,practised,subjects};
   }
 
   private async view(client: PoolClient, schoolId: string, sessionId: string) {

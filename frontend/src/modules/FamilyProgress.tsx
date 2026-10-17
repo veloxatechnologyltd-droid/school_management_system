@@ -10,7 +10,7 @@ const monthName = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateStri
 const pct = (n: number | null) => n === null ? '–' : `${n}%`;
 
 // A child's progress for their family. "help" is what teachers suggest at home (shown on the family's Home page);
-// "tables" is how each subject is going and how terms compare (the Progress page).
+// "tables" is how each subject is going and how terms compare (the Performance page).
 export function FamilyProgress({ schoolId, childId, view }: { schoolId: string; childId: string; view: 'help' | 'tables' }) {
   const [data, setData] = useState<Progress | null>(null); const [error, setError] = useState('');
   useEffect(() => { let live = true; setData(null); setError('');
@@ -27,7 +27,7 @@ export function FamilyProgress({ schoolId, childId, view }: { schoolId: string; 
         {h.practice.length > 0 && <ul className="practice-list">{h.practice.map((r, j) => <li key={j}><span>{r.url ? <a href={r.url} target="_blank" rel="noopener noreferrer">{r.title}</a> : <strong>{r.title}</strong>}{r.detail && <span className="sub">{r.detail}</span>}</span></li>)}</ul>}
         <span className="muted">From {h.teacher}</span></li>)}</ul>}
   </Card></section>;
-  return <section aria-label="Progress" className="page">
+  return <section aria-label="Performance" className="page">
     {!subjects.length && !compare && <Card>{data.shared
       ? <Empty title="No marks to show yet" hint="Once class exercises, homework and tests are marked, how each subject is going appears here."/>
       : <Empty title="Class progress is not shared yet" hint="The school has not switched on sharing of class progress with families. Published report cards are on the Report cards page."/>}</Card>}

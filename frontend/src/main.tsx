@@ -66,7 +66,7 @@ const navByRole:Record<string,NavGroup[]>={
   accountant:[{group:'Money',items:[nav('fees','Fees','receipt_long')]}],
   frontdesk:[{group:'Front desk',items:[nav('collection','Pickup','directions_walk'),nav('learners','Learners','groups')]}],
   guardian:[
-    {group:'My child',items:[nav('children','Home','home'),nav('practice','Learn at home','menu_book'),nav('my-progress','Progress','insights'),nav('reports','Report cards','description'),nav('notes','Notes','forum')]},
+    {group:'My child',items:[nav('children','Home','home'),nav('practice','Learn at home','menu_book'),nav('my-progress','Performance','insights'),nav('reports','Report cards','description'),nav('notes','Notes','forum')]},
     {group:'The school',items:[nav('fees','Fees','receipt_long'),nav('notices','Notices','campaign')]}]
 };
 // Page headers for modules that do not draw their own (the other pages do).

@@ -403,7 +403,7 @@ function ParentScreens() {
   const list: [Shot, string, string][] = [
     [shots.parentHome, 'Home', 'How their child is doing, at a glance.'],
     [shots.parentLearn, 'Learn at home', "Lessons and practice on this term's topics, approved by teachers."],
-    [shots.parentProgress, 'Progress', 'Class work and tests, term by term.'],
+    [shots.parentProgress, 'Performance', 'Class work and tests, term by term.'],
     [shots.parentReports, 'Report cards', 'Published report cards, kept as issued.'],
   ];
   return <section className="lp-parents lp-blue" aria-labelledby="lp-parents-h">

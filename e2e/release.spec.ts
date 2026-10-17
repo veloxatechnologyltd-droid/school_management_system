@@ -303,7 +303,7 @@ test('each role lands on its own daily work; the section stays in the address ac
   await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('link',{name:'Notices',exact:true}).click();await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   await page.reload();await pickSchool(page);await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  for(const [email,expected] of [['teacher@example.test',['Today','Ask','My classes','Assessment','Performance','Curriculum','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['Home','Learn at home','Progress','Report cards','Notes','Fees','Notices']]] as const){
+  for(const [email,expected] of [['teacher@example.test',['Today','Ask','My classes','Assessment','Performance','Curriculum','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['Home','Learn at home','Performance','Report cards','Notes','Fees','Notices']]] as const){
     const other=await browser.newPage();await other.setViewportSize({width:375,height:812});await other.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));await signIn(other,email);expect(await links(other)).toEqual(expected);
     expect(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await other.close();
   }
