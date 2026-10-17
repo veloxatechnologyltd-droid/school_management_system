@@ -58,7 +58,7 @@ export class GenerationService {
     const full = work.some((w,n) => deficit[n]! > 0 && w.need === 0);
     const idle = state.lesson && work.every(w => w.need === 0);
     return { indicatorId: a.indicator_id as string, grade: a.grade as string, fact, existing: state.existing, counts: state.counts, hasLesson: state.lesson, work, idle,
-      note: idle ? (full ? 'level_full' : null) : await this.ai.gate(client,actor.schoolId) };
+      note: idle ? (full ? 'level_full' : null) : await this.ai.gate(client,actor) };
   }
 
   // What exists for this topic and class level: live generated questions per level, the highest place used in each level, a current lesson, and every wording a new question must not repeat.

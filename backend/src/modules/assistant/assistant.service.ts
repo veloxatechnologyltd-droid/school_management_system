@@ -61,10 +61,11 @@ export class AssistantService {
 
   // Phase 1: who is asking, and may the model be used (platform switch, school switch, provider key, monthly cap).
   async prepare(client: PoolClient, actor: Actor) {
-    const settings = await this.ai.settings(client, actor.schoolId);
-    const note = !settings.platformEnabled ? 'ai_disabled_platform' : !settings.enabled ? 'ai_disabled_school' : !this.call() ? 'no_provider' : settings.runsThisMonth >= settings.monthlyRunCap ? 'monthly_cap_reached' : null;
+    const settings = await this.ai.settings(client, actor.schoolId, actor.membershipId);
+    const note = !settings.platformEnabled ? 'ai_disabled_platform' : !settings.enabled ? 'ai_disabled_school' : !this.call() ? 'no_provider' : this.ai.capReached(settings);
     if (note) throw new ConflictException({ message: { ai_disabled_platform: 'AI assistance is not available on this service yet', ai_disabled_school: 'AI assistance is switched off for this school. A headteacher can turn it on in Settings → AI assistance',
-      no_provider: 'No AI provider is configured for the assistant', monthly_cap_reached: 'The school has used this month\'s AI allowance. A headteacher can raise it in Settings → AI assistance' }[note], code: note });
+      no_provider: 'No AI provider is configured for the assistant', monthly_cap_reached: 'The school has used this month\'s AI allowance. A headteacher can raise it in Settings → AI assistance',
+      person_cap_reached: 'You have used your own AI allowance for this month. A headteacher can raise it in Settings → AI assistance' }[note], code: note });
     const school = (await client.query('SELECT name FROM schools WHERE id=$1', [actor.schoolId])).rows[0]?.name as string | undefined;
     const today = (await client.query("SELECT (now() AT TIME ZONE 'Africa/Accra')::date::text AS day, to_char(now() AT TIME ZONE 'Africa/Accra','FMDay') AS weekday")).rows[0];
     return { role: actor.role, school: school ?? 'this school', today: today.day as string, weekday: today.weekday as string };

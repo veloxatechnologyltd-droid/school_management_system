@@ -411,3 +411,8 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **Why:** Teachers tag topics on class work and know what they teach; routing every topic through the head put the work on the wrong person. This supersedes "headteachers add the school's indicators" (2026-10-14).
 **What was rejected:** Letting a teacher retire a colleague's or the head's topic (retiring takes a topic out of practice and Gaps for everyone); limiting teachers to subjects or grades they teach (assignments are by class, not subject).
 **Still open:** topics added by any teacher are school-wide and feed approved topics and Claude's drafting, so a poor entry reaches families through the Topics step; the head's approval of each topic for the term is the check.
+
+## 2026-10-17, AI limit applies to each person as well as the school
+**What was decided:** Evans asked for the monthly AI limit to apply per teacher, counted in requests. `ai_settings` gets `per_person_monthly_cap` (default 50, migration 052). Every real model call counts against the school and the person who made it; the school cap is checked first, then the person's. The rule is per person for every staff role (headteacher included), not teachers only, so it stays one predictable rule; the headteacher can raise it and sees who has used what.
+**Why:** The cap was one count for the whole school, so one busy teacher could use everyone's month.
+**What was rejected:** A teachers-only limit (the headteacher and others use Ask and drafts too); a per-day limit (Evans said requests, and the month is how the school's budget is set); changing the hosted demo or pushing before the hosted ledger has 052, because production refuses to start behind the bundled migrations.

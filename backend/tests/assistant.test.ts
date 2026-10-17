@@ -174,6 +174,18 @@ test('provider failures, refusals and the monthly cap are handled',async()=>{
   const capped=await ask('How is Basic 5?');assert.equal(capped.status,409);assert.equal(capped.body.code,'monthly_cap_reached');assert.equal(sent.length,0);
 });
 
+test('a person who has used their own allowance is stopped while the school still has room',async()=>{
+  await enable();script=()=>answer('ok');
+  const agreed='Parents agreed AI assistance in the data-protection notice',used=async(actor:any)=>(await call('/ai/settings','GET',undefined,actor)).body.myRunsThisMonth as number;
+  const save=async(perPersonMonthlyCap:number)=>ok('/ai/settings','PUT',{enabled:true,monthlyRunCap:5000,perPersonMonthlyCap,acknowledgement:agreed,version:(await call('/ai/settings')).body.version},head,200);
+  const limit=(await used(teacher))+1;
+  while((await used(head))<limit) assert.equal((await ask('One more question',head)).status,201);
+  await save(limit);sent=[];
+  const blocked=await ask('Another question',head);assert.equal(blocked.status,409);assert.equal(blocked.body.code,'person_cap_reached');assert.match(blocked.body.message,/your own AI allowance/);assert.equal(sent.length,0);
+  assert.ok(await used(teacher)<limit,'the other person has allowance left');
+  await save(50);
+});
+
 test('one person cannot flood the assistant',async()=>{
   await enable();script=()=>answer('ok');process.env.ASSISTANT_PER_MINUTE='2';
   try{

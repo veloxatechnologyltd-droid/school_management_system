@@ -9,6 +9,7 @@ import { AiDraftsService } from './ai-drafts.service';
 class SettingsDto extends OperationDto {
   @IsBoolean() enabled!: boolean;
   @IsInt() @Min(1) @Max(5000) monthlyRunCap!: number;
+  @IsOptional() @IsInt() @Min(1) @Max(5000) perPersonMonthlyCap?: number;
   @IsOptional() @IsString() @MinLength(10) @MaxLength(500) acknowledgement?: string;
   @IsOptional() @IsInt() @Min(1) version?: number;
 }
@@ -37,7 +38,10 @@ export class AiController {
   constructor(private readonly access: Access, private readonly ai: AiService, private readonly drafts: AiDraftsService) {}
   @Get('settings')
   settings(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string) {
-    return this.access.school(req,schoolId,['headteacher','teacher'],client => this.ai.settings(client,schoolId));
+    return this.access.school(req,schoolId,['headteacher','teacher'],async (client,actor) => {
+      const settings = await this.ai.settings(client,schoolId,actor.membershipId);
+      return actor.role === 'headteacher' ? {...settings,people:await this.ai.usageByPerson(client,schoolId)} : settings;
+    });
   }
   @Put('settings')
   save(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Body() body: SettingsDto) {

@@ -7,6 +7,8 @@ import { EarlyYearsReportsService } from '../early-years/reports.service';
 import { AiProvider, configuredProvider } from './ai.provider';
 import { Draft, ObservationFact, buildPrompt, digestOf, draftTemplateVersion, factsFrom, templateDraft, validateDraft } from './early-years-draft';
 
+// Matches the column default in migration 052.
+const DEFAULT_PER_PERSON_CAP = 50;
 export interface DraftRequest { learnerId: string; enrolmentId: string; periodStart: string; periodEnd: string }
 export interface Prepared { facts: ObservationFact[]; level: string; classId: string; useAi: boolean; note: string | null }
 export interface Completed { draft: Draft; source: 'ai' | 'template'; status: 'ok' | 'fallback'; provider: string; model: string | null; inputTokens: number | null; outputTokens: number | null; latencyMs: number; note: string | null }
@@ -18,22 +20,30 @@ export class AiService {
   constructor(private readonly reports: EarlyYearsReportsService) {}
   private provider() { return this.providerOverride ?? configuredProvider(); }
 
-  async settings(client: PoolClient, schoolId: string) {
-    const row = (await client.query('SELECT enabled,monthly_run_cap,acknowledgement,version FROM ai_settings WHERE school_id=$1',[schoolId])).rows[0];
-    const runs = Number((await client.query("SELECT count(*) FROM ai_runs WHERE school_id=$1 AND source='ai' AND created_at>=date_trunc('month',now() AT TIME ZONE 'Africa/Accra') AT TIME ZONE 'Africa/Accra'",[schoolId])).rows[0].count);
-    return {enabled:row?.enabled ?? false,monthlyRunCap:row?.monthly_run_cap ?? 200,acknowledgement:row?.acknowledgement ?? null,version:row?.version ?? 0,
-      platformEnabled:process.env.AI_ENABLED === 'true',providerConfigured:this.provider() !== null,runsThisMonth:runs};
+  async settings(client: PoolClient, schoolId: string, membershipId: string | null = null) {
+    const row = (await client.query('SELECT enabled,monthly_run_cap,per_person_monthly_cap,acknowledgement,version FROM ai_settings WHERE school_id=$1',[schoolId])).rows[0];
+    const runs = (await client.query("SELECT count(*) AS school,count(*) FILTER (WHERE actor_membership_id=$2) AS mine FROM ai_runs WHERE school_id=$1 AND source='ai' AND created_at>=date_trunc('month',now() AT TIME ZONE 'Africa/Accra') AT TIME ZONE 'Africa/Accra'",[schoolId,membershipId])).rows[0];
+    return {enabled:row?.enabled ?? false,monthlyRunCap:row?.monthly_run_cap ?? 200,perPersonMonthlyCap:row?.per_person_monthly_cap ?? DEFAULT_PER_PERSON_CAP,acknowledgement:row?.acknowledgement ?? null,version:row?.version ?? 0,
+      platformEnabled:process.env.AI_ENABLED === 'true',providerConfigured:this.provider() !== null,runsThisMonth:Number(runs.school),myRunsThisMonth:Number(runs.mine)};
   }
-  saveSettings(client: PoolClient, actor: Actor, body: {operationId:string;enabled:boolean;monthlyRunCap:number;acknowledgement?:string;version?:number}) {
+  // What each person has used this month, for the headteacher (counts only, never content).
+  async usageByPerson(client: PoolClient, schoolId: string) {
+    return (await client.query("SELECT s.membership_id AS \"membershipId\",s.display_name AS name,count(*)::int AS runs FROM ai_runs r JOIN staff_list() s ON s.membership_id=r.actor_membership_id WHERE r.school_id=$1 AND r.source='ai' AND r.created_at>=date_trunc('month',now() AT TIME ZONE 'Africa/Accra') AT TIME ZONE 'Africa/Accra' GROUP BY s.membership_id,s.display_name ORDER BY runs DESC,s.display_name",[schoolId])).rows as {membershipId:string;name:string;runs:number}[];
+  }
+  // Which monthly allowance is used up, if either: the school's or the person's own.
+  capReached(s: {runsThisMonth:number;monthlyRunCap:number;myRunsThisMonth:number;perPersonMonthlyCap:number}): 'monthly_cap_reached' | 'person_cap_reached' | null {
+    return s.runsThisMonth >= s.monthlyRunCap ? 'monthly_cap_reached' : s.myRunsThisMonth >= s.perPersonMonthlyCap ? 'person_cap_reached' : null;
+  }
+  saveSettings(client: PoolClient, actor: Actor, body: {operationId:string;enabled:boolean;monthlyRunCap:number;perPersonMonthlyCap?:number;acknowledgement?:string;version?:number}) {
     return command(client,actor,body.operationId,'ai.settings',body,async () => {
       const current = (await client.query('SELECT version FROM ai_settings WHERE school_id=$1',[actor.schoolId])).rows[0];
       if (current && body.version !== current.version) throw new ConflictException('AI settings changed. Reload before saving');
       if (body.enabled && !body.acknowledgement?.trim()) throw new BadRequestException('Confirm the data-protection acknowledgement before enabling AI');
-      const values = [actor.schoolId,body.enabled,body.monthlyRunCap,body.acknowledgement?.trim() ?? null,actor.membershipId];
-      if (current) await client.query('UPDATE ai_settings SET enabled=$2,monthly_run_cap=$3,acknowledgement=$4,updated_by=$5,updated_at=now(),version=version+1 WHERE school_id=$1',values);
-      else await client.query('INSERT INTO ai_settings(school_id,enabled,monthly_run_cap,acknowledgement,updated_by) VALUES($1,$2,$3,$4,$5)',values);
-      await audit(client,actor,body.enabled ? 'ai.enabled' : 'ai.disabled',actor.schoolId,{monthlyRunCap:body.monthlyRunCap});
-      return this.settings(client,actor.schoolId);
+      const values = [actor.schoolId,body.enabled,body.monthlyRunCap,body.acknowledgement?.trim() ?? null,actor.membershipId,body.perPersonMonthlyCap ?? null];
+      if (current) await client.query('UPDATE ai_settings SET enabled=$2,monthly_run_cap=$3,acknowledgement=$4,updated_by=$5,per_person_monthly_cap=COALESCE($6,per_person_monthly_cap),updated_at=now(),version=version+1 WHERE school_id=$1',values);
+      else await client.query(`INSERT INTO ai_settings(school_id,enabled,monthly_run_cap,acknowledgement,updated_by,per_person_monthly_cap) VALUES($1,$2,$3,$4,$5,COALESCE($6,${DEFAULT_PER_PERSON_CAP}))`,values);
+      await audit(client,actor,body.enabled ? 'ai.enabled' : 'ai.disabled',actor.schoolId,{monthlyRunCap:body.monthlyRunCap,perPersonMonthlyCap:body.perPersonMonthlyCap ?? null});
+      return this.settings(client,actor.schoolId,actor.membershipId);
     });
   }
 
@@ -42,17 +52,16 @@ export class AiService {
     const inputs = await this.reports.draftInputs(client,actor,body);
     const facts = factsFrom(inputs.observations);
     if (!facts.some(fact => fact.status === 'observed')) throw new ConflictException('There are no observed entries in this period to draft from');
-    const note = await this.gate(client,actor.schoolId);
+    const note = await this.gate(client,actor);
     return {facts,level:inputs.level,classId:inputs.classId,useAi:note === null,note};
   }
-  // Why the model may not be used right now (null = it may): platform kill switch, school switch, provider key, monthly cap.
-  async gate(client: PoolClient, schoolId: string): Promise<string | null> {
-    const settings = await this.settings(client,schoolId);
+  // Why the model may not be used right now (null = it may): platform kill switch, school switch, provider key, school cap, personal cap.
+  async gate(client: PoolClient, actor: {schoolId:string;membershipId:string}): Promise<string | null> {
+    const settings = await this.settings(client,actor.schoolId,actor.membershipId);
     if (!settings.platformEnabled) return 'ai_disabled_platform';
     if (!settings.enabled) return 'ai_disabled_school';
     if (!settings.providerConfigured) return 'no_provider';
-    if (settings.runsThisMonth >= settings.monthlyRunCap) return 'monthly_cap_reached';
-    return null;
+    return this.capReached(settings);
   }
   // The provider for a run that passed the gate (scripted in tests).
   providerFor() { return this.provider(); }

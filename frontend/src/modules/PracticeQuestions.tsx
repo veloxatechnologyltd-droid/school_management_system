@@ -50,7 +50,7 @@ export function PracticeQuestions({ schoolId, csrfToken, indicatorId, onChanged 
     setDrafting(true);
     const r = await send<Draft>(`/ai/indicators/${indicatorId}/questions-draft`).finally(() => setDrafting(false));
     if (r.questions.length) { open(r.questions.map(fromSaved), r.runId); setMessage('Drafted with Claude. Work through every question and answer yourself before approving: a wrong answer would teach a child the wrong thing.'); }
-    else { open(levels.flatMap(([level]) => Array.from({ length: MIN }, () => blank(level))), r.runId, true); setMessage(r.note?.startsWith('ai_disabled') || r.note === 'no_provider' ? 'AI drafting is off for this school, so write the questions yourself.' : 'Claude could not draft questions this time. Try again, or write them yourself.'); }
+    else { open(levels.flatMap(([level]) => Array.from({ length: MIN }, () => blank(level))), r.runId, true); setMessage(r.note?.startsWith('ai_disabled') || r.note === 'no_provider' ? 'AI drafting is off for this school, so write the questions yourself.' : r.note?.endsWith('_cap_reached') ? 'The AI limit for this month is used up, so write the questions yourself. The headteacher can raise it in Settings, under AI assistance.' : 'Claude could not draft questions this time. Try again, or write them yourself.'); }
   });
   const set = (key: string, change: Partial<Q>) => setEditor(e => e && { ...e, questions: e.questions.map(q => q.key === key ? { ...q, ...change } : q) });
   const removeButton = (q: Q) => <button type="button" className="secondary small" onClick={() => setEditor(ed => ed && { ...ed, questions: ed.questions.filter(x => x.key !== q.key) })}>Remove question</button>;

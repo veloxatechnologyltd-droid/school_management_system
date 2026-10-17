@@ -18,7 +18,7 @@ type AiState = { enabled: boolean; platformEnabled: boolean; providerConfigured:
 const reasons = (reason: string, target: 'question' | 'lesson') => ({ wrong_answer: target === 'lesson' ? 'Something in the lesson looks wrong' : 'The answer looks wrong', unclear: target === 'lesson' ? 'The lesson is unclear' : 'The question is unclear', not_taught: 'Not what the class learned', other: 'Another reason' } as Record<string, string>)[reason];
 const notes: Record<string, string> = {
   ai_disabled_platform: 'Claude is not switched on for the platform yet.', ai_disabled_school: 'AI assistance is off for this school. Switch it on in Settings, under AI assistance.',
-  no_provider: 'No AI provider is set up yet.', monthly_cap_reached: "This month's AI limit for the school has been reached.", provider_error: 'Claude did not answer. Try again in a moment.',
+  no_provider: 'No AI provider is set up yet.', monthly_cap_reached: "This month's AI limit for the school has been reached.", person_cap_reached: 'You have used your own AI limit for this month. The headteacher can raise it in Settings, under AI assistance.', provider_error: 'Claude did not answer. Try again in a moment.',
   partial: 'Some questions were left out by the automatic checks. Make more to fill the gap.', topic_unavailable: 'This topic was retired, or is no longer one of your classes, while it was being made.', nothing_new: 'Nothing new could be made this time. Try again.',
   already_running: 'This topic is already being made. Give it a minute.', level_full: 'A level has used all its places for questions. Retire the topic and approve it again to start a fresh set.',
 };

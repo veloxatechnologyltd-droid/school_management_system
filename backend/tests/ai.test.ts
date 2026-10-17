@@ -81,8 +81,30 @@ test('the monthly cap stops model calls but the teacher still gets a template dr
   const result=await draft();assert.equal(result.body.source,'template');assert.equal(result.body.note,'monthly_cap_reached');assert.equal(calls,before);
 });
 
+test('each person has their own monthly allowance, the head sees who used it, and the school cap still comes first',async()=>{
+  const agreement='Data-protection agreement with parents covers AI drafting';
+  const save=async(body:Record<string,unknown>,actor=head)=>call('/ai/settings','PUT',{operationId:randomUUID(),enabled:true,monthlyRunCap:50,acknowledgement:agreement,version:(await call('/ai/settings')).body.version,...body},actor);
+  const headDraft=()=>call('/ai/early-years/report-draft','POST',{learnerId:learner,enrolmentId:enrolment,...period},head);
+  assert.equal((await call('/ai/settings')).body.perPersonMonthlyCap,50);
+  assert.equal((await save({perPersonMonthlyCap:0})).status,400);assert.equal((await save({perPersonMonthlyCap:5001})).status,400);assert.equal((await save({perPersonMonthlyCap:2},teacher)).status,403);
+  const saved=await save({perPersonMonthlyCap:1});assert.equal(saved.status,200,JSON.stringify(saved.body));assert.equal(saved.body.perPersonMonthlyCap,1);
+  script=async()=>({text:good(),inputTokens:1,outputTokens:1});const before=calls;
+  // The teacher already made one model draft this month, so their own allowance of 1 is used up; the head has made none.
+  const mine=await draft();assert.equal(mine.status,201,JSON.stringify(mine.body));assert.equal(mine.body.source,'template');assert.equal(mine.body.note,'person_cap_reached');assert.equal(calls,before);
+  const first=await headDraft();assert.equal(first.status,201,JSON.stringify(first.body));assert.equal(first.body.source,'ai');assert.equal(calls,before+1);
+  const second=await headDraft();assert.equal(second.body.source,'template');assert.equal(second.body.note,'person_cap_reached');assert.equal(calls,before+1);
+  const seen=(await call('/ai/settings')).body;assert.equal(seen.myRunsThisMonth,1);assert.equal(seen.runsThisMonth,2);
+  assert.deepEqual(new Set(seen.people.map((p:any)=>p.membershipId)),new Set([headM,teacherM]));assert.deepEqual(seen.people.map((p:any)=>p.runs),[1,1]);
+  const theirs=(await call('/ai/settings','GET',undefined,teacher)).body;assert.equal(theirs.people,undefined);assert.equal(theirs.myRunsThisMonth,1);assert.equal(theirs.perPersonMonthlyCap,1);
+  // Leaving the field out keeps the saved allowance; when the school's month is also used up, that is the reason given.
+  const kept=await save({monthlyRunCap:2});assert.equal(kept.status,200);assert.equal(kept.body.perPersonMonthlyCap,1);
+  assert.equal((await draft()).body.note,'monthly_cap_reached');
+  assert.equal((await save({perPersonMonthlyCap:50})).body.perPersonMonthlyCap,50);
+  assert.ok((await owner.query("SELECT 1 FROM audit_events WHERE school_id=$1 AND action='ai.enabled' AND (metadata->>'perPersonMonthlyCap')::int=1",[school])).rowCount);
+});
+
 test('access rules: no observed entries, unassigned classes, other schools and guardians never reach the provider',async()=>{
-  await call('/ai/settings','PUT',{operationId:randomUUID(),enabled:true,monthlyRunCap:50,acknowledgement:'Data-protection agreement with parents covers AI drafting',version:3});const before=calls;
+  await call('/ai/settings','PUT',{operationId:randomUUID(),enabled:true,monthlyRunCap:50,acknowledgement:'Data-protection agreement with parents covers AI drafting',version:(await call('/ai/settings')).body.version});const before=calls;
   assert.equal((await draft({learnerId:bareLearner,enrolmentId:bareEnrolment})).status,409);
   await owner.query("UPDATE teaching_assignments SET revoked_at=now(),revoked_by=$1,revocation_reason='Synthetic revoke' WHERE school_id=$2",[headM,school]).catch(()=>undefined);
   assert.equal((await call('/ai/early-years/report-draft','POST',{learnerId:learner,enrolmentId:enrolment,...period},guardian)).status,403);

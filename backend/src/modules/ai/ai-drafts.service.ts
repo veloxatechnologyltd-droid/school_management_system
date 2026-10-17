@@ -33,7 +33,7 @@ export class AiDraftsService {
     const facts = factsFor(results.items.filter(row => open.has(row.learnerId)),attendance,new Map(remarks.map(r => [r.learnerId,{conduct:r.conduct,interest:r.interest}])));
     if (!facts.length) throw new ConflictException(open.size ? 'Remarks are drafted from this term\'s results. Enter both the class score and the exam score for at least one subject first' : 'Every learner already has a remark, or the reports are published');
     const subjectNames = (await client.query('SELECT name FROM subjects WHERE school_id=$1',[actor.schoolId])).rows.map(row => row.name as string);
-    const note = await this.ai.gate(client,actor.schoolId);
+    const note = await this.ai.gate(client,actor);
     return {facts,level:(results.class as { level: string }).level,subjectNames,note};
   }
 
@@ -72,7 +72,7 @@ export class AiDraftsService {
       WHERE i.school_id=$1 AND i.id=$2 AND i.retired_at IS NULL`,[actor.schoolId,indicatorId])).rows[0];
     if (!row) throw new NotFoundException('Indicator unavailable or retired');
     const fact: IndicatorFact = {subject:row.subject,level:'Basic school',grade:row.grade,code:row.code,strand:row.strand,subStrand:row.sub_strand,description:row.description};
-    return {fact,note:await this.ai.gate(client,actor.schoolId)};
+    return {fact,note:await this.ai.gate(client,actor)};
   }
 
   async completeWorksheet(prepared: Awaited<ReturnType<AiDraftsService['prepareWorksheet']>>) {
@@ -145,7 +145,7 @@ export class AiDraftsService {
         weakTopics:gaps.filter(g => g.below.some(b => b.learnerId === row.learnerId)).sort((a,b) => (a.below.find(x => x.learnerId === row.learnerId)!.average) - (b.below.find(x => x.learnerId === row.learnerId)!.average)).slice(0,2).map(g => g.description)});
     }
     const facts: PlanFacts = {subject:sheet.subject.name,className:sheet.class.name,topic:topic?.description ?? null,classAverage:mean(sheet.items.filter(i => !i.left && i.ca !== null).map(i => i.ca!)),practice,learners};
-    return {facts,note:await this.ai.gate(client,actor.schoolId)};
+    return {facts,note:await this.ai.gate(client,actor)};
   }
 
   async completePlan(prepared: Awaited<ReturnType<AiDraftsService['preparePlan']>>) {
