@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
+import { takeFind } from '../lib/find';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, when } from '../lib/ui';
 
 type Role = 'headteacher' | 'guardian' | string;
@@ -19,8 +20,10 @@ export function Guardians({ schoolId, csrfToken, role, tabs }: Props) {
   const [links, setLinks] = useState<GuardianLink[]>([]);
   const [linksTotal, setLinksTotal] = useState(0);
   const [linksOffset, setLinksOffset] = useState(0);
-  const [linksSearchInput, setLinksSearchInput] = useState('');
-  const [linksSearch, setLinksSearch] = useState('');
+  // A search from the top bar opens the list already filtered to that parent.
+  const [found] = useState(() => takeFind('parents')?.text ?? '');
+  const [linksSearchInput, setLinksSearchInput] = useState(found);
+  const [linksSearch, setLinksSearch] = useState(found);
   const [learnerRows, setLearnerRows] = useState<LearnerChoice[]>([]);
   const [learnerTotal, setLearnerTotal] = useState(0);
   const [learnerSearchInput, setLearnerSearchInput] = useState('');

@@ -7,6 +7,7 @@ import { Mfa } from './modules/Mfa';
 import { PlatformAdmin } from './modules/PlatformAdmin';
 import { Icon, PageHeader, Tabs } from './lib/ui';
 import { SchoolLogo, setLogoTag, shrinkLogo } from './lib/logo';
+import { GlobalSearch, TermChip } from './modules/Search';
 // Local synthetic hints show only on the dev server, not against the cloud database (dev:cloud) or the demo school (dev:demo).
 const LOCAL=import.meta.env.DEV&&!['cloud','demo'].includes(import.meta.env.VITE_APP_MODE);
 // Demo mode (npm run dev:demo) shows the production sign-in, prefilled with the demo headteacher.
@@ -139,6 +140,8 @@ function App() {
   const [details,setDetails] = useState({address:'',phone:'',motto:''});
   const [status,setStatus] = useState('');
   const [logoStatus,setLogoStatus] = useState('');
+  // Bumped by a search result so the page it opens starts fresh with the search filled in, even when it is already open.
+  const [findEpoch,setFindEpoch] = useState(0);
   const [busy,setBusy] = useState(false);
   const [fullName,setFullName] = useState('');
   const [schoolName,setSchoolName] = useState('');
@@ -252,14 +255,14 @@ function App() {
     attendance:()=>attendanceView,
     ask:()=><Assistant key={`ask:${sid}`} schoolId={sid} csrfToken={csrf} role={role} displayName={session.displayName}/>,
     collection:()=><Collection key={'collection:'+sid} schoolId={sid} csrfToken={csrf} role={role}/>,
-    students:()=><Admissions key={sid} schoolId={sid} csrfToken={csrf} role={role} view={role==='headteacher'?'work':undefined} initialTab={tabId==='promotion'||subId==='promotion'?'promotion':subId==='applications'?'applications':'roll'}/>,
-    parents:()=><ParentsWork key={`parents:${sid}`} schoolId={sid} csrfToken={csrf} role={role} sub={subId}/>,
+    students:()=><Admissions key={`${sid}:${findEpoch}`} schoolId={sid} csrfToken={csrf} role={role} view={role==='headteacher'?'work':undefined} initialTab={tabId==='promotion'||subId==='promotion'?'promotion':subId==='applications'?'applications':'roll'}/>,
+    parents:()=><ParentsWork key={`parents:${sid}:${findEpoch}`} schoolId={sid} csrfToken={csrf} role={role} sub={subId}/>,
     assessment:()=><Assessment key={`assessment:${sid}`} schoolId={sid} csrfToken={csrf} role={role} view="work"/>,
     progress:()=><Progress key={`progress:${sid}`} schoolId={sid} csrfToken={csrf} role={role} initialTab={subId}/>,
     curriculum:()=><CurriculumWork key={`curriculum:${sid}`} schoolId={sid} csrfToken={csrf} role={role} sub={rawTab==='topics'?'material':subId}/>,
     'early-years':()=><EarlyYearsWork key={`early-years:${sid}:${role}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     fees:()=><GuardianStatement key={`statement:${sid}`} schoolId={sid}/>,
-    accounts:()=><Finance key={`finance:${sid}`} schoolId={sid} csrfToken={csrf} role={role}/>,
+    accounts:()=><Finance key={`finance:${sid}:${findEpoch}`} schoolId={sid} csrfToken={csrf} role={role}/>,
     notices:()=>role==='guardian'?<GuardianNotices key={`gnotices:${sid}`} schoolId={sid}/>:<Notices key={`notices:${sid}`} schoolId={sid} csrfToken={csrf}/>,
     // The family area keeps one key, so the child a parent picked stays picked as they move between its pages.
     children:()=><Family key={`family:${sid}`} schoolId={sid} csrfToken={csrf} section="children"/>,
@@ -287,7 +290,7 @@ function App() {
     </aside>
     {menuOpen&&<div className="scrim" onClick={()=>setMenuOpen(false)}/>}
     <div className="content">
-      <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}{role==='headteacher'&&<a className="icon-button settings-link" href="#/settings" aria-label="Settings" title="Settings"><Icon name="settings"/></a>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
+      <header className="topbar"><button type="button" className="icon-button menu-toggle" aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}><Icon name="menu"/></button>{school&&<h1>{school.name}</h1>}{school&&<em className="role-chip">{roleName}</em>}{school&&<TermChip key={school.id} schoolId={school.id}/>}{school&&<GlobalSearch key={`search:${school.id}`} schoolId={school.id} role={role} onFind={()=>setFindEpoch(value=>value+1)}/>}{role==='headteacher'&&<a className="icon-button settings-link" href="#/settings" aria-label="Settings" title="Settings"><Icon name="settings"/></a>}<div className="user"><span className="avatar" aria-hidden="true">{session.displayName.charAt(0).toUpperCase()}</span><span className="name">{session.displayName}</span></div><button className="secondary sign-out" disabled={busy} onClick={signOut}>Sign out</button></header>
       {school?.readOnly&&<p role="status" style={{margin:0,padding:'8px 16px',background:'var(--info-soft)',color:'var(--info)',fontSize:13,fontWeight:600}}>Demo school with sample data · read-only. Explore every page and try Ask; changes and password changes are switched off.</p>}
       <main id="main" tabIndex={-1} className={current?.id==='ask'&&!learnerPage&&!showContent?'ask-main':undefined}>{session.platformAdmin&&<PlatformAdmin csrfToken={session.csrfToken} onEnter={enterSchool}/>}{showContent&&<Suspense fallback={<p role="status">Loading…</p>}><ContentLibrary csrfToken={csrf}/></Suspense>}{school&&!showContent&&<>{meta&&<PageHeader eyebrow={meta.eyebrow} title={meta.title} blurb={meta.blurb}/>}<Suspense fallback={<p role="status">Loading…</p>}>{learnerPage?views.learner!():current&&views[current.id]()}</Suspense></>}{!school&&!showContent&&<p role="status">{status||'Select an available school to continue.'}</p>}{LOCAL&&<p className="muted local-note">Local foundation build · Synthetic schools</p>}</main>
     </div>

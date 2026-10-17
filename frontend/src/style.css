@@ -509,3 +509,21 @@ button.bar-row:hover{background:var(--sunken);color:var(--ink);box-shadow:none}
 /* five figures in one row: whole numbers on one line, never "GH₵" alone on a line */
 .head-stats .stat-value,.head-stats .stat-label{white-space:nowrap}
 table.compact th,table.compact td{padding:10px 12px}table.compact th{letter-spacing:.04em}
+/* Top bar: the term running today and the search box (Ctrl K). Both shrink before anything else does. */
+.term-chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--ink-2);white-space:nowrap;padding:4px 10px;border:1px solid var(--line);border-radius:999px;flex:0 1 auto;min-width:0;overflow:hidden}.term-chip .icon{font-size:18px;color:var(--accent-text);flex:none}.term-chip b{font-weight:700;color:var(--ink);flex:none;max-width:140px;overflow:hidden;text-overflow:ellipsis}.term-chip>span:last-child{overflow:hidden;text-overflow:ellipsis}
+.search-trigger{margin-left:auto;display:inline-flex;align-items:center;gap:8px;height:40px;min-width:150px;padding:0 10px 0 12px;background:var(--wash);color:var(--ink-3);border:1px solid var(--line);border-radius:999px;font-weight:500;font-size:14px;flex:0 1 280px;box-shadow:none}
+.search-trigger:hover{background:var(--sunken);color:var(--ink-2);box-shadow:none}.search-trigger-text{flex:1;text-align:left}
+.search-trigger kbd{font:inherit;font-size:12px;font-weight:600;padding:2px 6px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);color:var(--ink-3)}
+.search-trigger~.settings-link,.search-trigger~.user{margin-left:0}
+@media (max-width:1240px){.term-chip b{display:none}.search-trigger{min-width:0;flex-basis:200px}}
+@media (max-width:1060px){.search-trigger kbd{display:none}}
+@media (max-width:760px){.term-chip{display:none}.search-trigger{flex:none;width:var(--tap);height:var(--tap);padding:0;justify-content:center;border-radius:50%}.search-trigger-text,.search-trigger kbd{display:none}}
+@media (pointer:coarse){.search-trigger kbd{display:none}}
+.search-box{position:relative;max-width:none;margin:0 0 8px}.search-box .icon{position:absolute;left:14px;top:12px;color:var(--ink-3)}.search-box input{height:48px;font-size:16px;padding-left:44px;border-radius:999px}
+.search-results{list-style:none;margin:0;padding:0;display:grid;gap:2px;max-height:min(60vh,440px);overflow-y:auto}
+.search-results li{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 12px;border-radius:10px;cursor:pointer}.search-results li>span:not(.icon):not(.pill){flex:1;min-width:0}
+.search-results li[aria-selected=true]{background:var(--accent-soft)}.search-results .icon{color:var(--accent-text)}.search-results strong{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Beside the sidebar on a landscape tablet the top bar is narrow: the search becomes an icon and the name hides (the avatar stays). */
+@media (min-width:901px) and (max-width:1100px){.search-trigger{flex:none;width:var(--tap);height:var(--tap);min-width:0;padding:0;justify-content:center;border-radius:50%}.search-trigger-text,.search-trigger kbd{display:none}.topbar .user .name{display:none}.topbar .user{padding:3px}}
+/* On the smallest phones Settings is reached from the menu, which leaves room for the search button. */
+@media (max-width:400px){.topbar .settings-link{display:none}}

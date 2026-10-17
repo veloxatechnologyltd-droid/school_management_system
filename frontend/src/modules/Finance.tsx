@@ -1,5 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
+import { takeFind } from '../lib/find';
 import { recallChild, rememberChild } from '../lib/familyChild';
 import { Card, Dialog, Empty, Icon, PageHeader, Pager, Pill, Stat, Tabs, currentTerm } from '../lib/ui';
 import { Receipt, ReceiptData } from './Receipt';
@@ -32,9 +33,11 @@ export function Finance({ schoolId, csrfToken, role }: { schoolId: string; csrfT
   const [adjust, setAdjust] = useState<{ invoiceIds: string[]; kind: 'discount' | 'charge'; label: string; amount: string; reason: string } | null>(null);
   const [owingOnly, setOwingOnly] = useState(false);
   // The page opens on the school's collection by class; bills (one page at a time) and fee items are one tab away.
-  const [tab, setTab] = useState<'classes' | 'bills' | 'items' | ''>('');
+  // A search from the top bar opens a student's bills or one receipt.
+  const [found] = useState(() => takeFind('accounts'));
+  const [tab, setTab] = useState<'classes' | 'bills' | 'items' | ''>(found?.text ? 'bills' : '');
   const [offset, setOffset] = useState(0); const [total, setTotal] = useState(0);
-  const [searchInput, setSearchInput] = useState(''); const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState(found?.text ?? ''); const [search, setSearch] = useState(found?.text ?? '');
   // Empty states are only true once the first answer is in; before that the page says it is loading.
   const [termsReady, setTermsReady] = useState(false); const [loadedKey, setLoadedKey] = useState('');
   const dataKey = `${termId}|${classId}|${owingOnly}|${offset}|${search}`;
@@ -58,6 +61,7 @@ export function Finance({ schoolId, csrfToken, role }: { schoolId: string; csrfT
     } catch (e) { setError((e as Error).message); }
   }, [schoolId, termId, classId, owingOnly, offset, search]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (found?.receiptId) openReceipt(found.receiptId).catch(e => setError((e as Error).message)); }, [found]);
   useEffect(() => { setSelected(new Map()); setOffset(0); }, [termId]);
   const toggle = (rows: Invoice[], on: boolean) => setSelected(prior => { const next = new Map(prior); for (const r of rows) { if (on) next.set(r.id, r.full_name); else next.delete(r.id); } return next; });
   const startAdjust = (invoiceIds: string[]) => { setError(''); setMessage(''); setAdjust({ invoiceIds, kind: role === 'headteacher' ? 'discount' : 'charge', label: '', amount: '', reason: '' }); };

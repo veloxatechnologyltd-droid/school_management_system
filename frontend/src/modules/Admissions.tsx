@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
+import { takeFind } from '../lib/find';
 import { LearnerImports } from './LearnerImports';
 import { LearnerUpdates, fieldLabel } from './LearnerUpdates';
 import { Card, Dialog, Empty, Icon, PageHeader, Pill, Tabs, type Tone } from '../lib/ui';
@@ -35,8 +36,10 @@ export function Admissions({ schoolId, csrfToken, role, view, initialTab = 'roll
   const [learnersOffset, setLearnersOffset] = useState(0);
   const [admissionsSearchInput, setAdmissionsSearchInput] = useState('');
   const [admissionsSearch, setAdmissionsSearch] = useState('');
-  const [learnersSearchInput, setLearnersSearchInput] = useState('');
-  const [learnersSearch, setLearnersSearch] = useState('');
+  // A search from the top bar opens the roll already filtered to that student.
+  const [found] = useState(() => takeFind('students')?.text ?? '');
+  const [learnersSearchInput, setLearnersSearchInput] = useState(found);
+  const [learnersSearch, setLearnersSearch] = useState(found);
   const [detail, setDetail] = useState<LearnerDetail | null>(null);
   const [corrections, setCorrections] = useState<{ id: string; field: keyof typeof fieldLabel; old_value: string | null; new_value: string; reason: string; recorded_at: string }[]>([]);
   const [selectedLearner, setSelectedLearner] = useState('');
