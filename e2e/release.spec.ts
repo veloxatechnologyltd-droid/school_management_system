@@ -622,7 +622,7 @@ test('a parent practises approved questions with their child on a phone, the chi
   await expect(card.getByText('Level 2 of 3')).toBeVisible();await expect(card.getByText(/last practised today/)).toBeVisible();
 
   // The headteacher sees the same practice as evidence: on the learner page and in the class view.
-  await page.goto(`/#/learner/${learner}`);await pickSchool(page);
+  await page.goto(`/#/learner/${learner}`);await pickSchool(page);await page.getByRole('tab',{name:'Notes & practice',exact:true}).click();
   const evidence=page.locator('.card').filter({hasText:'Home practice'}).filter({hasText:topic});
   await expect(evidence.getByText('Level 2 of 3')).toBeVisible();await expect(evidence.getByText(/Level 1: 5 of 5 right, moved up to Level 2/)).toBeVisible();
   await page.goto('/#/progress');await pickSchool(page);

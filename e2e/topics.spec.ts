@@ -134,7 +134,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await lesson.getByRole('button',{name:'Check what you learned',exact:true}).click();
     const afterStudy=family.getByRole('dialog',{name:`Practice: ${third}`});await expect(afterStudy.getByText('Question 1 of 5')).toBeVisible();await family.keyboard.press('Escape');
     // The head sees the study on the learner's page, beside class work.
-    await page.goto(`/#/learner/${learner}`);await expect(page.getByText('Lessons studied')).toBeVisible();await expect(page.getByText(/no check taken/)).toBeVisible();
+    await page.goto(`/#/learner/${learner}`);await page.getByRole('tab',{name:'Notes & practice',exact:true}).click();await expect(page.getByText('Lessons studied')).toBeVisible();await expect(page.getByText(/no check taken/)).toBeVisible();
     await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Curriculum',exact:true}).click();await page.getByRole('tab',{name:'Learning material',exact:true}).click();await expect(page.getByRole('tab',{name:'Learning material',exact:true})).toHaveAttribute('aria-selected','true');
     // A parent can report a lesson: it stops at once, and Study is no longer offered for that topic.
     await card.locator('li').filter({hasText:fourth}).getByRole('button',{name:'Study first',exact:true}).click();
@@ -167,7 +167,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     expect(await noOverflow(family)).toBe(true);await family.keyboard.press('Escape');
     await history.locator('li').filter({hasText:third}).getByRole('button',{name:'Look again',exact:true}).click();
     await expect(family.getByRole('dialog').getByText(/You will learn this:/)).toBeVisible();expect(await noOverflow(family)).toBe(true);await family.keyboard.press('Escape');
-    await page.goto(`/#/learner/${learner}`);await expect(page.getByText('Lessons studied')).toBeVisible();
+    await page.goto(`/#/learner/${learner}`);await page.getByRole('tab',{name:'Notes & practice',exact:true}).click();await expect(page.getByText('Lessons studied')).toBeVisible();
     await page.getByRole('button',{name:'Questions and answers',exact:true}).first().click();
     const staffLook=page.getByRole('dialog');await expect(staffLook.locator('.history-questions > li')).toHaveCount(5);await expect(staffLook.getByText("The student's answer").first()).toBeVisible();await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'Read the lesson',exact:true}).first().click();await expect(page.getByRole('dialog').getByText(/open for/)).toBeVisible();await page.keyboard.press('Escape');
@@ -187,7 +187,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await page.setViewportSize({width:390,height:844});expect(await noOverflow(page)).toBe(true);
 
     // ---- A teacher's learning note is for staff only: refused if it names the student, kept and withdrawn with a reason, and never on a family's screen.
-    await teacher.goto(`/#/learner/${learner}`);
+    await teacher.goto(`/#/learner/${learner}`);await teacher.getByRole('tab',{name:'Notes & practice',exact:true}).click();
     const notes=teacher.locator('.card').filter({has:teacher.getByRole('heading',{name:'Learning notes',exact:true})});await expect(notes).toBeVisible();
     await expect(notes.getByText(/parents never see these/)).toBeVisible();
     const how=notes.getByLabel('How to help this student'),add=notes.getByRole('button',{name:'Add learning note',exact:true});

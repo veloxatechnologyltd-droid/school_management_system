@@ -2,9 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { SchoolLogo } from '../lib/logo';
 import { Card, Empty, Icon, PageHeader, Pill } from '../lib/ui';
-import { actionsFor, nextStep, statusNames, statusTone } from '../lib/admissions';
+import { actionsFor, nextStep, Step, statusNames, statusTone, stepNames } from '../lib/admissions';
 
-type Step = 'created' | 'review' | 'offered' | 'waitlisted' | 'declined' | 'accepted' | 'enrolled';
 type Application = {
   id: string; full_name: string; date_of_birth: string | null; sex: 'female' | 'male' | null; status: string; class_name: string; level: string; year_name: string;
   start_date: string; admission_number: string; version: number; learner_id: string | null; decision_reason: string | null; created_at: string;
@@ -15,7 +14,6 @@ type Application = {
 };
 
 const actionNames: Record<string, string> = { review: 'Start review', offer: 'Offer place', waitlist: 'Waitlist', decline: 'Decline', accept: 'Record acceptance', enrol: 'Enrol student' };
-const stepNames: Record<Step, string> = { created: 'Application received', review: 'Review started', offered: 'Place offered', waitlisted: 'Put on the waitlist', declined: 'Declined', accepted: 'Family accepted the place', enrolled: 'Enrolled' };
 
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 const when = (iso: string) => new Date(iso).toLocaleString('en-GB', { timeZone: 'Africa/Accra', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });

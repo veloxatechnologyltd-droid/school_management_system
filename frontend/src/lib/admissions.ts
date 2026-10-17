@@ -17,3 +17,6 @@ export function nextStep(status: string, className: string) {
   return ({ application: 'Start the review.', review: 'Decide: offer a place, put on the waitlist, or decline.', offered: 'Waiting for the family. Record their acceptance when they confirm.',
     waitlisted: 'Offer a place when one opens, or decline.', accepted: `Enrol into ${className}.`, enrolled: 'Nothing more. The student is on the roll.', declined: 'Nothing more. The application is closed.' } as Record<string, string>)[status] ?? '';
 }
+// What each recorded step of an application reads as on a timeline.
+export type Step = 'created' | 'review' | 'offered' | 'waitlisted' | 'declined' | 'accepted' | 'enrolled';
+export const stepNames: Record<Step, string> = { created: 'Application received', review: 'Review started', offered: 'Place offered', waitlisted: 'Put on the waitlist', declined: 'Declined', accepted: 'Family accepted the place', enrolled: 'Enrolled' };

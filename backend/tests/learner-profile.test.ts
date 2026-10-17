@@ -90,3 +90,22 @@ test('only the author or the headteacher withdraws a note, with a reason, and it
   await assert.rejects(owner.query('DELETE FROM learner_note_withdrawals WHERE note_id=$1',[teacherNote]),/append-only/);
   await assert.rejects(owner.query("INSERT INTO learner_notes(id,school_id,learner_id,author_membership_id,author_role,author_name,category,body,shared_with_family) VALUES($1,$2,$3,$4,'guardian','X','general','Private family note',false)",[randomUUID(),school,ama,guardianM]),/check/);
 });
+
+test('the page also carries the latest register days, the class\'s teachers and, for the head only, the application the student came from',async()=>{
+  // Three register days for Basic 5: Ama absent, late and present; Kojo present. Submitted, so they count.
+  const enrol=(id:string)=>owner.query('SELECT id FROM enrolments WHERE school_id=$1 AND learner_id=$2',[school,id]).then(r=>r.rows[0].id as string);
+  const days=[[shift(-3),'absent'],[shift(-2),'late'],[shift(-1),'present']] as const;
+  for(const [day,mark] of days){const register=randomUUID();
+    await owner.query("INSERT INTO attendance_registers(id,school_id,class_id,day,status,created_by,submitted_at,submitted_by,roster_source) VALUES($1,$2,$3,$4,'submitted',$5,now(),$5,'submission')",[register,school,cls,day,teacherM]);
+    for(const [who,m] of [[ama,mark],[kojo,'present']] as const)await owner.query("INSERT INTO attendance_marks(id,school_id,register_id,learner_id,enrolment_id,mark) VALUES($1,$2,$3,$4,$5,$6)",[randomUUID(),school,register,who,await enrol(who),m]);}
+  const application=randomUUID();
+  await owner.query("INSERT INTO admissions(id,school_id,full_name,class_id,start_date,admission_number,status,learner_id) VALUES($1,$2,'Ama Profile',$3,$4,$5,'enrolled',$6)",[application,school,cls,shift(-50),`AP-${application.slice(0,8)}`,ama]);
+
+  const p=(await call(`/learners/${ama}/profile`)).body;
+  assert.deepEqual(p.attendance.days,[{day:shift(-1),mark:'present'},{day:shift(-2),mark:'late'},{day:shift(-3),mark:'absent'}],'newest first, one mark per register day');
+  assert.deepEqual(p.classTeachers,['Kofi Sample']);
+  assert.equal(p.application.id,application);assert.equal(p.application.startDate,shift(-50));assert.match(p.application.receivedOn,/^\d{4}-\d{2}-\d{2}$/);
+  const t=(await call(`/learners/${ama}/profile`,'GET',undefined,teacher)).body;
+  assert.equal(t.application,null,'the application is the head\'s page only');assert.deepEqual(t.classTeachers,['Kofi Sample']);assert.equal(t.attendance.days.length,3);
+  const k=(await call(`/learners/${kojo}/profile`)).body;assert.equal(k.application,null,'a student who did not come through an application has none');
+});

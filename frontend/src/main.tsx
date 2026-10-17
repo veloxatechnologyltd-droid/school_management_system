@@ -36,6 +36,7 @@ const AiSettings=lazyModule(()=>import('./modules/AiSettings'),'AiSettings');
 const Assistant=lazyModule(()=>import('./modules/Assistant'),'Assistant');
 const LearnerPage=lazyModule(()=>import('./modules/LearnerPage'),'LearnerPage');
 const AdmissionPage=lazyModule(()=>import('./modules/AdmissionPage'),'AdmissionPage');
+const StaffPage=lazyModule(()=>import('./modules/StaffPage'),'StaffPage');
 const Accounts=lazyModule(()=>import('./modules/Accounts'),'Accounts');
 const ContentLibrary=lazyModule(()=>import('./modules/ContentLibrary'),'ContentLibrary');
 const GettingStarted=lazyModule(()=>import('./modules/GettingStarted'),'GettingStarted');
@@ -279,13 +280,16 @@ function App() {
   // An application's own page (#/admission/<id>) for the head and the front desk sits under Students.
   const admissionPage=tabId==='admission'&&!!subId&&(role==='headteacher'||role==='frontdesk');
   if(admissionPage)views.learner=()=><AdmissionPage key={`admission:${sid}:${subId}`} schoolId={sid} csrfToken={csrf} role={role} admissionId={subId!}/>;
-  const recordPage=learnerPage||admissionPage;
-  const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=admissionPage?'students':learnerPage?(role==='headteacher'?'students':'progress'):tabId==='fees'&&role!=='guardian'?'accounts':legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];
+  // A staff member's own page (#/teacher/<id> or #/staff/<id>) for the head sits under Teachers or Staff.
+  const staffPage=(tabId==='teacher'||tabId==='staff')&&/^[0-9a-f-]{36}$/i.test(subId??'')&&role==='headteacher';
+  if(staffPage)views.learner=()=><StaffPage key={`staff:${sid}:${subId}`} schoolId={sid} csrfToken={csrf} role={role} membershipId={subId!}/>;
+  const recordPage=learnerPage||admissionPage||staffPage;
+  const groups=navByRole[role]??[],items=groups.flatMap(g=>g.items),wanted=staffPage?(tabId==='teacher'?'teachers':'staff'):admissionPage?'students':learnerPage?(role==='headteacher'?'students':'progress'):tabId==='fees'&&role!=='guardian'?'accounts':legacyIds[tabId]??tabId,current=items.find(item=>item.id===wanted)??items[0];
   const roleName=role==='frontdesk'?'Front desk':role.charAt(0).toUpperCase()+role.slice(1);
   const meta=!recordPage&&current&&pageMeta[current.id];
   const navGroup=(g:NavGroup)=><div key={g.items[0].id} className="nav-section">{g.group&&<p className="nav-group">{g.group}</p>}{g.items.map(item=><a key={item.id} href={`#/${item.id}`} aria-current={!showContent&&item.id===current?.id?'page':undefined}><Icon name={item.icon}/><span className="label">{item.label}</span></a>)}</div>;
   return <div className="shell">
-    <PageTitle title={`${showContent?'Content library':admissionPage?'Application':learnerPage?'Student':current?.id==='settings'?`Settings · ${setting.label}`:current?.label??'Home'} · ${school?.name??'Veloxa SmartSchool'}`}/>
+    <PageTitle title={`${showContent?'Content library':staffPage?(tabId==='teacher'?'Teacher':'Staff member'):admissionPage?'Application':learnerPage?'Student':current?.id==='settings'?`Settings · ${setting.label}`:current?.label??'Home'} · ${school?.name??'Veloxa SmartSchool'}`}/>
     <a href="#main" className="skip-link" onClick={e=>{e.preventDefault();document.getElementById('main')?.focus();}}>Skip to content</a>
     <aside className={menuOpen?'sidebar open':'sidebar'}>
       <a href="#/" className="brand">{school?.logo_tag?<SchoolLogo schoolId={school.id} className="logo school-mark"/>:<img className="logo" src="/brand/mark-white.svg" alt="" />}<span className="brand-text"><strong>{school?.name??'Veloxa SmartSchool'}</strong><span>{roleName||'Signed in'}</span></span></a>

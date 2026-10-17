@@ -47,6 +47,14 @@ export class LearnerProfileService {
       FROM attendance_marks m JOIN attendance_registers r ON r.school_id=m.school_id AND r.id=m.register_id AND r.status IN ('submitted','locked')
       WHERE m.school_id=$1 AND m.learner_id=$2 AND r.day BETWEEN $3::date AND $4::date`,[actor.schoolId,learnerId,term.start_date,term.end_date])).rows[0] : null;
 
+    // The last weeks of marks, one per register day, for the Attendance tab.
+    const days = term ? (await client.query(`SELECT r.day::text AS day,m.mark FROM attendance_marks m JOIN attendance_registers r ON r.school_id=m.school_id AND r.id=m.register_id AND r.status IN ('submitted','locked')
+      WHERE m.school_id=$1 AND m.learner_id=$2 AND m.mark<>'unmarked' AND r.day BETWEEN $3::date AND $4::date ORDER BY r.day DESC LIMIT 30`,[actor.schoolId,learnerId,term.start_date,term.end_date])).rows as { day: string; mark: string }[] : [];
+    // Teachers currently assigned to the class, and the application this student came from (the head's page only).
+    const classTeachers = current ? (await client.query(`SELECT DISTINCT teacher_display_name AS name FROM teaching_assignments WHERE school_id=$1 AND class_id=$2 AND revoked_at IS NULL AND start_date<=$3::date AND end_date>$3::date ORDER BY 1`,
+      [actor.schoolId,current.class_id,today])).rows.map(r => r.name as string) : [];
+    const application = head ? (await client.query('SELECT id,created_at,start_date::text FROM admissions WHERE school_id=$1 AND learner_id=$2',[actor.schoolId,learnerId])).rows[0] ?? null : null;
+
     const termWork = term ? await this.progress.learnerTerm(client,actor,learnerId,term.id) : null;
     const history = await this.progress.learnerProgress(client,actor,learnerId,'term');
     const reports = (await client.query(`SELECT DISTINCT ON (r.term_id) r.term_id,t.name AS term_name,y.name AS year_name,r.revision,r.published_at,r.snapshot->'class'->>'name' AS class_name,
@@ -71,7 +79,8 @@ export class LearnerProfileService {
       guardians:guardians.map(g => ({name:g.name,verified:g.verified,rights:(['academic','billing','pickup','contact'] as const).filter(k => g[k]),...(phones ? {phone:phones.get(g.guardian_membership_id) ?? null} : {})})),
       terms:terms.map(t => ({id:t.id,name:t.name,yearName:t.year_name})),term:term ? {id:term.id,name:term.name,yearName:term.year_name,startDate:term.start_date,endDate:term.end_date} : null,
       attendance:attendance ? {marked:attendance.marked,present:attendance.present,late:attendance.late,absent:attendance.absent,excused:attendance.excused,
-        rate:attendance.marked ? Math.round(attendance.present * 1000 / attendance.marked) / 10 : null,absentDays:(attendance.absent_days ?? []).slice(0,10)} : null,
+        rate:attendance.marked ? Math.round(attendance.present * 1000 / attendance.marked) / 10 : null,absentDays:(attendance.absent_days ?? []).slice(0,10),days} : null,
+      classTeachers,application:application ? {id:application.id as string,receivedOn:String(new Date(application.created_at).toISOString()).slice(0,10),startDate:application.start_date as string} : null,
       termWork,history:{buckets:history.buckets,subjects:history.subjects},reports,plans,mock,
       fees:head ? await this.finance.learnerFees(client,actor.schoolId,learnerId) : undefined,
       notes:await this.notes(client,actor,learnerId)};

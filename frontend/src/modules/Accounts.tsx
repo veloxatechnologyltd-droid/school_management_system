@@ -2,7 +2,7 @@ import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'rea
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, Pager, Pill } from '../lib/ui';
 
-type Account = { user_id: string; display_name: string; login: string; role: string; revoked_at: string | null; must_change_password: boolean; phone: string | null };
+type Account = { user_id: string; membership_id: string; display_name: string; login: string; role: string; revoked_at: string | null; must_change_password: boolean; phone: string | null };
 type Credentials = { label: string; email: string; temporaryPassword: string };
 type Group = 'teacher' | 'office' | 'guardian';
 const roleNames: Record<string, string> = { teacher: 'Teacher', frontdesk: 'Front desk', accountant: 'Accountant', guardian: 'Parent', headteacher: 'Headteacher' };
@@ -75,10 +75,10 @@ export function Accounts({ schoolId, csrfToken, only }: { schoolId: string; csrf
         <span className="count">{matching.length} {noun}</span>
       </div>
       {shown.length ? <div className="table-wrap"><table><thead><tr><th>Name</th><th className="hide-sm">Sign-in</th><th>Status</th><th></th></tr></thead><tbody>{shown.map(a => <tr key={a.user_id}>
-        <td>{a.display_name}<span className="sub">{roleNames[a.role] ?? a.role}</span></td>
+        <td>{a.role === 'guardian' ? a.display_name : <a className="learner-link" href={`#/${a.role === 'teacher' ? 'teacher' : 'staff'}/${a.membership_id}`}>{a.display_name}</a>}<span className="sub">{roleNames[a.role] ?? a.role}</span></td>
         <td className="hide-sm">{a.login}{a.phone && <span className="sub">{a.phone}</span>}</td>
         <td>{status(a)}</td>
-        <td className="num">{!a.revoked_at && a.role !== 'headteacher' && <button type="button" className="secondary" disabled={busy} aria-label={`Manage ${a.display_name}`} onClick={() => manage(a)}>Manage</button>}</td>
+        <td className="num">{a.role !== 'guardian' && <a className="button secondary" href={`#/${a.role === 'teacher' ? 'teacher' : 'staff'}/${a.membership_id}`} aria-label={`Open ${a.display_name}`}>Open</a>} {!a.revoked_at && a.role !== 'headteacher' && <button type="button" className="secondary" disabled={busy} aria-label={`Manage ${a.display_name}`} onClick={() => manage(a)}>Manage</button>}</td>
       </tr>)}</tbody></table></div> : !loaded ? <p role="status" className="card-body muted">Loading accounts…</p> : <Empty title={search ? 'No accounts match this search' : `No ${noun} yet`} hint={search ? undefined : `Use "${text.add}" to give someone a sign-in.`}/>}
       <Pager offset={offset} shown={shown.length} total={matching.length} noun={noun} onMove={setOffset}/>
     </Card>

@@ -110,7 +110,7 @@ async function main() {
     for (let i = 0; i < 180; i++) { try { if ((await fetch(`${API}/auth/session`)).status < 500) break; } catch { /* API still starting */ } await new Promise(r => setTimeout(r, 1000)); }
 
     // Families: most learners have their own guardian, some share one (siblings). The parent persona has two children.
-    const learnerPlan: { name: string; classIndex: number; dob: string; family: number }[] = [];
+    const learnerPlan: { name: string; classIndex: number; dob: string; family: number; sex: 'female' | 'male' }[] = [];
     const families: { name: string; surname: string }[] = [];
     const parentFamily = 0; families.push({ name: 'Grace Asante', surname: 'Asante' });
     classPlan.forEach((c, classIndex) => {
@@ -122,7 +122,7 @@ async function main() {
         else { surname = pick(surnames); family = families.length; families.push({ name: `${pick(girl ? girls : ['Ama', 'Akosua', 'Abena', 'Efua', 'Gifty', 'Mercy', 'Comfort', 'Joyce', 'Vida', 'Lydia'])} ${surname}`, surname }); }
         const first = classIndex === 12 && n === 0 ? 'Kwame' : classIndex === 7 && n === 0 ? 'Akosua' : pick(girl ? girls : boys);
         const dob = iso(new Date(Date.UTC(Y - c.age, Math.floor(rand() * 12), 1 + Math.floor(rand() * 28))));
-        learnerPlan.push({ name: `${first} ${surname}`, classIndex, dob, family });
+        learnerPlan.push({ name: `${first} ${surname}`, classIndex, dob, family, sex: girls.includes(first) ? 'female' : 'male' });
       }
     });
 
@@ -172,7 +172,10 @@ async function main() {
     await inBatches(learnerPlan.map(p => ({ p, number: `SIS/${Y}/${String(++admissionNo).padStart(4, '0')}` })), 8, async ({ p, number }) => {
       let a = await head.post('/admissions', { fullName: p.name, dateOfBirth: p.dob, classId: classes[p.classIndex]!.id, startDate: yearStart, admissionNumber: number });
       for (const action of ['review', 'offer', 'accept', 'enrol']) a = await head.post(`/admissions/${a.id}/transition`, { version: a.version, action });
-      const detail = await head.get(`/learners/${a.learner_id}`);
+      let detail = await head.get(`/learners/${a.learner_id}`);
+      // The census and the student's page show whether each is a girl or a boy.
+      await head.post(`/learners/${a.learner_id}/sex`, { version: detail.version, sex: p.sex });
+      detail = await head.get(`/learners/${a.learner_id}`);
       learners.push({ id: a.learner_id, name: p.name, classIndex: p.classIndex, enrolmentId: detail.enrolments[0]?.id, guardian: guardians[p.family], ability: clamp(normal(63, 13), 30, 96), chronic: chance(0.035) });
     });
     learners.sort((a, b) => a.classIndex - b.classIndex || a.name.localeCompare(b.name));

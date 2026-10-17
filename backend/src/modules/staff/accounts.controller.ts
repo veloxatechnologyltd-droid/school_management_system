@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Get, NotFoundException, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, DefaultValuePipe, Get, NotFoundException, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { IsIn, IsString, MaxLength, MinLength } from 'class-validator';
 import { Request } from 'express';
 import { randomBytes } from 'node:crypto';
@@ -8,6 +8,7 @@ import { audit } from '../../core/commands';
 import { normalizeGhanaPhone } from '../notices/sms.provider';
 import { PhoneDto } from '../notices/notices.dto';
 import { hashPassword } from '../identity/identity.controller';
+import { memberActivity, memberProfile } from './profile';
 
 class NewAccountDto {
   @IsString() @MinLength(2) @MaxLength(120) name!: string;
@@ -39,6 +40,19 @@ export class AccountsController {
   @Get()
   list(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string) {
     return this.run(req,schoolId,false,async client => ({items:(await client.query('SELECT user_id,membership_id,display_name,login,role,revoked_at,must_change_password,phone FROM staff_list()')).rows}));
+  }
+  // One staff member's page (classes, what they have done lately, their sign-in's history).
+  @Get(':membershipId')
+  profile(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('membershipId',new ParseUUIDPipe()) membershipId: string) {
+    return this.run(req,schoolId,false,client => memberProfile(client,schoolId,membershipId));
+  }
+  @Get(':membershipId/activity')
+  activity(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('membershipId',new ParseUUIDPipe()) membershipId: string,
+    @Query('offset',new DefaultValuePipe(0),ParseIntPipe) offset: number) {
+    return this.run(req,schoolId,false,async client => {
+      if (!(await client.query('SELECT 1 FROM staff_list() WHERE membership_id=$1 AND role<>\'guardian\'',[membershipId])).rowCount) throw new NotFoundException('Staff member unavailable');
+      return memberActivity(client,schoolId,membershipId,Math.max(0,offset),25);
+    });
   }
   @Post()
   create(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Body() body: NewAccountDto) {
