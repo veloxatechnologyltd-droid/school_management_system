@@ -156,6 +156,9 @@ async function main() {
     const completed = terms.filter(t => t.end < TODAY);
     const classes: { id: string; name: string; level: string }[] = [];
     for (const c of classPlan) classes.push({ id: (await head.post('/classes', { name: c.name, level: c.level, capacity: c.size + 6, academicYearId: year.id })).id, name: c.name, level: c.level });
+    // Last year's Basic 5 to JHS 3 classes, so the Classes page has an earlier year to filter to.
+    const lastYear = await head.post('/academic-years', { name: `${Y - 1}/${Y}`, startDate: `${Y - 1}-09-08`, endDate: `${Y}-08-01` });
+    for (const c of classPlan.slice(-5)) await head.post('/classes', { name: c.name, level: c.level, capacity: c.size + 6, academicYearId: lastYear.id });
 
     step(`Admitting and enrolling ${learnerPlan.length} learners`);
     const learners: Learner[] = [];
