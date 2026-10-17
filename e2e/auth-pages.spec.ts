@@ -65,6 +65,30 @@ test('register is one screen with nothing to scroll to, counts the password and 
   expect(errors).toEqual([]);
 });
 
+test('on a tablet and a phone the blue fills the screen, the last line has room and the small controls are touch-sized', async ({ browser }) => {
+  for (const [width, height] of [[768, 1024], [390, 844]]) {
+    const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
+    const page = await context.newPage();
+    for (const route of ['signin', 'register']) {
+      await page.goto(`/#/${route}`);
+      await expect(page.locator('.au-card h1')).toBeVisible();
+      expect(await noOverflow(page), `${width}x${height} ${route} does not overflow sideways`).toBe(true);
+      const measured = await page.evaluate(() => {
+        const hero = document.querySelector('.au-hero')!.getBoundingClientRect();
+        const lastBullet = [...document.querySelectorAll('.au-points li')].pop()!.getBoundingClientRect();
+        const height = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().height;
+        return { pageEnd: document.documentElement.scrollHeight, heroEnd: hero.bottom + scrollY, heroHeight: hero.height, roomUnderLastBullet: hero.bottom - lastBullet.bottom, eye: height('.au-eye'), nav: height('.au-nav-cta') };
+      });
+      expect(measured.heroEnd, `${width}x${height} ${route}: no bare band under the blue`).toBeGreaterThanOrEqual(measured.pageEnd - 1);
+      expect(measured.heroHeight, `${width}x${height} ${route}: the blue fills the screen`).toBeGreaterThanOrEqual(height - 1);
+      expect(measured.roomUnderLastBullet, `${width}x${height} ${route}: room under the last line`).toBeGreaterThanOrEqual(24);
+      expect(measured.eye, `${width}x${height} ${route}: show-password button`).toBeGreaterThanOrEqual(44);
+      expect(measured.nav, `${width}x${height} ${route}: top-bar button`).toBeGreaterThanOrEqual(44);
+    }
+    await context.close();
+  }
+});
+
 test('an outage says what happened on the page, for sign-in and for a new account', async ({ page }) => {
   await page.route('**/api/v1/auth/login', route => route.fulfill({ status: 503, contentType: 'text/plain', body: 'unavailable' }));
   await page.route('**/api/v1/auth/register', route => route.fulfill({ status: 502, contentType: 'text/plain', body: 'bad gateway' }));
