@@ -29,4 +29,4 @@ The wordmark is Google Sans (the font the app uses) converted to outlines, so th
 
 The first export is kept in `v1-before-fix/`. Version 2 separates the dot from the line (they overlapped into a lump), draws the rise as one smooth curve, gives all strokes the same weight, aligns the left ends of the lines, evens the spacing, and adds the lockups, reversed and one-colour files, app icon and favicon.
 
-The meaning describes the intended design; it is not a claim that the software guarantees learning improvement or that the symbol has been legally cleared as exclusive. The app and marketing artwork still use the previous icon until a separate replacement pass.
+The meaning describes the intended design; it is not a claim that the software guarantees learning improvement or that the symbol has been legally cleared as exclusive. The app (`frontend/public/brand/`), the flyers and the proposal use this mark; the earlier Journey V icon is kept in `marketing/logos/superseded/`.

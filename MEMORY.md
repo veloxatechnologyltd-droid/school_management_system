@@ -412,6 +412,26 @@ Read MEMORY.md at the start of every session before doing anything. Never contra
 **What was rejected:** Letting a teacher retire a colleague's or the head's topic (retiring takes a topic out of practice and Gaps for everyone); limiting teachers to subjects or grades they teach (assignments are by class, not subject).
 **Still open:** topics added by any teacher are school-wide and feed approved topics and Claude's drafting, so a poor entry reaches families through the Topics step; the head's approval of each topic for the term is the check.
 
+## 2026-10-17, Journey V logo direction withdrawn
+**What was decided:** Evans no longer wants the Journey V logo, finding it too similar to common AI-generated logos. Explore a more distinctive school-specific identity; a register-and-learning-path image is only a concept preview, not an approved replacement.
+**Why:** The mark needs to express this product's work and be recognizable beyond a generic initial.
+**What was rejected:** Continuing to present the Journey V as the preferred brand direction or treating a generated concept as the final logo.
+
+## 2026-10-17, Register Path logo export and meaning
+**What was decided:** Evans requested the register-and-learning-path mark as a final transparent PNG, with a Markdown explanation of its meaning. Keep the editable SVG master and a size review beside the PNG. This approves the asset deliverable; replacing the icon across the app and artwork is a separate change.
+**Why:** The register margin and lines tie the mark to real school records; the upward learner path ties it to using evidence for support and reassessment.
+**What was rejected:** Returning to the Journey V, treating the generated preview as the vector master, or claiming legal uniqueness from a quick visual search.
+
+## 2026-10-17, Register Path version 2
+**What was decided:** After a design critique, Evans asked for the weaknesses to be fixed. The Register Path mark was redrawn (separate learner dot, one smooth rising curve, uniform stroke) and the folder gained lockups, reversed and one-colour files, an app icon and a favicon. `v1-before-fix/` keeps the first export. Evans then asked for the new icons everywhere: the app, all flyers and the proposal now use them, and the headteacher screenshots were recaptured to show the new mark (and the current product).
+**Why:** The dot overlapped the line's end into a lump at the focal point, and a mark with only a PNG could not be used for the sidebar, tab, print or dark backgrounds.
+**What was rejected:** Regenerating from the v1 geometry, or shrinking the full mark into a favicon (it blurs below about 24 px).
+
+## 2026-10-17, grading policy is entered in points of the final score
+**What was decided:** Evans said the grading form did not match how the teacher explained it: CA 50% and exam 50%, the CA made of exercises 15, homework 15 and two class tests 10 each, with every mark recorded out of 100 and then scaled (halved). The form now asks for the CA weight and each part as points of the final score adding up to the CA weight; the server keeps each part as a share of the CA out of 100 (four decimals). The demo loaders and the local Sunrise demo use 50/50.
+**Why:** The earlier form asked for shares of the CA (30/30/40) under a 30/70 demo policy and showed "9% of the final score", which did not read like the teacher's scheme even though the arithmetic was the same.
+**What was rejected:** A migration to store points of the final score (not needed); changing hosted Sunrise or the landing page's "CA 30%, exam 70%" without Evans's approval.
+
 ## 2026-10-17, AI limit applies to each person as well as the school
 **What was decided:** Evans asked for the monthly AI limit to apply per teacher, counted in requests. `ai_settings` gets `per_person_monthly_cap` (default 50, migration 052). Every real model call counts against the school and the person who made it; the school cap is checked first, then the person's. The rule is per person for every staff role (headteacher included), not teachers only, so it stays one predictable rule; the headteacher can raise it and sees who has used what.
 **Why:** The cap was one count for the whole school, so one busy teacher could use everyone's month.

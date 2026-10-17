@@ -11,7 +11,7 @@ export const shots = {
   attendance: desktop('head-attendance', 'The Attendance page: one dated register per class.'),
   reportCards: desktop('head-reportcards', 'The Assessment page on Report cards: terminal results and published report cards for a class.'),
   learners: desktop('head-learners', 'The Learners page: the learner roll with search, import from CSV, admissions and year-end promotion.'),
-  progress: desktop('head-progress', 'The Progress page: class exercises, homework and tests followed week by week.'),
+  progress: desktop('head-progress', 'The Performance page: each subject followed week by week, with gaps, support plans and home practice a tab away.'),
   ask: desktop('head-ask', 'Ask: plain-language questions about the school, answered from its own records.'),
   notices: desktop('head-notices', 'The Notices page: a message drafted, approved by the head and sent to families.'),
   parentHome: phone('parent-home', "A parent's phone: the Home page for their child."),
@@ -29,5 +29,5 @@ export const tour: TourItem[] = [
   { id: 'ask', label: 'Ask', icon: 'forum', shot: shots.ask, title: 'Ask your school a question in plain words.', text: "Ask reads your school's own records and answers with the numbers behind it. Try a question, or follow up on the last answer.", points: ["Limited to what the signed-in person may see", 'It only reads: it cannot change a record', "Learner names from your records are not sent to the AI provider"] },
   { id: 'notices', label: 'Notices', icon: 'campaign', shot: shots.notices, title: 'One notice to every family, once you approve it.', text: 'Draft a short message, approve it, and it reaches the guardians who have a verified contact right. The office sees how many it reached.', points: ['Nothing is sent until the head approves it', 'Only verified guardians receive a notice', 'Families with no phone number still get it in the app'] },
   { id: 'learners', label: 'Learners', icon: 'groups', shot: shots.learners, title: 'Every learner, with their whole history.', text: 'The roll, admissions and year-end promotion in one place. Bring existing class lists in from a CSV file.', points: ['Import with a preview and duplicate review', 'Class history keeps every move and withdrawal', 'Guardian rights are verified by the head'] },
-  { id: 'progress', label: 'Progress', icon: 'insights', shot: shots.progress, title: 'See a class week by week, not once a term.', text: 'Record class exercises, homework and tests as they happen and follow each class and learner.', points: ['Trends, gaps and support plans', 'Learners who need help are flagged early', 'Home practice results sit beside class work'] },
+  { id: 'progress', label: 'Performance', icon: 'insights', shot: shots.progress, title: 'See a class week by week, not once a term.', text: 'Record class exercises, homework and tests as they happen and follow each class and learner.', points: ['Trends, gaps and support plans', 'Learners who need help are flagged early', 'Home practice results sit beside class work'] },
 ];

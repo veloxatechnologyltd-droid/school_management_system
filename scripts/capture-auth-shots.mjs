@@ -57,7 +57,8 @@ const kwame = pick('Linked child', 'Kwame');
 const STEPS = {
   'head-attendance': [async (page) => { await page.getByLabel('Date', { exact: true }).fill('2026-10-15'); }, pick('Class', BASIC6)],
   'head-reportcards': [pick('Class', BASIC6), (page) => page.getByRole('tab', { name: 'Report cards' }).click()],
-  'head-progress': [pick('Class', BASIC6)],
+  // Performance opens on Term results, which the hosted demo has none of yet, so show the weekly Trends instead.
+  'head-progress': [pick('Class', BASIC6), (page) => page.getByRole('tab', { name: 'Trends' }).click()],
   'parent-home': [kwame], 'parent-learn': [kwame], 'parent-progress': [kwame], 'parent-reports': [kwame],
 };
 
@@ -79,6 +80,8 @@ const accountFor = (account) => (account === 'localparent' ? LOCAL : { base: BAS
 async function signIn(browser, account, viewport) {
   const { base, email, password } = accountFor(account);
   const context = await browser.newContext({ viewport, deviceScaleFactor: 2, locale: 'en-GH', timezoneId: 'Africa/Accra', reducedMotion: 'reduce' });
+  // CAPTURE_AT=<ISO time> pins the browser clock so a re-capture keeps the day and greeting of the first one.
+  if (process.env.CAPTURE_AT) await context.clock.setFixedTime(new Date(process.env.CAPTURE_AT));
   const page = await context.newPage();
   await page.goto(`${base}/#/signin`);
   await page.getByLabel('Email or phone number', { exact: true }).fill(email);
