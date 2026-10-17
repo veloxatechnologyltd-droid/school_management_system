@@ -22,14 +22,14 @@ export function LearnerUpdates({ schoolId, csrfToken, role, onApplied }: { schoo
   const stage = (e: React.FormEvent) => { e.preventDefault(); void act(async () => { setBatch(await post<Batch>('/learner-updates', { sourceName: sourceName || 'pasted corrections', dateFormat, csv })); await loadWaiting(); }); };
   const apply = (e: React.FormEvent) => { e.preventDefault(); if (!batch) return; void act(async () => {
     const r = await post<{ learners: number; changes: number }>(`/learner-updates/${batch.id}/apply`, { version: batch.version, approvalReason: reason });
-    setMessage(`Applied ${r.changes} correction(s) to ${r.learners} learner(s). The old values are kept in each learner's history.`); setBatch(null); setCsv(''); setReason(''); onApplied(); await loadWaiting();
+    setMessage(`Applied ${r.changes} correction(s) to ${r.learners} student(s). The old values are kept in each student's history.`); setBatch(null); setCsv(''); setReason(''); onApplied(); await loadWaiting();
   }); };
   const open = (id: string) => void act(async () => setBatch(await request<Batch>(`/schools/${schoolId}/learner-updates/${id}`)));
 
   return <div>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {!batch && <>
-      <p className="muted">One row per learner, found by admission number. Include only the columns to correct: Full Name, Date of Birth, Sex. Blank cells change nothing.</p>
+      <p className="muted">One row per student, found by admission number. Include only the columns to correct: Full Name, Date of Birth, Sex. Blank cells change nothing.</p>
       <form onSubmit={stage}>
         <label>CSV file<input type="file" accept=".csv,text/csv" onChange={async e => { const file = e.target.files?.[0]; if (file) { setSourceName(file.name); setCsv(await file.text()); } }}/></label>
         <label>Or paste the rows<textarea value={csv} onChange={e => setCsv(e.target.value)} rows={5} placeholder={'Admission No.,Full Name,Date of Birth,Sex\nNKB/0012,Kwame Mensah,04/05/2015,M'} required/></label>
@@ -42,14 +42,14 @@ export function LearnerUpdates({ schoolId, csrfToken, role, onApplied }: { schoo
       {batch.status === 'applied' && <p><Pill tone="positive">Applied</Pill></p>}
       {batch.issues.length > 0 && <><h4>Problems to fix ({batch.issues.length})</h4><ul className="history">{batch.issues.map((i, n) => <li key={n}><strong>Row {i.rowNumber} · {i.admissionNumber || 'no admission number'}</strong><span>{i.message}</span></li>)}</ul>
         <p className="muted">Nothing is applied while any row has a problem. Correct the file and preview it again.</p></>}
-      {batch.changes.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Field</th><th>Now</th><th>Will be</th></tr></thead><tbody>
+      {batch.changes.length ? <div className="table-wrap"><table><thead><tr><th>Student</th><th>Field</th><th>Now</th><th>Will be</th></tr></thead><tbody>
         {batch.changes.map((c, n) => <tr key={n}><td>{c.fullName}<span className="sub">{c.admissionNumber}</span></td><td>{fieldLabel[c.field]}</td><td>{c.from ?? '—'}</td><td><strong>{c.to}</strong></td></tr>)}</tbody></table></div>
-        : <Empty title="Nothing to change" hint="Every learner in the file already matches the record."/>}
+        : <Empty title="Nothing to change" hint="Every student in the file already matches the record."/>}
       {batch.unchanged ? <p className="muted">{batch.unchanged} row(s) already match and will not change.</p> : null}
       {batch.status === 'staged' && batch.changes.length > 0 && !batch.issues.length && (head
         ? <form onSubmit={apply}><label>Reason for these corrections<input value={reason} onChange={e => setReason(e.target.value)} required minLength={3} maxLength={500} placeholder="Checked against birth certificates"/></label>
           <div className="actions"><button disabled={busy}>Apply {batch.changes.length} correction(s)</button><button type="button" className="secondary" onClick={() => setBatch(null)}>Back</button></div></form>
-        : <p className="muted">Saved for the headteacher, who applies it from Learners → Update from CSV.</p>)}
+        : <p className="muted">Saved for the headteacher, who applies it from Students → Update from CSV.</p>)}
       {(!head || batch.status !== 'staged' || batch.issues.length > 0 || !batch.changes.length) && <button type="button" className="secondary" onClick={() => setBatch(null)}>Back</button>}
     </>}
   </div>;

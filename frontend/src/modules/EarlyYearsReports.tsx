@@ -115,7 +115,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
 
   async function suggestDraft() {
     const learner = learners.find(row => row.id === learnerId);
-    if (!learner) { setError('Choose an enrolled learner first.'); return; }
+    if (!learner) { setError('Choose an enrolled student first.'); return; }
     setBusy(true); setError('');
     try {
       const result = await request<{ runId: string; source: string; note: string | null; strengths: string; nextSteps: string }>(`/schools/${schoolId}/ai/early-years/report-draft`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: json({ learnerId, enrolmentId: learner.enrolment_id, periodStart, periodEnd }) });
@@ -126,7 +126,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
   async function createReport(event: FormEvent) {
     event.preventDefault();
     const learner = learners.find(row => row.id === learnerId);
-    if (!learner) { setError('Choose an enrolled learner.'); return; }
+    if (!learner) { setError('Choose an enrolled student.'); return; }
     if (!await perform(() => post(`/schools/${schoolId}/early-years/reports`, csrfToken, { learnerId, enrolmentId: learner.enrolment_id, periodStart, periodEnd, strengths, nextSteps, ...(teacherNote.trim() ? { teacherNote } : {}) }), 'Narrative report draft saved.')) return;
     setWriting(false); setFilter('all');
     if (aiRun) { const outcome = strengths === aiRun.strengths && nextSteps === aiRun.nextSteps ? 'accepted' : 'edited'; void request(`/schools/${schoolId}/ai/runs/${aiRun.runId}/feedback`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: json({ outcome }) }).catch(() => undefined); setAiRun(null); }
@@ -178,7 +178,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
           <div className="row-actions">
             {row.status === 'draft' && canWork && <button disabled={busy} onClick={() => perform(() => post(`${base}/submit`, csrfToken, { version: row.version }), 'Report submitted for headteacher review.')}>Submit for review</button>}
             {row.status === 'submitted' && head && <button disabled={busy} onClick={() => perform(() => post(`${base}/approve`, csrfToken, { version: row.version }), 'Report approved.')}>Approve</button>}
-            {row.status === 'approved' && head && <button disabled={busy} onClick={() => perform(() => post(`${base}/publish`, csrfToken, { version: row.version }), 'Report published to guardians.')}>Publish to guardians</button>}
+            {row.status === 'approved' && head && <button disabled={busy} onClick={() => perform(() => post(`${base}/publish`, csrfToken, { version: row.version }), 'Report published to parents.')}>Publish to parents</button>}
           </div></div>
           <details><summary>Read the report</summary>
           <p><b>Strengths:</b> {row.strengths}</p><p><b>Next steps:</b> {row.next_steps}</p>{row.teacher_note && <p><b>Teacher note:</b> {row.teacher_note}</p>}
@@ -199,7 +199,7 @@ export function EarlyYearsReports({ schoolId, csrfToken, role, childId: chosenCh
           <label>Class<select value={classId} onChange={event => setClassId(event.target.value)} required><option value="">Choose a class</option>{classes.map(row => <option key={row.id} value={row.id}>{row.name} · {row.year_name}</option>)}</select></label>
           <label>Report starts<input type="date" value={periodStart} max={today()} onChange={event => setPeriodStart(event.target.value)} required/></label>
           <label>Report ends<input type="date" value={periodEnd} min={periodStart} max={today()} onChange={event => setPeriodEnd(event.target.value)} required/></label></div>
-        <div className="actions"><label>Learner<select value={learnerId} onChange={event => setLearnerId(event.target.value)} required><option value="">Choose an enrolled learner</option>{learners.map(row => <option key={row.id} value={row.id}>{row.full_name} · {row.admission_number}</option>)}</select></label>
+        <div className="actions"><label>Student<select value={learnerId} onChange={event => setLearnerId(event.target.value)} required><option value="">Choose an enrolled student</option>{learners.map(row => <option key={row.id} value={row.id}>{row.full_name} · {row.admission_number}</option>)}</select></label>
           <button type="button" className="secondary" onClick={() => loadClasses().catch(reason => setError((reason as Error).message))}>Refresh classes</button>
           <button type="button" className="secondary" disabled={busy || !learnerId} onClick={() => void suggestDraft()}>Suggest a draft from observations</button></div>
         {aiRun && <p className="muted" role="status">{aiRun.source === 'ai' ? 'Draft suggested by AI from this period\'s observations. Read it, correct it, and only then save.' : 'A simple draft was built from the recorded observations (AI is not used). Read and edit it before saving.'} Nothing is saved or shared until you save and the headteacher approves.</p>}

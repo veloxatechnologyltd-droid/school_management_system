@@ -1,6 +1,6 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
-import { AiLabel, Card, Dialog, Empty, Icon, PageHeader, Pill, Stat, when } from '../lib/ui';
+import { AiLabel, Card, Dialog, Empty, Icon, Pill, Stat, when } from '../lib/ui';
 
 type Content = { lesson: boolean; levels: number[]; target: number; openFlags: number };
 type Approval = { id: string; grade: string; approvedByName: string; approvedAt: string; content: Content };
@@ -98,6 +98,7 @@ function TopicContent({ schoolId, csrfToken, topic, approval, term, canMake, onM
 }
 
 // The term's topics: approve them once, and Claude makes the lessons and questions. Teachers see the class levels they teach; the head sees all.
+// The Learning material tab of the Curriculum page: the header there is the Curriculum one, so this draws only the term picker.
 export function Topics({ schoolId, csrfToken }: { schoolId: string; csrfToken: string; role: string }) {
   const [data, setData] = useState<Overview | null>(null); const [reports, setReports] = useState<Report[]>([]); const [ai, setAi] = useState<AiState | null>(null);
   const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
@@ -146,7 +147,7 @@ export function Topics({ schoolId, csrfToken }: { schoolId: string; csrfToken: s
   };
   const handle = (id: string, outcome: 'was_wrong' | 'was_fine') => { setBusy(true); send(`/learning/flags/${id}/handle`, { outcome }).then(() => load(data?.term.id)).catch(e => setError((e as Error).message)).finally(() => setBusy(false)); };
 
-  if (!data) return <>{<PageHeader eyebrow="Teaching" title="Topics" blurb="Approve what your classes learn this term."/>}{error ? <p role="alert">{error}</p> : <p role="status">Loading…</p>}</>;
+  if (!data) return <>{error ? <p role="alert">{error}</p> : <p role="status">Loading…</p>}</>;
   const subjects = [...new Set(data.topics.map(t => t.subject))], grades = [...new Set(data.topics.flatMap(t => [t.grade, ...t.approvals.map(a => a.grade)]).filter((g): g is string => !!g))].sort();
   const shown = data.topics.filter(t => (!subject || t.subject === subject) && (!grade || t.grade === grade || t.approvals.some(a => a.grade === grade)));
   const approvedCount = data.topics.filter(t => t.approvals.length).length, unapprovedShown = shown.filter(t => !t.approvals.length);
@@ -154,9 +155,9 @@ export function Topics({ schoolId, csrfToken }: { schoolId: string; csrfToken: s
   const toggle = (id: string) => setPicked(set => { const next = new Set(set); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const canPick = data.canApprove && !data.term.ended;
 
-  return <section aria-label="Topics" className="page">
-    <PageHeader eyebrow="Teaching" title="Topics" blurb="Approve what your classes learn this term. Claude then writes a lesson and practice questions from each approved topic, and you can read or retire anything it makes."
-      actions={<label className="inline-field">Term<select value={data.term.id} onChange={e => { setPicked(new Set()); void load(e.target.value); }}>{data.terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.yearName}{t.current ? ' (now)' : ''}</option>)}</select></label>}/>
+  return <section aria-label="Learning material" className="page">
+    <p className="muted">Approve what your classes learn this term. Claude then writes a lesson and practice questions from each approved topic, and you can read or retire anything it makes.</p>
+    <div className="page-actions"><label className="inline-field">Term<select value={data.term.id} onChange={e => { setPicked(new Set()); void load(e.target.value); }}>{data.terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.yearName}{t.current ? ' (now)' : ''}</option>)}</select></label></div>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {ai && !aiReady && <p className="draft-banner" role="status"><span>{aiWhy} Approving topics still records them; nothing is made until it is on.</span></p>}
     <div className="stats">
@@ -187,7 +188,7 @@ export function Topics({ schoolId, csrfToken }: { schoolId: string; csrfToken: s
       </div>
       {picked.size > 0 && <p className="draft-banner"><span>{picked.size} topic{picked.size === 1 ? '' : 's'} selected</span>
         <span className="row-actions"><button className="small" onClick={() => { setChosenGrade(data.gradeChoices.length === 1 ? data.gradeChoices[0]! : ''); setApproving(true); }}>Approve for {data.term.name}</button><button className="secondary small" onClick={() => setPicked(new Set())}>Clear</button></span></p>}
-      {!data.topics.length ? <Empty title="No topics yet" hint="The head adds the school's curriculum topics under Settings, Curriculum, with where they come from. They appear here to approve."/>
+      {!data.topics.length ? <Empty title="No topics yet" hint="Add the school's curriculum topics on the Topics tab, with where they come from. They appear here to approve."/>
         : !shown.length ? <Empty title="No topics match" hint="Choose another subject or class."/>
         : <ul className="entries">{shown.flatMap(t => t.approvals.length ? t.approvals.map(a => ({ t, a })) : [{ t, a: null as Approval | null }]).map(({ t, a }) => <li key={`${t.indicatorId}:${a?.id ?? 'new'}`}>
           {a ? <div className="entry-main topic-pick static"><span className="topic-mark"><Icon name="check_circle"/></span><span className="topic-text"><strong>{t.description}</strong><span className="muted">{t.subject}{t.code ? ` · ${t.code}` : ''} · {a.grade}</span></span></div>

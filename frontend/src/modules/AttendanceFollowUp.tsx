@@ -90,17 +90,17 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
   const attention: Attention[] = [
     ...(missing.length ? [{ icon: 'event_busy', tone: 'critical' as Tone, text: `${plural(missing.length, 'class has', 'classes have')} no register today`, detail: names(missing.map(c => c.name)), href: '#/attendance', go: 'Open registers' }] : []),
     ...(drafts.length ? [{ icon: 'edit_note', tone: 'caution' as Tone, text: `${plural(drafts.length, 'register is', 'registers are')} saved but not submitted`, detail: names(drafts.map(c => c.name)), href: '#/attendance', go: 'Open registers' }] : []),
-    ...(absent.length ? [{ icon: 'person_alert', tone: 'caution' as Tone, text: `${plural(absent.length, 'learner has', 'learners have')} been absent 3 or more days this week`,
-      detail: unreachable.length ? `No guardian phone on file for ${names(unreachable.map(a => a.full_name))}` : 'Guardian phone numbers are listed below.',
-      href: unreachable.length ? '#/guardians' : '#/attendance', go: unreachable.length ? 'Add guardian contacts' : 'Check registers' }] : []),
+    ...(absent.length ? [{ icon: 'person_alert', tone: 'caution' as Tone, text: `${plural(absent.length, 'student has', 'students have')} been absent 3 or more days this week`,
+      detail: unreachable.length ? `No parent phone on file for ${names(unreachable.map(a => a.full_name))}` : 'Parent phone numbers are listed below.',
+      href: unreachable.length ? '#/parents' : '#/attendance', go: unreachable.length ? 'Add parent contacts' : 'Check registers' }] : []),
     ...(week ? [{ icon: 'payments', tone: (week.previous && week.collectedPesewas < week.previous.collectedPesewas ? 'caution' : 'positive') as Tone, text: `${cedis(week.collectedPesewas)} in fees collected this week`,
-      detail: week.previous ? `${cedis(week.previous.collectedPesewas)} in the same week of ${week.previous.term}` : `No earlier term to compare with`, href: '#/fees', go: 'Open fees' }] : []),
+      detail: week.previous ? `${cedis(week.previous.collectedPesewas)} in the same week of ${week.previous.term}` : `No earlier term to compare with`, href: '#/accounts', go: 'Open accounts' }] : []),
     ...(scoreGaps.length ? [{ icon: 'grading', tone: 'caution' as Tone, text: `${plural(scoreGaps.length, 'class is', 'classes are')} missing scores`,
       detail: `${morning!.scores!.term} ends ${morning!.scores!.daysLeft > 0 ? `in ${plural(morning!.scores!.daysLeft, 'day', 'days')}` : 'today'}: ${names(scoreGaps.map(c => c.not_started ? `${c.name} (none yet)` : `${c.name} (${c.subjects.join(', ')})`))}`, href: '#/assessment', go: 'Open scores' }] : []),
     ...(morning?.support?.length ? [{ icon: 'event_upcoming', tone: 'caution' as Tone, text: `${plural(morning.support.length, 'support review is', 'support reviews are')} due`,
       detail: names(morning.support.map(p => `${p.class_name} ${p.subject_name} (${p.owner_name})`)), href: '#/progress/support', go: 'Review plans' }] : []),
-    ...(fees && fees.outstandingPesewas > 0 ? [{ icon: 'account_balance_wallet', tone: 'critical' as Tone, text: `${cedis(fees.outstandingPesewas)} in fees outstanding`, detail: `${Math.round(fees.outstandingPesewas / Math.max(fees.billedPesewas, 1) * 100)}% of the ${cedis(fees.billedPesewas)} billed for ${fees.term}`, href: '#/fees', go: 'Open fees' }] : []),
-    ...(waiting ? [{ icon: 'how_to_reg', tone: 'info' as Tone, text: `${plural(waiting, 'admission is', 'admissions are')} waiting for a decision`, detail: 'New applications and applications under review.', href: '#/learners/applications', go: 'Review applications' }] : []),
+    ...(fees && fees.outstandingPesewas > 0 ? [{ icon: 'account_balance_wallet', tone: 'critical' as Tone, text: `${cedis(fees.outstandingPesewas)} in fees outstanding`, detail: `${Math.round(fees.outstandingPesewas / Math.max(fees.billedPesewas, 1) * 100)}% of the ${cedis(fees.billedPesewas)} billed for ${fees.term}`, href: '#/accounts', go: 'Open accounts' }] : []),
+    ...(waiting ? [{ icon: 'how_to_reg', tone: 'info' as Tone, text: `${plural(waiting, 'admission is', 'admissions are')} waiting for a decision`, detail: 'New applications and applications under review.', href: '#/students/applications', go: 'Review applications' }] : []),
   ];
 
   return <section aria-label="Attendance follow-up" className="page">
@@ -117,7 +117,7 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
         {follow && (follow.open
           ? (follow.classes.length ? <>
             <div className="toolbar"><span className="count">{showAll ? `All ${follow.classes.length} classes` : `${outstanding.length} of ${follow.classes.length} classes still to do`}</span><button type="button" className="secondary" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show only outstanding' : `Show all ${follow.classes.length} classes`}</button></div>
-            {visibleClasses.length ? <div className="table-wrap"><table><thead><tr><th>Class</th><th className="num">Learners</th><th>Register</th></tr></thead>
+            {visibleClasses.length ? <div className="table-wrap"><table><thead><tr><th>Class</th><th className="num">Students</th><th>Register</th></tr></thead>
             <tbody>{visibleClasses.map(c => <tr key={c.class_id}><td>{c.name}<span className="sub">{c.level}</span></td><td className="num">{c.learners}</td><td><Pill tone={tone[c.register_status] ?? 'neutral'}>{label[c.register_status] ?? c.register_status}</Pill></td></tr>)}</tbody></table></div>
             : <Empty title="Every register is in" hint="All classes have submitted today’s register."/>}</>
             : <Empty title="No classes to mark today"/>)
@@ -126,9 +126,9 @@ export function AttendanceFollowUp({ schoolId }: { schoolId: string }) {
       <div>
         <Card title="Absent 3 or more days this week" hint={morning ? `Since Monday ${morning.weekStart}, from submitted registers` : undefined} flush>
           {absent.length ? <div className="table-wrap"><table><tbody>{absent.map(a => <tr key={a.learner_id}><td>{a.full_name}<span className="sub">{a.class_name} · last {a.last_absent_day}</span></td>
-            <td>{a.guardian_name ? <>{a.guardian_name}{a.phone ? <a className="sub" href={`tel:${a.phone}`}>{a.phone}</a> : <span className="sub">No phone on file</span>}</> : <span className="muted">No guardian contact</span>}</td>
+            <td>{a.guardian_name ? <>{a.guardian_name}{a.phone ? <a className="sub" href={`tel:${a.phone}`}>{a.phone}</a> : <span className="sub">No phone on file</span>}</> : <span className="muted">No parent contact</span>}</td>
             <td className="num"><Pill tone="critical">{a.absences} absent</Pill></td></tr>)}</tbody></table></div>
-            : <p className="muted">No learner has been absent 3 or more days this week.</p>}
+            : <p className="muted">No student has been absent 3 or more days this week.</p>}
         </Card>
         <Card title="Printable register" hint="For a power or network outage">
           <label>Class<select value={printClass} onChange={e => setPrintClass(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>

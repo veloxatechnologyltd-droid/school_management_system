@@ -36,32 +36,32 @@ export function Promotion({ schoolId, csrfToken, embedded = false }: { schoolId:
   const targets = classes.filter(c => c.id !== source);
   const decided = roster.filter(l => choice[l.id]).length;
   return <section aria-label="Year-end promotion" className="page">
-    {embedded ? <p className="muted">Move each class into next year: promote, repeat or record that a learner left. Past enrolments stay in each learner's history.</p> : <PageHeader eyebrow="End of year" title="Promotion" blurb="Move each class into next year: promote, repeat or record that a learner left. Past enrolments stay in each learner's history."/>}
+    {embedded ? <p className="muted">Move each class into next year: promote, repeat or record that a student left. Past enrolments stay in each student's history.</p> : <PageHeader eyebrow="End of year" title="Promotion" blurb="Move each class into next year: promote, repeat or record that a student left. Past enrolments stay in each student's history."/>}
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <Card flush>
       <div className="toolbar">
         <label>Class being closed<select value={source} onChange={e => chooseSource(e.target.value)}><option value="">Choose a class</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name} · {c.year_name}</option>)}</select></label>
         <label>New year starts on<input type="date" value={effective} onChange={e => setEffective(e.target.value)}/></label>
-        <button className="secondary" disabled={!source || !effective} onClick={() => void loadRoster()}>Show learners</button>
+        <button className="secondary" disabled={!source || !effective} onClick={() => void loadRoster()}>Show students</button>
       </div>
-      {!source ? (loaded && <Empty title={classes.length ? 'Choose the class you are closing' : 'No classes yet'} hint={classes.length ? 'Its learners appear here with one decision each.' : 'Add classes in Settings first.'}/>)
+      {!source ? (loaded && <Empty title={classes.length ? 'Choose the class you are closing' : 'No classes yet'} hint={classes.length ? 'Its students appear here with one decision each.' : 'Add classes in Settings first.'}/>)
         : !effective ? <Empty title="Choose when the new year starts" hint="Add next year’s academic year and classes in Settings, then pick its first day."/>
-        : !roster.length ? <Empty title="No learners to move" hint="Nobody is enrolled in this class on that date."/> : <>
+        : !roster.length ? <Empty title="No students to move" hint="Nobody is enrolled in this class on that date."/> : <>
           <div className="toolbar"><label>Set everyone to<select value="" onChange={e => setAll(e.target.value)}><option value="">Choose…</option>{targets.map(c => <option key={c.id} value={c.id}>Move to {c.name} · {c.year_name}</option>)}<option value="leave">Leave the school</option></select></label><span className="count">{decided} of {roster.length} decided</span></div>
-          <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Decision</th></tr></thead><tbody>{roster.map(l => <tr key={l.id}><td>{l.full_name}<span className="sub">{l.admission_number}</span></td>
+          <div className="table-wrap"><table><thead><tr><th>Student</th><th>Decision</th></tr></thead><tbody>{roster.map(l => <tr key={l.id}><td>{l.full_name}<span className="sub">{l.admission_number}</span></td>
             <td><select aria-label={`Decision for ${l.full_name}`} value={choice[l.id] ?? ''} onChange={e => setChoice({ ...choice, [l.id]: e.target.value })}><option value="">Choose…</option>{targets.map(c => <option key={c.id} value={c.id}>Move to {c.name} · {c.year_name}</option>)}<option value="leave">Leave the school</option></select></td></tr>)}</tbody></table></div>
         </>}
     </Card>
     {roster.length > 0 && <>
       <div className="stats">
-        <Stat label="Learners" value={roster.length} caption="In the class being closed" icon="groups"/>
+        <Stat label="Students" value={roster.length} caption="In the class being closed" icon="groups"/>
         <Stat label="Moving" value={roster.filter(l => choice[l.id] && choice[l.id] !== 'leave').length} caption="Promoted or repeating" tone="positive" icon="trending_up"/>
         <Stat label="Leaving" value={roster.filter(l => choice[l.id] === 'leave').length} caption="Leave the school" icon="logout"/>
-        <Stat label="Still to decide" value={roster.length - decided} caption="Every learner needs one" tone={roster.length - decided ? 'caution' : 'neutral'} icon="pending_actions"/>
+        <Stat label="Still to decide" value={roster.length - decided} caption="Every student needs one" tone={roster.length - decided ? 'caution' : 'neutral'} icon="pending_actions"/>
       </div>
-      <Card title="Apply promotion" hint="Nothing changes until every learner has a decision.">
+      <Card title="Apply promotion" hint="Nothing changes until every student has a decision.">
         <label>Reason recorded in each history<input value={reason} onChange={e => setReason(e.target.value)} minLength={3} maxLength={400}/></label>
-        <button disabled={busy || !complete} onClick={() => void run()}>{busy ? 'Working…' : 'Apply promotion'}</button>{!complete && <p className="muted">Choose a decision for every learner to continue.</p>}
+        <button disabled={busy || !complete} onClick={() => void run()}>{busy ? 'Working…' : 'Apply promotion'}</button>{!complete && <p className="muted">Choose a decision for every student to continue.</p>}
       </Card>
     </>}
   </section>;

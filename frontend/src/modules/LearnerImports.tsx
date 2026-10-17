@@ -129,7 +129,7 @@ export function LearnerImports({ schoolId, csrfToken, role, onCommitted, inDialo
       if (text.length > 40000) throw new Error('CSV files must be 40,000 characters or fewer.');
       const cleanText = text.replace(/^\uFEFF/, '');
       const dataRows = cleanText.trimEnd().split(/\r?\n/).length - 1;
-      if (dataRows < 1 || dataRows > 200) throw new Error('CSV must contain between 1 and 200 learner rows.');
+      if (dataRows < 1 || dataRows > 200) throw new Error('CSV must contain between 1 and 200 student rows.');
       setDateFormat(looseDate.test(cleanText) ? '' : 'iso');
       setCsv(cleanText); setSourceName(file.name);
       if (fileInput.current) fileInput.current.value = '';
@@ -188,7 +188,7 @@ export function LearnerImports({ schoolId, csrfToken, role, onCommitted, inDialo
       const result = await request<ImportBatch>(`/schools/${schoolId}/learner-imports/${batch.id}/commit`, { method: 'POST', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ ...payload, operationId: operationId(key, payload) }) });
       operations.current.delete(key);
       if (!alive.current) return;
-      setBatch(result); setValidatedBatchId(result.id); setSelectedRows([]); setReviewConfirmed(false); setNotice(`Import committed. ${payload.selectedRows.length} learner rows were processed.`);
+      setBatch(result); setValidatedBatchId(result.id); setSelectedRows([]); setReviewConfirmed(false); setNotice(`Import committed. ${payload.selectedRows.length} student rows were processed.`);
       setBatchOffset(0); await Promise.all([loadBatches(0, batchSearch), onCommitted()]);
     } catch (e) { if (alive.current) setError((e as Error).message); }
     finally { if (alive.current) setBusy(false); }
@@ -203,14 +203,14 @@ export function LearnerImports({ schoolId, csrfToken, role, onCommitted, inDialo
   const selectedValidCount = batch?.rows.filter(row => selectedRows.includes(row.row_number) && canSelect(row)).length ?? 0;
 
   return <div className="learner-imports">
-    {!inDialog && <button type="button" className="secondary" aria-expanded={open} onClick={() => setOpen(value => !value)}>Import existing learners</button>}
+    {!inDialog && <button type="button" className="secondary" aria-expanded={open} onClick={() => setOpen(value => !value)}>Import existing students</button>}
     {open && <div>
-      <p className="muted">Stage a CSV, validate identities, review duplicate matches, and approve selected rows. Imports create learners and dated class enrolments only; they do not merge identities or create logins or invoices.</p>
+      <p className="muted">Stage a CSV, validate identities, review duplicate matches, and approve selected rows. Imports create students and dated class enrolments only; they do not merge identities or create logins or invoices.</p>
       <div className="actions"><button type="button" className="secondary" onClick={downloadTemplate}>Download CSV header template</button></div>
-      <p className="muted">Save your class list from Excel or Google Sheets as CSV. The first row must name the columns, for example <code>{CSV_HEADER}</code> (other names such as “Name”, “Student ID” or “DOB” are recognised, column order does not matter and extra columns are ignored). Date of birth may be blank. Maximum 200 learner rows and 40,000 characters.</p>
+      <p className="muted">Save your class list from Excel or Google Sheets as CSV. The first row must name the columns, for example <code>{CSV_HEADER}</code> (other names such as “Name”, “Student ID” or “DOB” are recognised, column order does not matter and extra columns are ignored). Date of birth may be blank. Maximum 200 student rows and 40,000 characters.</p>
       {error && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}
 
-      <h3>Stage a learner CSV</h3>
+      <h3>Stage a student CSV</h3>
       <form className="actions" onSubmit={event => { event.preventDefault(); setClassId(''); setClassOffset(0); setClassSearch(classSearchInput.trim()); }}>
         <label>Search import classes<input type="search" maxLength={120} value={classSearchInput} onChange={event => setClassSearchInput(event.target.value)} placeholder="Class name or academic year" /></label>
         <button type="submit" className="secondary" disabled={classLoading}>Search classes</button>
@@ -234,7 +234,7 @@ export function LearnerImports({ schoolId, csrfToken, role, onCommitted, inDialo
       {batchRows.length ? <ul className="history">{batchRows.map(row => <li key={row.id}>
         <strong>{row.source_name} · {row.class_name}</strong><span>{row.status} · Starts {row.start_date} · {row.row_count} rows</span>
         <button type="button" className="secondary" disabled={batchLoading || busy} onClick={() => void selectBatch(row.id)}>Open import preview</button>
-      </li>)}</ul> : <p>{batchSearch ? 'No import batches match this search.' : 'No learner imports staged yet.'}</p>}
+      </li>)}</ul> : <p>{batchSearch ? 'No import batches match this search.' : 'No student imports staged yet.'}</p>}
       <div className="actions" aria-label="Import batch pages"><button type="button" className="secondary" disabled={batchLoading || batchOffset === 0} onClick={() => setBatchOffset(Math.max(0, batchOffset - 25))}>Previous import batches</button><span>{batchTotal === 0 ? '0 batches' : `Showing ${batchOffset + 1}–${Math.min(batchOffset + batchRows.length, batchTotal)} of ${batchTotal} batches`}</span><button type="button" className="secondary" disabled={batchLoading || batchOffset + batchRows.length >= batchTotal} onClick={() => setBatchOffset(batchOffset + 25)}>Next import batches</button></div>
 
       {batch && <div>
@@ -252,13 +252,13 @@ export function LearnerImports({ schoolId, csrfToken, role, onCommitted, inDialo
             {duplicateReview && <div><span>Possible identity matches — do not merge automatically:</span>{row.validation.possibleMatches.map(match => <span key={`${match.kind}:${match.id}`}>{match.kind}: {match.full_name} · {match.admission_number}{match.date_of_birth ? ` · Born ${match.date_of_birth}` : ''}</span>)}{row.validation.batchMatches.length > 0 && <span>Matches rows in this CSV: {row.validation.batchMatches.join(', ')}</span>}
               {batch.status === 'committed' ? row.duplicate_review_reason && <span>Duplicate review reason: {row.duplicate_review_reason}</span> : <label>Duplicate review reason for row {row.row_number}<input minLength={3} maxLength={500} value={reviewReasons[row.row_number] ?? ''} disabled={!headteacher} onChange={event => { const reason = event.target.value; setReviewConfirmed(false); setReviewReasons(current => ({ ...current, [row.row_number]: reason })); if (selectedRows.includes(row.row_number) && reason.trim().length < 3) setSelectedRows(current => current.filter(number => number !== row.row_number)); }} /></label>}
             </div>}
-            {row.learner_id && <span>Created learner record: {row.learner_id}</span>}
+            {row.learner_id && <span>Created student record: {row.learner_id}</span>}
           </li>;
         })}</ul></> : <p>This batch has no parsed rows.</p>}
         {headteacher && batch.status === 'staged' && <div>
           <p>{selectedValidCount} eligible rows selected.</p>
           <label>Import approval reason<input minLength={3} maxLength={500} value={approvalReason} onChange={event => { setReviewConfirmed(false); setApprovalReason(event.target.value); }} /></label>
-          <label><input type="checkbox" checked={reviewConfirmed} onChange={event => setReviewConfirmed(event.target.checked)} /> I reviewed the validation results and selected learner identities for this import.</label>
+          <label><input type="checkbox" checked={reviewConfirmed} onChange={event => setReviewConfirmed(event.target.checked)} /> I reviewed the validation results and selected student identities for this import.</label>
           <details><summary>Capacity override (only if required)</summary><label>Reason for exceeding class capacity<input minLength={3} maxLength={500} value={capacityOverrideReason} onChange={event => { setReviewConfirmed(false); setCapacityOverrideReason(event.target.value); }} /></label></details>
           <button type="button" disabled={busy || selectedValidCount === 0 || approvalReason.trim().length < 3 || !reviewConfirmed || selectedRows.some(number => { const row = batch.rows.find(item => item.row_number === number); return Boolean(row && !canSelect(row)); })} onClick={() => void commit()}>{busy ? 'Committing…' : `Commit ${selectedValidCount} selected rows`}</button>
         </div>}

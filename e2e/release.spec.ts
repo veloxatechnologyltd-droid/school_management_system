@@ -20,29 +20,29 @@ async function chooseChild(page:Page,id:string) {
   await expect(page.locator('.page-eyebrow').first()).not.toHaveText('My family');
   const picker=page.getByRole('combobox',{name:'Linked child',exact:true});if(await picker.count())await picker.selectOption(id);
 }
-test('CSV import requires fresh review, commits selected learners and retains approval on reload',async({page})=>{
-  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Learners');
+test('CSV import requires fresh review, commits selected students and retains approval on reload',async({page})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Students');
   const suffix=randomUUID().slice(0,8),className=`CSV class ${suffix}`,fileName=`learners-${suffix}.csv`,reason='Reviewed synthetic source and distinct identities';
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   async function post(route:string,body:Record<string,unknown>){const response=await page.request.post(`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(201);return response.json();}
   const year=await post('/academic-years',{name:`CSV year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'}),section=await post('/classes',{name:className,level:'Primary',capacity:5,academicYearId:year.id});
-  await page.getByRole('button',{name:'Import existing learners',exact:true}).click();
+  await page.getByRole('button',{name:'Import existing students',exact:true}).click();
   await page.getByLabel('Search import classes',{exact:true}).fill(className);await page.getByRole('button',{name:'Search classes',exact:true}).first().click();await page.getByRole('combobox',{name:'Target class',exact:true}).selectOption(section.id);
   await page.getByLabel('Search import classes',{exact:true}).fill('no matching class');await page.getByRole('button',{name:'Search classes',exact:true}).first().click();await expect(page.getByRole('combobox',{name:'Target class',exact:true})).toHaveValue('');
   await page.getByLabel('Search import classes',{exact:true}).fill(className);await page.getByRole('button',{name:'Search classes',exact:true}).first().click();await page.getByRole('combobox',{name:'Target class',exact:true}).selectOption(section.id);
   await page.getByLabel('Enrolment start date',{exact:true}).fill('2026-09-01');
-  await page.getByLabel('CSV file',{exact:true}).setInputFiles({name:fileName,mimeType:'text/csv',buffer:Buffer.from(`admission_number,full_name,date_of_birth\nCSV-A-${suffix},Synthetic Import A ${suffix},2019-01-01\nCSV-B-${suffix},Synthetic Import B ${suffix},\nINVALID!,Invalid learner,`)});
+  await page.getByLabel('CSV file',{exact:true}).setInputFiles({name:fileName,mimeType:'text/csv',buffer:Buffer.from(`admission_number,full_name,date_of_birth\nCSV-A-${suffix},Synthetic Import A ${suffix},2019-01-01\nCSV-B-${suffix},Synthetic Import B ${suffix},\nINVALID!,Invalid student,`)});
   await page.getByRole('button',{name:'Stage CSV for validation',exact:true}).click();await expect(page.getByRole('heading',{name:`Preview: ${fileName}`,exact:true})).toBeVisible();
   await expect(page.getByLabel(`Row 2: Synthetic Import A ${suffix} · CSV-A-${suffix} · Born 2019-01-01`,{exact:true})).toBeDisabled();
-  await page.reload();await pickSchool(page);await page.getByRole('button',{name:'Import existing learners',exact:true}).click();
+  await page.reload();await pickSchool(page);await page.getByRole('button',{name:'Import existing students',exact:true}).click();
   await page.getByLabel('Search import batches',{exact:true}).fill(fileName);await page.getByRole('button',{name:'Search batches',exact:true}).click();await page.locator('li').filter({hasText:fileName}).getByRole('button',{name:'Open import preview',exact:true}).click();
   await page.getByRole('button',{name:'Revalidate this preview',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'Validation refreshed.'})).toBeVisible();
-  const first=page.getByLabel(`Row 2: Synthetic Import A ${suffix} · CSV-A-${suffix} · Born 2019-01-01`,{exact:true}),second=page.getByLabel(`Row 3: Synthetic Import B ${suffix} · CSV-B-${suffix}`,{exact:true}),confirmation=page.getByLabel('I reviewed the validation results and selected learner identities for this import.',{exact:true});
+  const first=page.getByLabel(`Row 2: Synthetic Import A ${suffix} · CSV-A-${suffix} · Born 2019-01-01`,{exact:true}),second=page.getByLabel(`Row 3: Synthetic Import B ${suffix} · CSV-B-${suffix}`,{exact:true}),confirmation=page.getByLabel('I reviewed the validation results and selected student identities for this import.',{exact:true});
   await first.check();await page.getByLabel('Import approval reason',{exact:true}).fill(reason);await confirmation.check();await expect(page.getByRole('button',{name:'Commit 1 selected rows',exact:true})).toBeEnabled();
   await second.check();await expect(confirmation).not.toBeChecked();await expect(page.getByRole('button',{name:'Commit 2 selected rows',exact:true})).toBeDisabled();await confirmation.check();
   await page.getByLabel('Import approval reason',{exact:true}).fill(reason+' reviewed');await expect(confirmation).not.toBeChecked();await confirmation.check();
-  await page.setViewportSize({width:375,height:812});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.getByRole('button',{name:'Commit 2 selected rows',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'Import committed. 2 learner rows were processed.'})).toBeVisible();
-  await page.reload();await pickSchool(page);await page.getByRole('button',{name:'Import existing learners',exact:true}).click();await page.getByLabel('Search import batches',{exact:true}).fill(fileName);await page.getByRole('button',{name:'Search batches',exact:true}).click();await page.locator('li').filter({hasText:fileName}).getByRole('button',{name:'Open import preview',exact:true}).click();
+  await page.setViewportSize({width:375,height:812});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.getByRole('button',{name:'Commit 2 selected rows',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'Import committed. 2 student rows were processed.'})).toBeVisible();
+  await page.reload();await pickSchool(page);await page.getByRole('button',{name:'Import existing students',exact:true}).click();await page.getByLabel('Search import batches',{exact:true}).fill(fileName);await page.getByRole('button',{name:'Search batches',exact:true}).click();await page.locator('li').filter({hasText:fileName}).getByRole('button',{name:'Open import preview',exact:true}).click();
   await expect(page.getByText(`Approval reason: ${reason} reviewed`,{exact:true})).toBeVisible();await expect(page.getByRole('status').filter({hasText:'This import is committed'})).toBeVisible();
   const learners=await (await page.request.get(`/api/v1/schools/${school}/learners?search=CSV-A-${suffix}`)).json();expect(learners.total).toBe(1);const detail=await (await page.request.get(`/api/v1/schools/${school}/learners/${learners.items[0].id}`)).json();expect(detail.enrolments).toHaveLength(1);expect(detail.enrolments[0].class_id).toBe(section.id);expect(errors).toEqual([]);
 });
@@ -55,35 +55,35 @@ test('collection verifies pickup, records headteacher exceptions and preserves c
   let admission=await post('/admissions',{fullName:name,admissionNumber:number,classId:section.id,startDate:previous});for(const action of ['review','offer','accept','enrol'])admission=await post(`/admissions/${admission.id}/transition`,{version:admission.version,action});
   const guardian=await post('/guardian-links',{learnerId:admission.learner_id,guardianMembershipId:'30000000-0000-4000-8000-000000000004',academic:false,billing:false,pickup:true,contact:false});await post(`/guardian-links/${guardian.id}/verify`,{version:1,reason:'Head reviewed synthetic pickup authority'});
   const context=await browser.newContext(),frontdesk=await context.newPage();frontdesk.on('pageerror',error=>errors.push(error.message));
-  async function choose(target:Page){const panel=target.locator('section').filter({has:target.getByRole('heading',{name:'Learner collection',exact:true})});await panel.getByLabel('Search learners',{exact:true}).fill(number);await panel.getByRole('button',{name:'Search collection roster',exact:true}).click();await panel.getByRole('button',{name,exact:true}).click();await expect(panel.getByRole('heading',{name,exact:true})).toBeVisible();return panel;}
+  async function choose(target:Page){const panel=target.locator('section').filter({has:target.getByRole('heading',{name:'Student collection',exact:true})});await panel.getByLabel('Search students',{exact:true}).fill(number);await panel.getByRole('button',{name:'Search collection roster',exact:true}).click();await panel.getByRole('button',{name,exact:true}).click();await expect(panel.getByRole('heading',{name,exact:true})).toBeVisible();return panel;}
   try{
-    await signIn(frontdesk,'frontdesk@example.test');const deskPanel=await choose(frontdesk);await deskPanel.getByRole('combobox',{name:'Authorized collector / one-time exception',exact:true}).selectOption(`guardian:${guardian.id}`);
-    const confirmation=deskPanel.getByLabel('I confirmed the collector’s identity in person and am handing the learner into their care now.',{exact:true});await deskPanel.getByLabel('Staff verification reason',{exact:true}).fill('Compared synthetic collector in person against reviewed school record');await confirmation.check();await deskPanel.getByLabel('Staff verification reason',{exact:true}).fill('Rechecked synthetic collector in person against reviewed school record');await expect(confirmation).not.toBeChecked();await confirmation.check();
-    await frontdesk.setViewportSize({width:375,height:812});expect(await frontdesk.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await deskPanel.getByRole('button',{name:'Record learner release',exact:true}).click();await expect(deskPanel.getByRole('status').filter({hasText:'Collection release recorded for Abena Sample.'})).toBeVisible();await expect(deskPanel.getByRole('button',{name:'Record learner release',exact:true})).toHaveCount(0);
+    await signIn(frontdesk,'frontdesk@example.test');const deskPanel=await choose(frontdesk);await deskPanel.getByRole('combobox',{name:'Authorized collector / one-time exception',exact:true}).selectOption(`parent:${guardian.id}`);
+    const confirmation=deskPanel.getByLabel('I confirmed the collector’s identity in person and am handing the student into their care now.',{exact:true});await deskPanel.getByLabel('Staff verification reason',{exact:true}).fill('Compared synthetic collector in person against reviewed school record');await confirmation.check();await deskPanel.getByLabel('Staff verification reason',{exact:true}).fill('Rechecked synthetic collector in person against reviewed school record');await expect(confirmation).not.toBeChecked();await confirmation.check();
+    await frontdesk.setViewportSize({width:375,height:812});expect(await frontdesk.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await deskPanel.getByRole('button',{name:'Record student release',exact:true}).click();await expect(deskPanel.getByRole('status').filter({hasText:'Collection release recorded for Abena Sample.'})).toBeVisible();await expect(deskPanel.getByRole('button',{name:'Record student release',exact:true})).toHaveCount(0);
     const headPanel=await choose(page);await headPanel.getByText('Correct mistaken release record',{exact:true}).click();await headPanel.getByLabel('Correction reason',{exact:true}).fill('Synthetic mistaken recording correction; no physical return claimed');await headPanel.getByRole('button',{name:'Void mistaken release record',exact:true}).click();await expect(headPanel.getByRole('status').filter({hasText:'Release record voided as a correction.'})).toBeVisible();
     await post(`/guardian-links/${guardian.id}/revoke`,{version:2,reason:'Synthetic pickup authority ended'});
     await frontdesk.reload();await pickSchool(frontdesk);const requestPanel=await choose(frontdesk);await expect(requestPanel.getByText('No current pickup authorization or approved exception is available.',{exact:true})).toBeVisible();await requestPanel.getByText('Request an unexpected collector review',{exact:true}).click();await requestPanel.getByLabel('Unexpected collector name',{exact:true}).fill('Synthetic Alternate Collector');await requestPanel.getByLabel('Reason for requesting this exception',{exact:true}).fill('Unexpected collector requires separate headteacher verification');await requestPanel.getByRole('button',{name:'Request headteacher review',exact:true}).click();await expect(requestPanel.getByRole('status').filter({hasText:'Unexpected collector request recorded'})).toBeVisible();await expect(requestPanel.getByRole('button',{name:'Approve one-time exception',exact:true})).toHaveCount(0);
     await headPanel.getByRole('button',{name:'Refresh collection records',exact:true}).click();const reviewer=await choose(page);const pending=reviewer.locator('li').filter({hasText:'Synthetic Alternate Collector · pending'});await pending.getByLabel('Review reason',{exact:true}).fill('Head reviewed separate one-time permission');await pending.getByLabel('In-person identity verification reason (required to approve)',{exact:true}).fill('Synthetic head verified identity through the school procedure');await pending.getByRole('button',{name:'Approve one-time exception',exact:true}).click();await expect(reviewer.getByRole('status').filter({hasText:'Collector request approved.'})).toBeVisible();
-    await requestPanel.getByRole('button',{name:'Refresh collection records',exact:true}).click();const releasePanel=await choose(frontdesk);await expect(releasePanel.getByText('Identity verification:',{exact:false})).toHaveCount(0);await releasePanel.getByRole('combobox',{name:'Authorized collector / one-time exception',exact:true}).selectOption({label:'Approved one-time exception: Synthetic Alternate Collector'});await releasePanel.getByLabel('Staff verification reason',{exact:true}).fill('Staff confirmed the exceptional collector in person');await releasePanel.getByLabel('I confirmed the collector’s identity in person and am handing the learner into their care now.',{exact:true}).check();await releasePanel.getByRole('button',{name:'Record learner release',exact:true}).click();await expect(releasePanel.getByRole('status').filter({hasText:'Collection release recorded for Synthetic Alternate Collector.'})).toBeVisible();
+    await requestPanel.getByRole('button',{name:'Refresh collection records',exact:true}).click();const releasePanel=await choose(frontdesk);await expect(releasePanel.getByText('Identity verification:',{exact:false})).toHaveCount(0);await releasePanel.getByRole('combobox',{name:'Authorized collector / one-time exception',exact:true}).selectOption({label:'Approved one-time exception: Synthetic Alternate Collector'});await releasePanel.getByLabel('Staff verification reason',{exact:true}).fill('Staff confirmed the exceptional collector in person');await releasePanel.getByLabel('I confirmed the collector’s identity in person and am handing the student into their care now.',{exact:true}).check();await releasePanel.getByRole('button',{name:'Record student release',exact:true}).click();await expect(releasePanel.getByRole('status').filter({hasText:'Collection release recorded for Synthetic Alternate Collector.'})).toBeVisible();
     await reviewer.getByRole('button',{name:'Refresh collection records',exact:true}).click();const correction=await choose(page);const exceptional=correction.locator('li').filter({hasText:'One-time exception used.'});await exceptional.getByText('Correct mistaken release record',{exact:true}).click();await exceptional.getByLabel('Correction reason',{exact:true}).fill('Correct synthetic entry without restoring consumed authority');await exceptional.getByRole('button',{name:'Void mistaken release record',exact:true}).click();await expect(correction.getByRole('status').filter({hasText:'Release record voided as a correction.'})).toBeVisible();await expect(correction.getByText('Synthetic Alternate Collector · used',{exact:true})).toBeVisible();await expect(correction.getByRole('combobox',{name:'Authorized collector / one-time exception',exact:true})).toHaveCount(0);
     await frontdesk.reload();await pickSchool(frontdesk);const persisted=await choose(frontdesk);await expect(persisted.getByText('Synthetic Alternate Collector · used',{exact:true})).toBeVisible();await expect(persisted.getByText('No current pickup authorization or approved exception is available.',{exact:true})).toBeVisible();
-    await post(`/learners/${admission.learner_id}/withdraw`,{version:1,effectiveDate:today,reason:'Synthetic departed child retains collection history'});await persisted.getByRole('button',{name:'Refresh collection records',exact:true}).click();await persisted.getByLabel('Include learners with collection history',{exact:true}).check();const historical=await choose(frontdesk);await expect(historical.getByRole('status').filter({hasText:'Collection activity is history-only'})).toBeVisible();await expect(historical.getByRole('button',{name:'Record learner release',exact:true})).toHaveCount(0);await expect(historical.getByText('Synthetic Alternate Collector · used',{exact:true})).toBeVisible();expect(errors).toEqual([]);
+    await post(`/learners/${admission.learner_id}/withdraw`,{version:1,effectiveDate:today,reason:'Synthetic departed child retains collection history'});await persisted.getByRole('button',{name:'Refresh collection records',exact:true}).click();await persisted.getByLabel('Include students with collection history',{exact:true}).check();const historical=await choose(frontdesk);await expect(historical.getByRole('status').filter({hasText:'Collection activity is history-only'})).toBeVisible();await expect(historical.getByRole('button',{name:'Record student release',exact:true})).toHaveCount(0);await expect(historical.getByText('Synthetic Alternate Collector · used',{exact:true})).toBeVisible();expect(errors).toEqual([]);
   }finally{await context.close();}
 });
 test('admission decisions, enrolment, transfer and reload preserve history',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
-  const suffix=randomUUID().slice(0,8),yearName=`Browser year ${suffix}`,first=`Primary Blue ${suffix}`,second=`Primary Green ${suffix}`,name=`Synthetic Browser Learner ${suffix}`,admission=`WEB-${suffix}`;
-  await signIn(page,'head@example.test','Settings');await openSetting(page,'Academic year & classes');
+  const suffix=randomUUID().slice(0,8),yearName=`Browser year ${suffix}`,first=`Primary Blue ${suffix}`,second=`Primary Green ${suffix}`,name=`Synthetic Browser Student ${suffix}`,admission=`WEB-${suffix}`;
+  await signIn(page,'head@example.test','Classes');
   await page.getByLabel('Year name',{exact:true}).fill(yearName);await page.getByLabel('Start date',{exact:true}).fill('2026-09-02');await page.getByLabel('End date (exclusive)',{exact:true}).fill('2027-08-01');await page.getByRole('button',{name:'Add academic year',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'Academic year added.'})).toBeVisible();
   for(const className of [first,second]) {
     await page.getByLabel('Class name',{exact:true}).fill(className);await page.getByLabel('Capacity',{exact:true}).fill('5');await page.getByRole('combobox',{name:'Academic year',exact:true}).selectOption({label:yearName});
     await page.getByRole('button',{name:'Add class',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'Class added.'})).toBeVisible();await expect(page.getByLabel('Class name',{exact:true})).toHaveValue('');
   }
-  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Learners',exact:true}).click();
-  await page.getByRole('button',{name:'New application',exact:true}).click();await page.getByLabel('Learner full name',{exact:true}).fill(name);await page.getByLabel('Admission number',{exact:true}).fill(admission);await page.getByRole('combobox',{name:'Intended class',exact:true}).selectOption({label:`${first} · Primary · ${yearName}`});await page.getByLabel('Proposed start date',{exact:true}).fill('2026-09-02');await page.getByRole('button',{name:'Record application',exact:true}).click();
+  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Students',exact:true}).click();
+  await page.getByRole('button',{name:'New application',exact:true}).click();await page.getByLabel('Student full name',{exact:true}).fill(name);await page.getByLabel('Admission number',{exact:true}).fill(admission);await page.getByRole('combobox',{name:'Intended class',exact:true}).selectOption({label:`${first} · Primary · ${yearName}`});await page.getByLabel('Proposed start date',{exact:true}).fill('2026-09-02');await page.getByRole('button',{name:'Record application',exact:true}).click();
   const application=page.locator('tr').filter({hasText:admission});await expect(application).toContainText('Application');
-  for(const action of ['Start review','Offer place','Record acceptance','Enrol learner']){await application.getByRole('button',{name:action,exact:true}).click();await expect(application.getByRole('button',{name:action,exact:true})).toHaveCount(0);}
-  async function findLearner(){const panel=page.getByRole('region',{name:'Admissions and learners'});await panel.getByRole('tab',{name:/^Learner roll/}).click();await panel.getByLabel('Search learners',{exact:true}).fill(admission);await panel.locator('form').filter({hasText:'Search learners'}).getByRole('button',{name:'Search',exact:true}).click();await panel.getByRole('button',{name,exact:true}).click();}
+  for(const action of ['Start review','Offer place','Record acceptance','Enrol student']){await application.getByRole('button',{name:action,exact:true}).click();await expect(application.getByRole('button',{name:action,exact:true})).toHaveCount(0);}
+  async function findLearner(){const panel=page.getByRole('region',{name:'Admissions and students'});await panel.getByRole('tab',{name:/^Student roll/}).click();await panel.getByLabel('Search students',{exact:true}).fill(admission);await panel.locator('form').filter({hasText:'Search students'}).getByRole('button',{name:'Search',exact:true}).click();await panel.getByRole('button',{name,exact:true}).click();}
   await expect(application).toContainText('Enrolled');await findLearner();
   await expect(page.getByRole('heading',{name:'Class history',exact:true})).toBeVisible();await page.getByRole('combobox',{name:'New class',exact:true}).selectOption({label:`${second} · Primary · ${yearName}`});await page.getByLabel('Effective date',{exact:true}).fill('2026-10-01');await page.getByLabel('Transfer reason',{exact:true}).fill('Synthetic browser transfer review');await page.getByRole('button',{name:'Record transfer',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'Previous enrolment history is retained.'})).toBeVisible();await expect(page.locator('li').filter({hasText:'Synthetic browser transfer review'})).toContainText('2026-10-01');
@@ -92,11 +92,11 @@ test('admission decisions, enrolment, transfer and reload preserve history',asyn
   await expect(history).toContainText('Synthetic browser transfer review');await expect(history).toContainText(second);await expect(history).toContainText('Scheduled');
   await page.setViewportSize({width:375,height:812});await expect(page.getByRole('button',{name:'Record transfer',exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await history.scrollIntoViewIfNeeded();await page.screenshot({path:'.local/admissions-mobile.png'});expect(errors).toEqual([]);
-  await page.getByRole('button',{name:'Withdraw learner',exact:true}).click();await page.getByLabel('Withdrawal date (first day out of class)',{exact:true}).fill('2026-09-29');await page.getByLabel('Withdrawal reason',{exact:true}).fill('Synthetic reviewed school departure');await page.getByRole('button',{name:'Record withdrawal',exact:true}).click();
+  await page.getByRole('button',{name:'Withdraw student',exact:true}).click();await page.getByLabel('Withdrawal date (first day out of class)',{exact:true}).fill('2026-09-29');await page.getByLabel('Withdrawal reason',{exact:true}).fill('Synthetic reviewed school departure');await page.getByRole('button',{name:'Record withdrawal',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'Withdrawal recorded.'})).toBeVisible();await expect(page.getByRole('button',{name:'Record transfer',exact:true})).toHaveCount(0);
   await page.reload();await pickSchool(page);await findLearner();
   await expect(page.locator('li').filter({hasText:'Synthetic reviewed school departure'}).filter({hasText:'2026-09-29'})).toHaveCount(1);await expect(page.locator('li').filter({hasText:second}).filter({hasText:'Superseded'})).toHaveCount(1);await expect(page.locator('li').filter({hasText:'Synthetic browser transfer review'})).toContainText(first);
-  await expect(page.getByText('No open enrolment. Previous learner and class records are retained.',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Withdraw learner',exact:true})).toHaveCount(0);expect(errors).toEqual([]);
+  await expect(page.getByText('No open enrolment. Previous student and class records are retained.',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Withdraw student',exact:true})).toHaveCount(0);expect(errors).toEqual([]);
 });
 test('authorized audit export is generated and downloaded with tenant-scoped records',async({page})=>{
   await signIn(page,'head@example.test','Settings');await openSetting(page,'Activity log');await page.getByRole('button',{name:'Export audit history',exact:true}).click();await page.getByRole('button',{name:'Prepare export',exact:true}).click();await expect(page.getByRole('button',{name:'Check export progress',exact:true})).toBeVisible();
@@ -106,40 +106,40 @@ test('authorized audit export is generated and downloaded with tenant-scoped rec
   const result=JSON.parse(await readFile('.local/browser-audit-export.json','utf8'));expect(result.schoolId).toBe(school);expect(result.rows.length).toBeGreaterThan(0);expect(result.rows.length).toBeLessThanOrEqual(500);
 });
 test('teacher browser exposes no admissions controls and server rejects direct administration',async({page})=>{
-  await signIn(page,'teacher@example.test');await expect(page.getByRole('heading',{name:'Admissions and learners',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Export audit history',exact:true})).toHaveCount(0);
+  await signIn(page,'teacher@example.test');await expect(page.getByRole('heading',{name:'Admissions and students',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Export audit history',exact:true})).toHaveCount(0);
   const denied=await page.request.get(`/api/v1/schools/${school}/admissions`);expect(denied.status()).toBe(403);
 });
-test('guardian verification, distinct rights and revocation persist across two browser sessions',async({page,browser})=>{
-  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Guardians');
-  const suffix=randomUUID().slice(0,8),name=`Synthetic Guardian Child ${suffix}`,admission=`FAM-${suffix}`;
+test('parent verification, distinct rights and revocation persist across two browser sessions',async({page,browser})=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Parents');
+  const suffix=randomUUID().slice(0,8),name=`Synthetic Parent Child ${suffix}`,admission=`FAM-${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   async function post(route:string,body:Record<string,unknown>){const response=await page.request.post(`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(201);return response.json();}
   const year=await post('/academic-years',{name:`Family year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'}),section=await post('/classes',{name:`Family class ${suffix}`,level:'Primary',capacity:5,academicYearId:year.id});
   let application=await post('/admissions',{fullName:name,dateOfBirth:'2018-05-03',admissionNumber:admission,classId:section.id,startDate:'2026-09-01'});
   for(const action of ['review','offer','accept','enrol'])application=await post(`/admissions/${application.id}/transition`,{version:application.version,action});
-  const family=page.locator('section').filter({has:page.getByRole('heading',{name:'Guardian rights',exact:true})});
-  await family.getByRole('button',{name:'Link a guardian',exact:true}).click();await family.getByLabel('Search learners',{exact:true}).fill(name);await family.getByRole('button',{name:'Search learners',exact:true}).click();await family.getByRole('combobox',{name:'Learner',exact:true}).selectOption({label:`${name} · ${admission}`});
-  async function create(right:string){await family.getByRole('combobox',{name:'Existing active guardian',exact:true}).selectOption('30000000-0000-4000-8000-000000000004');await family.getByRole('checkbox',{name:right,exact:true}).check();await family.getByRole('button',{name:'Create pending guardian link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'pending verification'})).toBeVisible();}
+  const family=page.locator('section').filter({has:page.getByRole('heading',{name:'Parent rights',exact:true})});
+  await family.getByRole('button',{name:'Link a parent',exact:true}).click();await family.getByLabel('Search students',{exact:true}).fill(name);await family.getByRole('button',{name:'Search students',exact:true}).click();await family.getByRole('combobox',{name:'Student',exact:true}).selectOption({label:`${name} · ${admission}`});
+  async function create(right:string){await family.getByRole('combobox',{name:'Existing active parent',exact:true}).selectOption('30000000-0000-4000-8000-000000000004');await family.getByRole('checkbox',{name:right,exact:true}).check();await family.getByRole('button',{name:'Create pending parent link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'pending verification'})).toBeVisible();}
   await create('Billing information');let pending=family.locator('tr').filter({hasText:name}).filter({hasText:'Pending verification'});await expect(pending).toBeVisible();
   const context=await browser.newContext();const portal=await context.newPage();portal.on('pageerror',error=>errors.push(error.message));await portal.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));
   try{
     await signIn(portal,'guardian@example.test');await expect(portal.getByRole('heading',{name:'Home',exact:true})).toBeVisible();await expect(portal.getByText('No children linked yet')).toBeVisible();await expect(portal.getByText(`Admission number ${admission}`)).toHaveCount(0);
-    await pending.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Reviewed verification reason',{exact:true}).fill('Synthetic reviewed billing authority');await family.getByRole('button',{name:'Verify guardian link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Guardian link verified.'})).toBeVisible();
-    await portal.getByRole('button',{name:'Refresh guardian records',exact:true}).click();await expect(portal.getByText(`Admission number ${admission}`)).toBeVisible();await expect(portal.getByRole('heading',{name,exact:true})).toBeVisible();await expect(portal.getByRole('heading',{name:'Your verified access',exact:true})).toBeVisible();await expect(portal.getByRole('heading',{name:/^About /})).toHaveCount(0);
+    await pending.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Reviewed verification reason',{exact:true}).fill('Synthetic reviewed billing authority');await family.getByRole('button',{name:'Verify parent link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Parent link verified.'})).toBeVisible();
+    await portal.getByRole('button',{name:'Refresh parent records',exact:true}).click();await expect(portal.getByText(`Admission number ${admission}`)).toBeVisible();await expect(portal.getByRole('heading',{name,exact:true})).toBeVisible();await expect(portal.getByRole('heading',{name:'Your verified access',exact:true})).toBeVisible();await expect(portal.getByRole('heading',{name:/^About /})).toHaveCount(0);
     const billing=await (await portal.request.get(`/api/v1/schools/${school}/guardian/children/${application.learner_id}`)).json();expect(billing.billing).toBe(true);expect(billing).not.toHaveProperty('date_of_birth');expect(billing).not.toHaveProperty('enrolments');
-    const verified=family.locator('tr').filter({hasText:name}).filter({hasText:'Synthetic reviewed billing authority'});await verified.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Revocation reason',{exact:true}).fill('Synthetic sponsor authority ended');await family.getByRole('button',{name:'Revoke guardian link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Guardian link revoked.'})).toBeVisible();
-    expect((await portal.request.get(`/api/v1/schools/${school}/guardian/children/${application.learner_id}`)).status()).toBe(404);await portal.getByRole('button',{name:'Refresh guardian records',exact:true}).click();await expect(portal.getByText('No children linked yet')).toBeVisible();await expect(portal.getByText(`Admission number ${admission}`)).toHaveCount(0);
-    await family.getByRole('button',{name:'Link a guardian',exact:true}).click();await create('Academic records');pending=family.locator('tr').filter({hasText:name}).filter({hasText:'Pending verification'});await pending.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Reviewed verification reason',{exact:true}).fill('Synthetic reviewed academic authority');await family.getByRole('button',{name:'Verify guardian link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Guardian link verified.'})).toBeVisible();
-    await portal.getByRole('button',{name:'Refresh guardian records',exact:true}).click();await expect(portal.getByText(`Admission number ${admission}`)).toBeVisible();await expect(portal.getByText('Date of birth: 3 May 2018',{exact:true})).toBeVisible();await expect(portal.locator('li').filter({hasText:`Family class ${suffix}`})).toContainText('Active today');
+    const verified=family.locator('tr').filter({hasText:name}).filter({hasText:'Synthetic reviewed billing authority'});await verified.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Revocation reason',{exact:true}).fill('Synthetic sponsor authority ended');await family.getByRole('button',{name:'Revoke parent link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Parent link revoked.'})).toBeVisible();
+    expect((await portal.request.get(`/api/v1/schools/${school}/guardian/children/${application.learner_id}`)).status()).toBe(404);await portal.getByRole('button',{name:'Refresh parent records',exact:true}).click();await expect(portal.getByText('No children linked yet')).toBeVisible();await expect(portal.getByText(`Admission number ${admission}`)).toHaveCount(0);
+    await family.getByRole('button',{name:'Link a parent',exact:true}).click();await create('Academic records');pending=family.locator('tr').filter({hasText:name}).filter({hasText:'Pending verification'});await pending.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Reviewed verification reason',{exact:true}).fill('Synthetic reviewed academic authority');await family.getByRole('button',{name:'Verify parent link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Parent link verified.'})).toBeVisible();
+    await portal.getByRole('button',{name:'Refresh parent records',exact:true}).click();await expect(portal.getByText(`Admission number ${admission}`)).toBeVisible();await expect(portal.getByText('Date of birth: 3 May 2018',{exact:true})).toBeVisible();await expect(portal.locator('li').filter({hasText:`Family class ${suffix}`})).toContainText('Active today');
     await portal.setViewportSize({width:375,height:812});expect(await portal.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await portal.getByRole('heading',{name:'Home',exact:true}).scrollIntoViewIfNeeded();await portal.screenshot({path:'.local/guardian-mobile.png'});
     expect((await portal.request.get(`/api/v1/schools/${school}/learners/${application.learner_id}`)).status()).toBe(403);expect((await portal.request.get(`/api/v1/schools/${school}/guardian/children/${randomUUID()}`)).status()).toBe(404);
-    const academic=family.locator('tr').filter({hasText:name}).filter({hasText:'Synthetic reviewed academic authority'});await academic.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Revocation reason',{exact:true}).fill('Synthetic academic authority ended');await family.getByRole('button',{name:'Revoke guardian link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Guardian link revoked.'})).toBeVisible();
-    await portal.getByRole('button',{name:'Refresh guardian records',exact:true}).click();await expect(portal.getByText('Date of birth: 3 May 2018',{exact:true})).toHaveCount(0);await expect(portal.getByText(`Admission number ${admission}`)).toHaveCount(0);await expect(portal.getByText('No children linked yet')).toBeVisible();expect(errors).toEqual([]);
+    const academic=family.locator('tr').filter({hasText:name}).filter({hasText:'Synthetic reviewed academic authority'});await academic.getByRole('button',{name:/^Review /}).click();await family.getByLabel('Revocation reason',{exact:true}).fill('Synthetic academic authority ended');await family.getByRole('button',{name:'Revoke parent link',exact:true}).click();await expect(family.getByRole('status').filter({hasText:'Parent link revoked.'})).toBeVisible();
+    await portal.getByRole('button',{name:'Refresh parent records',exact:true}).click();await expect(portal.getByText('Date of birth: 3 May 2018',{exact:true})).toHaveCount(0);await expect(portal.getByText(`Admission number ${admission}`)).toHaveCount(0);await expect(portal.getByText('No children linked yet')).toBeVisible();expect(errors).toEqual([]);
   }finally{await context.close();}
 });
 test('dated teacher grant, fresh roster and revocation work across two browser sessions',async({page,browser})=>{
-  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Settings');await openSetting(page,'Teacher assignments');
-  const suffix=randomUUID().slice(0,8),className=`Roster class ${suffix}`,name=`Synthetic Roster Learner ${suffix}`,lateName=`Synthetic Late Learner ${suffix}`;
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Teachers');await page.getByRole('tab',{name:'Class assignments',exact:true}).click();
+  const suffix=randomUUID().slice(0,8),className=`Roster class ${suffix}`,name=`Synthetic Roster Student ${suffix}`,lateName=`Synthetic Late Student ${suffix}`;
   const today=new Date().toISOString().slice(0,10),day=(delta:number)=>new Date(Date.parse(`${today}T00:00:00Z`)+delta*86400000).toISOString().slice(0,10);
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   async function post(route:string,body:Record<string,unknown>){const response=await page.request.post(`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(201);return response.json();}
@@ -154,9 +154,9 @@ test('dated teacher grant, fresh roster and revocation work across two browser s
     await signIn(teacherPage,'teacher@example.test');expect((await teacherPage.request.get(`/api/v1/schools/${school}/teaching/classes/${section.id}/roster?date=${today}`)).status()).toBe(404);
     await assign.getByRole('combobox',{name:'Teacher',exact:true}).selectOption('30000000-0000-4000-8000-000000000003');await assign.getByLabel('Assignment start date (inclusive)',{exact:true}).fill(today);await assign.getByLabel('Assignment end date (exclusive)',{exact:true}).fill(day(100));await assign.getByLabel('Reason authorizing whole-class roster access',{exact:true}).fill('Synthetic headteacher reviewed class responsibility');await assign.getByRole('button',{name:'Create teacher assignment',exact:true}).click();await expect(teaching.getByRole('status').filter({hasText:'Teaching assignment created.'})).toBeVisible();
     const sections=teacherPage.getByRole('navigation',{name:'Sections',exact:true});
-    await sections.getByRole('link',{name:'My classes',exact:true}).click();await teacherPage.getByRole('button',{name:'Refresh class access',exact:true}).click();
+    await sections.getByRole('link',{name:'Classes',exact:true}).click();await teacherPage.getByRole('button',{name:'Refresh class access',exact:true}).click();
     await sections.getByRole('link',{name:'Today',exact:true}).click();const teacherAttendance=teacherPage.locator('section').filter({has:teacherPage.getByRole('heading',{name:'Attendance',exact:true})});await teacherAttendance.getByLabel('Date',{exact:true}).fill(today);await teacherAttendance.getByRole('combobox',{name:'Class',exact:true}).selectOption(section.id);
-    await sections.getByRole('link',{name:'My classes',exact:true}).click();await teacherPage.getByRole('combobox',{name:'Select an assigned class',exact:true}).selectOption(section.id);
+    await sections.getByRole('link',{name:'Classes',exact:true}).click();await teacherPage.getByRole('combobox',{name:'Select an assigned class',exact:true}).selectOption(section.id);
     const teacherRoster=teacherPage.locator('section').filter({has:teacherPage.getByRole('heading',{name:'My classes',exact:true})});await expect(teacherRoster.locator('li').filter({hasText:name})).toHaveCount(1);await expect(teacherRoster.locator('li').filter({hasText:lateName})).toHaveCount(0);
     const roster=await (await teacherPage.request.get(`/api/v1/schools/${school}/teaching/classes/${section.id}/roster?date=${today}`)).json();expect(roster.total).toBe(1);expect(Object.keys(roster.items[0]).sort()).toEqual(['admission_number','enrolment_id','full_name','id']);
     await teacherPage.getByLabel('Class date',{exact:true}).fill(day(1));await teacherPage.getByRole('button',{name:'Show classes for date',exact:true}).click();await teacherPage.getByRole('combobox',{name:'Select an assigned class',exact:true}).selectOption(section.id);await expect(teacherRoster.locator('li').filter({hasText:lateName})).toHaveCount(1);
@@ -185,7 +185,7 @@ test('a teacher can submit a fresh register without saving a draft first',async(
 });
 test('attendance screen records an open day, submits, locks and corrects a register',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Attendance');
-  const suffix=randomUUID().slice(0,8),today='2026-09-28',name=`Synthetic Attendance Learner ${suffix}`,admission=`ATT-${suffix}`;
+  const suffix=randomUUID().slice(0,8),today='2026-09-28',name=`Synthetic Attendance Student ${suffix}`,admission=`ATT-${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   async function post(route:string,body:Record<string,unknown>){const response=await page.request.post(`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(201);return response.json();}
   const year=await post('/academic-years',{name:`Attendance year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'}),section=await post('/classes',{name:`Attendance class ${suffix}`,level:'Primary',capacity:5,academicYearId:year.id});
@@ -200,9 +200,9 @@ test('attendance screen records an open day, submits, locks and corrects a regis
   await page.setViewportSize({width:375,height:812});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
 
-test('Nursery report draft passes review, publishes and appears in the guardian portal',async({page,browser})=>{
+test('Nursery report draft passes review, publishes and appears in the parent portal',async({page,browser})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Early years');
-  const suffix=randomUUID().slice(0,8),today='2026-09-28',learnerName=`Synthetic KG Report Learner ${suffix}`,admission=`REP-${suffix}`;
+  const suffix=randomUUID().slice(0,8),today='2026-09-28',learnerName=`Synthetic KG Report Student ${suffix}`,admission=`REP-${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   async function post(route:string,body:Record<string,unknown>){const response=await page.request.post(`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(201);return response.json();}
   const year=await post('/academic-years',{name:`Report year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'}),section=await post('/classes',{name:`Report Nursery ${suffix}`,level:'Nursery',capacity:5,academicYearId:year.id});
@@ -211,19 +211,19 @@ test('Nursery report draft passes review, publishes and appears in the guardian 
   const link=await post('/guardian-links',{learnerId:application.learner_id,guardianMembershipId:guardianCandidate.id,academic:true,billing:false,pickup:false,contact:false});await post(`/guardian-links/${link.id}/verify`,{version:link.version,reason:'Synthetic academic reporting permission verified'});
   await page.reload();await pickSchool(page);
   const panel=page.getByRole('region',{name:'Nursery and KG progress reports'});await expect(panel.getByRole('heading',{name:'Nursery and KG progress reports'})).toBeVisible();
-  await panel.getByRole('button',{name:'New report',exact:true}).click();await panel.getByRole('combobox',{name:'Level'}).selectOption('Nursery');await panel.getByRole('button',{name:'Refresh classes',exact:true}).click();await panel.getByRole('combobox',{name:'Class'}).selectOption(section.id);await expect(panel.getByRole('option',{name:new RegExp(learnerName)})).toHaveCount(1);const roster=await (await page.request.get(`/api/v1/schools/${school}/teaching/classes/${section.id}/roster?date=${today}`)).json(),reportLearner=roster.items.find((item:any)=>item.full_name===learnerName);expect(reportLearner).toBeTruthy();await panel.getByRole('combobox',{name:'Learner'}).selectOption(reportLearner.id);
-  await panel.getByLabel('Strengths and progress').fill('Joined a shared activity and took turns with peers.');await panel.getByLabel('Next steps').fill('Continue offering a chance to lead a short group activity.');await panel.getByLabel('Teacher note (optional)').fill('Synthetic note for guardian preview.');await panel.getByRole('button',{name:'Save report draft'}).click();
-  const report=panel.locator('li').filter({hasText:learnerName});await expect(report).toContainText('draft');await report.getByRole('button',{name:'Submit for review'}).click();await expect(report).toContainText('submitted');await report.getByRole('button',{name:'Approve'}).click();await expect(report).toContainText('approved');await report.getByRole('button',{name:'Publish to guardians'}).click();await expect(report).toContainText('published');
+  await panel.getByRole('button',{name:'New report',exact:true}).click();await panel.getByRole('combobox',{name:'Level'}).selectOption('Nursery');await panel.getByRole('button',{name:'Refresh classes',exact:true}).click();await panel.getByRole('combobox',{name:'Class'}).selectOption(section.id);await expect(panel.getByRole('option',{name:new RegExp(learnerName)})).toHaveCount(1);const roster=await (await page.request.get(`/api/v1/schools/${school}/teaching/classes/${section.id}/roster?date=${today}`)).json(),reportLearner=roster.items.find((item:any)=>item.full_name===learnerName);expect(reportLearner).toBeTruthy();await panel.getByRole('combobox',{name:'Student'}).selectOption(reportLearner.id);
+  await panel.getByLabel('Strengths and progress').fill('Joined a shared activity and took turns with peers.');await panel.getByLabel('Next steps').fill('Continue offering a chance to lead a short group activity.');await panel.getByLabel('Teacher note (optional)').fill('Synthetic note for parent preview.');await panel.getByRole('button',{name:'Save report draft'}).click();
+  const report=panel.locator('li').filter({hasText:learnerName});await expect(report).toContainText('draft');await report.getByRole('button',{name:'Submit for review'}).click();await expect(report).toContainText('submitted');await report.getByRole('button',{name:'Approve'}).click();await expect(report).toContainText('approved');await report.getByRole('button',{name:'Publish to parents'}).click();await expect(report).toContainText('published');
   const context=await browser.newContext(),guardianPage=await context.newPage();guardianPage.on('pageerror',error=>errors.push(error.message));await guardianPage.clock.setFixedTime(new Date(`${today}T10:00:00Z`));
   try{await signIn(guardianPage,'guardian@example.test','Report cards');await chooseChild(guardianPage,reportLearner.id);const guardianPanel=guardianPage.getByRole('region',{name:'Nursery and KG progress reports'});const guardianReport=guardianPanel.locator('li').filter({hasText:learnerName});await expect(guardianReport).toContainText('Joined a shared activity and took turns with peers.');await expect(guardianReport).toContainText('Continue offering a chance to lead a short group activity.');expect(errors).toEqual([]);}
   finally{await context.close();}
 });
 test('connection and proxy failures show a plain-language retry message, not a parser error',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
-  await signIn(page,'head@example.test','Learners');
+  await signIn(page,'head@example.test','Students');
   await page.route('**/api/v1/schools/*/academic-years*',route=>route.fulfill({status:502,contentType:'text/html',body:'<html><body>Bad gateway</body></html>'}));
   await page.reload();await pickSchool(page);
-  const panel=page.getByRole('region',{name:'Admissions and learners'});
+  const panel=page.getByRole('region',{name:'Admissions and students'});
   await expect(panel.getByRole('alert')).toContainText('Wait a moment and try again');
   await page.unroute('**/api/v1/schools/*/academic-years*');
   await page.route('**/api/v1/schools/*/academic-years*',route=>route.abort('connectionrefused'));
@@ -255,7 +255,7 @@ test('platform administrator creates a school; its headteacher signs in with the
     } finally {await context.close();}
   } finally {await owner.end();}
 });
-test('headteacher drafts and approves a notice; the linked guardian reads it',async({page,browser})=>{
+test('headteacher drafts and approves a notice; the linked parent reads it',async({page,browser})=>{
   const {Pool}=require('pg');const path=require('node:path');
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Notices');
@@ -264,29 +264,29 @@ test('headteacher drafts and approves a notice; the linked guardian reads it',as
   async function post(route:string,body:Record<string,unknown>){const response=await page.request.post(`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status()).toBe(201);return response.json();}
   const year=await post('/academic-years',{name:`Notice year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'}),section=await post('/classes',{name:className,level:'Primary',capacity:5,academicYearId:year.id});
   const learner=randomUUID();
-  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,'Notice Learner')",[learner,school,`NT-${suffix}`]);
+  await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,'Notice Student')",[learner,school,`NT-${suffix}`]);
   await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,'2026-09-01')",[randomUUID(),school,learner,section.id]);
   await owner.query("INSERT INTO guardian_links(id,school_id,learner_id,guardian_membership_id,guardian_display_name,academic,billing,pickup,contact,verified_at,verified_by,verification_reason) VALUES($1,$2,$3,'30000000-0000-4000-8000-000000000004','Abena Sample',true,false,false,true,now(),'30000000-0000-4000-8000-000000000001','Checked in person')",[randomUUID(),school,learner]);
   await owner.end();await page.reload();await pickSchool(page);
-  const panel=page.getByRole('region',{name:'Notices to guardians',exact:true});
+  const panel=page.getByRole('region',{name:'Notices to parents',exact:true});
   await panel.getByRole('button',{name:'New notice',exact:true}).click();await panel.getByLabel('Title',{exact:true}).fill(title);await panel.getByLabel('Message',{exact:true}).fill('Bring a packed lunch on Friday.');
   const selects=panel.locator('form select');await selects.nth(0).selectOption('class');await selects.nth(1).selectOption(section.id);
   await panel.getByRole('button',{name:'Save draft',exact:true}).click();await expect(panel.getByText('Saved as a draft. Nothing is sent until you approve it.')).toBeVisible();
   page.once('dialog',dialog=>dialog.accept());
   await panel.locator('li').filter({hasText:title}).getByRole('button',{name:'Approve and send',exact:true}).click();
-  await expect(panel.getByText('Approved for 1 guardian; 0 will also get an SMS.')).toBeVisible();
+  await expect(panel.getByText('Approved for 1 parent; 0 will also get an SMS.')).toBeVisible();
   await page.setViewportSize({width:375,height:812});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const guardianPage=await browser.newPage();await guardianPage.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));await signIn(guardianPage,'guardian@example.test','Notices');
   const mine=guardianPage.getByRole('region',{name:'Notices from the school',exact:true});await expect(mine.getByText(title)).toBeVisible();await expect(mine.getByText('Bring a packed lunch on Friday.')).toBeVisible();
   await guardianPage.close();expect(errors).toEqual([]);
 });
 test('an Excel-style class list with "Admission No." headers and DD/MM/YYYY dates stages once the date order is chosen',async({page})=>{
-  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Learners');
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Students');
   const suffix=randomUUID().slice(0,8),className=`Excel class ${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   async function post(route:string,body:Record<string,unknown>){const response=await page.request.post(`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status()).toBe(201);return response.json();}
   const year=await post('/academic-years',{name:`Excel year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'});await post('/classes',{name:className,level:'Primary',capacity:5,academicYearId:year.id});
-  await page.getByRole('button',{name:'Import existing learners',exact:true}).click();
+  await page.getByRole('button',{name:'Import existing students',exact:true}).click();
   await page.getByLabel('Search import classes',{exact:true}).fill(className);await page.getByRole('button',{name:'Search classes',exact:true}).first().click();
   await page.getByRole('combobox',{name:'Target class',exact:true}).selectOption({index:1});
   await page.getByLabel('CSV file',{exact:true}).setInputFiles({name:`excel-${suffix}.csv`,mimeType:'text/csv',buffer:Buffer.from(`Student Name,Gender,Admission No.,DOB\r\n"Mensah, Ama ${suffix}",F,EX-${suffix},03/04/2015\r\n`)});
@@ -298,12 +298,12 @@ test('an Excel-style class list with "Admission No." headers and DD/MM/YYYY date
 test('each role lands on its own daily work; the section stays in the address across reload at phone width',async({page,browser})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewportSize({width:375,height:812});
   const links=async(p:Page)=>p.getByRole('navigation',{name:'Sections',exact:true}).locator('a .label').allTextContents();
-  await signIn(page);expect(await links(page)).toEqual(['Home','Ask','Attendance','Learners','Guardians','Pickup','Assessment','Performance','Curriculum','Topics','Early years','Fees','Notices','Settings']);
-  await expect(page.getByRole('link',{name:'Home',exact:true})).toHaveAttribute('aria-current','page');await expect(page.getByRole('region',{name:'Notices to guardians'})).toHaveCount(0);
-  await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('link',{name:'Notices',exact:true}).click();await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
-  await page.reload();await pickSchool(page);await expect(page.getByRole('region',{name:'Notices to guardians'})).toBeVisible();
+  await signIn(page);expect(await links(page)).toEqual(['Home','Kobby AI','Students','Parents','Teachers','Staff','Classes','Attendance','Pickup','Curriculum','Assessment','Performance','Early years','Accounts','Notices','Settings']);
+  await expect(page.getByRole('link',{name:'Home',exact:true})).toHaveAttribute('aria-current','page');await expect(page.getByRole('region',{name:'Notices to parents'})).toHaveCount(0);
+  await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('link',{name:'Notices',exact:true}).click();await expect(page.getByRole('region',{name:'Notices to parents'})).toBeVisible();
+  await page.reload();await pickSchool(page);await expect(page.getByRole('region',{name:'Notices to parents'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  for(const [email,expected] of [['teacher@example.test',['Today','Ask','My classes','Assessment','Performance','Curriculum','Topics','Early years']],['frontdesk@example.test',['Pickup','Learners']],['guardian@example.test',['Home','Learn at home','Performance','Report cards','Notes','Fees','Notices']]] as const){
+  for(const [email,expected] of [['teacher@example.test',['Today','Kobby AI','Classes','Curriculum','Assessment','Performance','Early years']],['frontdesk@example.test',['Pickup','Students']],['guardian@example.test',['Home','Learn at home','Performance','Report cards','Notes','Fees','Notices']]] as const){
     const other=await browser.newPage();await other.setViewportSize({width:375,height:812});await other.clock.setFixedTime(new Date('2026-09-28T10:00:00Z'));await signIn(other,email);expect(await links(other)).toEqual(expected);
     expect(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await other.close();
   }
@@ -321,14 +321,14 @@ test('a new sign-up sees a setup guide instead of empty daily screens, and daily
   await guide.getByRole('button',{name:'Save academic year',exact:true}).click();await expect(guide).toContainText('1 of 5 done');
   await guide.getByLabel('Class name',{exact:true}).fill('Primary 1');await guide.getByRole('button',{name:'Add class',exact:true}).click();
   await expect(guide.getByRole('status')).toContainText('Added: Primary 1');await expect(guide).toContainText('2 of 5 done');
-  await expect(guide.getByRole('link',{name:'Add staff'})).toBeVisible();await expect(page.getByRole('heading',{name:'Attendance follow-up'})).toBeVisible();
+  await expect(guide.getByRole('link',{name:'Add teachers'})).toBeVisible();await expect(page.getByRole('heading',{name:'Attendance follow-up'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
 test('class teacher remarks and the headteacher remark appear on the printed report card with attendance and reopening date',async({page})=>{
   const {Pool}=require('pg');const path=require('node:path');
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Assessment');
-  const suffix=randomUUID().slice(0,8),name=`Report Learner ${suffix}`;
+  const suffix=randomUUID().slice(0,8),name=`Report Student ${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   async function send(route:string,body:Record<string,unknown>,method='post',status=201){const response=await page.request[method as 'post'](`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
   const year=await send('/academic-years',{name:`Report year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'}),section=await send('/classes',{name:`Report class ${suffix}`,level:'Primary',capacity:5,academicYearId:year.id});
@@ -369,7 +369,7 @@ test('CA cannot be typed: class work recorded on the Assessment page makes the C
   const {Pool}=require('pg');const path=require('node:path');
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test','Assessment');
-  const suffix=randomUUID().slice(0,8),name=`CA Learner ${suffix}`;
+  const suffix=randomUUID().slice(0,8),name=`CA Student ${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   async function send(route:string,body:Record<string,unknown>,method='post',status=201){const response=await page.request[method as 'post'](`/api/v1/schools/${school}${route}`,{headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
   const year=await send('/academic-years',{name:`CA year ${suffix}`,startDate:'2026-09-01',endDate:'2027-08-01'}),section=await send('/classes',{name:`CA class ${suffix}`,level:'Primary',capacity:5,academicYearId:year.id});
@@ -396,7 +396,7 @@ test('CA cannot be typed: class work recorded on the Assessment page makes the C
   const row=panel.getByRole('row').filter({hasText:name});await expect(row.getByText('75',{exact:true})).toBeVisible();
   await expect(panel.getByLabel(/continuous assessment/)).toHaveCount(0);
   await row.getByLabel(`${name} exam`,{exact:true}).fill('60');await panel.getByRole('button',{name:'Save exam scores',exact:true}).click();
-  await expect(panel.getByText(/Saved 1 exam mark\(s\) and the CA from class work for 1 learner\(s\)/)).toBeVisible();
+  await expect(panel.getByText(/Saved 1 exam mark\(s\) and the CA from class work for 1 student\(s\)/)).toBeVisible();
   const grid=await (await page.request.get(`/api/v1/schools/${school}/assessment/classes/${section.id}/grid?termId=${term.id}&subjectId=${subject.id}`)).json();
   expect(grid.items[0]).toMatchObject({ca:75,exam:60});
   // Performance only shows results: the term result with the CA and exam weighted by the school's policy.
@@ -448,9 +448,9 @@ test('the headteacher’s morning view lists missing registers, this week’s fe
   const card=page.locator('.card').filter({has:page.getByRole('heading',{name:'Needs attention',exact:true})});
   const item=(text:string)=>card.getByRole('listitem').filter({hasText:text});
   await expect(item('1 class has no register today')).toContainText('Basic 4');await expect(item('1 class has no register today').getByRole('link',{name:'Open registers'})).toHaveAttribute('href','#/attendance');
-  await expect(item('GH₵ 120.00 in fees collected this week')).toContainText('GH₵ 450.00 in the same week of Term 1');await expect(item('in fees collected this week').getByRole('link',{name:'Open fees'})).toHaveAttribute('href','#/fees');
+  await expect(item('GH₵ 120.00 in fees collected this week')).toContainText('GH₵ 450.00 in the same week of Term 1');await expect(item('in fees collected this week').getByRole('link',{name:'Open accounts'})).toHaveAttribute('href','#/accounts');
   await expect(item('1 class is missing scores')).toContainText('Term 2 ends in 10 days: Basic 4 (Science)');await expect(item('missing scores').getByRole('link',{name:'Open scores'})).toHaveAttribute('href','#/assessment');
-  await expect(page.getByText('No learner has been absent 3 or more days this week.')).toBeVisible();
+  await expect(page.getByText('No student has been absent 3 or more days this week.')).toBeVisible();
   await item('missing scores').getByRole('link',{name:'Open scores'}).click();await expect(page).toHaveURL(/#\/assessment$/);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
@@ -470,7 +470,7 @@ test('the headteacher selects several bills and records one discount on each, wi
     await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,$3,$4)",[learner,sid,`BK-${learner.slice(0,6)}`,name]);
     await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,'2026-09-01')",[randomUUID(),sid,learner,section]);
     await owner.query(`INSERT INTO invoices(id,school_id,learner_id,term_id,class_id,lines,total_pesewas,issued_by) VALUES($1,$2,$3,$4,$5,'[{"name":"Tuition","amount_pesewas":60000}]',60000,$6)`,[randomUUID(),sid,learner,term,section,head]);}
-  await page.reload();await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Fees',exact:true}).click();
+  await page.reload();await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Accounts',exact:true}).click();
   await page.getByRole('checkbox',{name:'Select Adwoa Staffward'}).check();await page.getByRole('checkbox',{name:'Select Kojo Staffward'}).check();
   await page.getByRole('button',{name:'Adjust 2 selected'}).click();
   const dialog=page.getByRole('dialog',{name:'Adjust 2 bills'});await expect(dialog).toContainText('Adwoa Staffward, Kojo Staffward');
@@ -483,7 +483,7 @@ test('the headteacher selects several bills and records one discount on each, wi
   expect(reasons).toEqual(['Staff ward policy, board minute 4/2026','Staff ward policy, board minute 4/2026']);
   await expect(page.getByRole('button',{name:/selected$/})).toHaveCount(0);expect(errors).toEqual([]);
 });
-test('the headteacher previews learner corrections from a CSV, applies them with a reason, and the learner keeps the old values in history',async({page})=>{
+test('the headteacher previews student corrections from a CSV, applies them with a reason, and the student keeps the old values in history',async({page})=>{
   const {Pool}=require('pg');const path=require('node:path');
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
@@ -495,23 +495,23 @@ test('the headteacher previews learner corrections from a CSV, applies them with
   await owner.query("INSERT INTO class_sections(id,school_id,academic_year_id,name,level,capacity) VALUES($1,$2,$3,'Basic 6','Primary',30)",[section,sid,year]);
   await owner.query("INSERT INTO learners(id,school_id,admission_number,full_name) VALUES($1,$2,'UPD-1','Abena Mensa')",[learner,sid]);
   await owner.query("INSERT INTO enrolments(id,school_id,learner_id,class_id,start_date) VALUES($1,$2,$3,$4,'2026-09-01')",[randomUUID(),sid,learner,section]);await owner.end();
-  await page.reload();await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Learners',exact:true}).click();
+  await page.reload();await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Students',exact:true}).click();
   await page.getByRole('button',{name:'Update from CSV',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'Correct learner records from a CSV'});
+  const dialog=page.getByRole('dialog',{name:'Correct student records from a CSV'});
   await dialog.getByLabel('Or paste the rows').fill('Admission No.,Full Name,Date of Birth,Sex\nUPD-1,Abena Mensah,14/02/2015,F\n');
   await dialog.getByRole('button',{name:'Preview changes',exact:true}).click();
   await expect(dialog.getByRole('row').filter({hasText:'Date of birth'})).toContainText('2015-02-14');await expect(dialog.getByRole('row').filter({hasText:'Will be'})).toBeVisible();
   await expect(dialog.getByRole('row').filter({hasText:/^Abena Mensa.*Name/})).toContainText('Abena Mensah');
   await dialog.getByLabel('Reason for these corrections').fill('Checked against the birth certificate');
   await dialog.getByRole('button',{name:'Apply 3 correction(s)',exact:true}).click();
-  await expect(dialog.getByRole('status')).toContainText('Applied 3 correction(s) to 1 learner(s)');
+  await expect(dialog.getByRole('status')).toContainText('Applied 3 correction(s) to 1 student(s)');
   await dialog.getByRole('button',{name:'Close'}).click();
   await page.getByRole('button',{name:'Abena Mensah',exact:true}).click();
   const drawer=page.getByRole('dialog',{name:'Abena Mensah'});
   await expect(drawer).toContainText('Name: Abena Mensa → Abena Mensah');await expect(drawer).toContainText('Date of birth: not recorded → 2015-02-14');await expect(drawer).toContainText('Checked against the birth certificate');
   expect(errors).toEqual([]);
 });
-test('the Ask conversation survives leaving the page and a reload, keeps its follow-up context, clears on request and is gone after signing out',async({page})=>{
+test('Kobby AI keeps each conversation in a list on the left, survives leaving the page and a reload, keeps follow-up context per chat, deletes on request and is gone after signing out',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   const sent:string[][]=[];
   await page.route('**/assistant/chat',async route=>{
@@ -519,15 +519,17 @@ test('the Ask conversation survives leaving the page and a reload, keeps its fol
     if(messages.at(-1)?.includes('slowly'))await new Promise(done=>setTimeout(done,1500));
     await route.fulfill({json:{runId:randomUUID(),reply:`Answer ${sent.length}: Basic 6 is doing well.`,people:{},tools:['school_overview']}});
   });
-  const sections=page.getByRole('navigation',{name:'Sections',exact:true}),question=page.getByLabel('Your question',{exact:true}),savedChats=()=>page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('ask:')));
-  await signIn(page,'head@example.test','Ask');
-  await question.fill('How is Basic 6 doing?');await page.getByRole('button',{name:'Ask',exact:true}).click();
+  const sections=page.getByRole('navigation',{name:'Sections',exact:true}),history=page.getByRole('navigation',{name:'Chat history',exact:true}),question=page.getByLabel('Your question',{exact:true}),savedChats=()=>page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('ask:')));
+  await signIn(page,'head@example.test','Kobby AI');
+  await expect(page.getByText('Your chats will appear here.')).toBeVisible();
+  await question.fill('How is Basic 6 doing?');await page.getByRole('button',{name:'Send question',exact:true}).click();
   await expect(page.getByText('Answer 1: Basic 6 is doing well.')).toBeVisible();
+  await expect(history.getByRole('button',{name:'How is Basic 6 doing?',exact:true})).toHaveAttribute('aria-current','true');
   // Leave the page with an unsent draft, then come back.
   await question.fill('a half-written question');
-  await sections.getByRole('link',{name:'Home',exact:true}).click();await expect(page.getByRole('heading',{name:'Ask about your school'})).toHaveCount(0);
-  await sections.getByRole('link',{name:'Ask',exact:true}).click();
-  await expect(page.getByText('How is Basic 6 doing?',{exact:true})).toBeVisible();await expect(page.getByText('Answer 1: Basic 6 is doing well.')).toBeVisible();await expect(question).toHaveValue('a half-written question');
+  await sections.getByRole('link',{name:'Home',exact:true}).click();await expect(page.getByRole('heading',{name:'Kobby AI',exact:true})).toHaveCount(0);
+  await sections.getByRole('link',{name:'Kobby AI',exact:true}).click();
+  await expect(page.getByText('How is Basic 6 doing?',{exact:true}).first()).toBeVisible();await expect(page.getByText('Answer 1: Basic 6 is doing well.')).toBeVisible();await expect(question).toHaveValue('a half-written question');
   // A reload keeps it too, and a follow-up carries the earlier turns.
   await page.reload();await pickSchool(page);
   await expect(page.getByText('Answer 1: Basic 6 is doing well.')).toBeVisible();
@@ -537,27 +539,41 @@ test('the Ask conversation survives leaving the page and a reload, keeps its fol
   // An answer that arrives after the person has gone elsewhere is still saved.
   await question.fill('Answer slowly please');await question.press('Enter');
   await sections.getByRole('link',{name:'Home',exact:true}).click();await page.waitForTimeout(2000);
-  await sections.getByRole('link',{name:'Ask',exact:true}).click();
+  await sections.getByRole('link',{name:'Kobby AI',exact:true}).click();
   await expect(page.getByText('Answer 3: Basic 6 is doing well.')).toBeVisible();
   expect(await savedChats()).toHaveLength(1);
-  // New conversation clears it.
-  await page.getByRole('button',{name:'New conversation',exact:true}).click();
+  // A new chat starts empty, joins the list, and does not carry the first chat's turns.
+  await page.getByRole('button',{name:'New chat',exact:true}).click();
   await expect(page.getByText('Answer 1: Basic 6 is doing well.')).toHaveCount(0);await expect(page.getByRole('button',{name:'How is Basic 6 performing this term?',exact:true})).toBeVisible();
-  expect(await savedChats()).toHaveLength(0);
+  await question.fill('Who was absent most last week?');await question.press('Enter');await expect(page.getByText('Answer 4: Basic 6 is doing well.')).toBeVisible();
+  expect(sent[3]).toEqual(['Who was absent most last week?']);
+  await expect(history.getByRole('button')).toHaveCount(4);await expect(history.getByRole('listitem')).toHaveCount(2);
+  // Any chat in the list can be opened again, and a follow-up there carries only that chat's turns.
+  await history.getByRole('button',{name:'How is Basic 6 doing?',exact:true}).click();
+  await expect(page.getByText('Answer 3: Basic 6 is doing well.')).toBeVisible();await expect(page.getByText('Answer 4: Basic 6 is doing well.')).toHaveCount(0);
+  await question.fill('And the week before?');await question.press('Enter');await expect(page.getByText('Answer 5: Basic 6 is doing well.')).toBeVisible();
+  expect(sent[4]!.slice(-2)).toEqual(['Answer 3: Basic 6 is doing well.','And the week before?']);expect(sent[4]!.join(' ')).not.toContain('absent most');
+  // Search narrows the list.
+  await page.getByLabel('Search your chats',{exact:true}).fill('absent');await expect(history.getByRole('listitem')).toHaveCount(1);await page.getByLabel('Search your chats',{exact:true}).fill('');
+  // Deleting asks first, removes only that chat, and the other stays open.
+  await history.getByRole('button',{name:'Delete chat: Who was absent most last week?',exact:true}).click({force:true});
+  await history.getByRole('button',{name:'Keep',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(2);
+  await history.getByRole('button',{name:'Delete chat: Who was absent most last week?',exact:true}).click({force:true});
+  await history.getByRole('button',{name:'Delete',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(1);await expect(page.getByText('Answer 5: Basic 6 is doing well.')).toBeVisible();
+  expect(await savedChats()).toHaveLength(1);
   // Signing out deletes whatever is saved; signing in again starts clean.
-  await question.fill('One more question');await question.press('Enter');await expect(page.getByText(/^Answer 4:/)).toBeVisible();expect(await savedChats()).toHaveLength(1);
   await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeVisible();
   expect(await savedChats()).toHaveLength(0);
-  await signIn(page,'head@example.test','Ask');
-  await expect(page.getByText(/^Answer \d/)).toHaveCount(0);await expect(page.getByRole('button',{name:'How is Basic 6 performing this term?',exact:true})).toBeVisible();
+  await signIn(page,'head@example.test','Kobby AI');
+  await expect(page.getByText(/^Answer \d/)).toHaveCount(0);await expect(page.getByRole('button',{name:'How is Basic 6 performing this term?',exact:true})).toBeVisible();await expect(page.getByText('Your chats will appear here.')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
-test('a guardian practises approved questions with their child on a phone, the child moves up a level, and switching home practice off hides it',async({page,browser})=>{
+test('a parent practises approved questions with their child on a phone, the child moves up a level, and switching home practice off hides it',async({page,browser})=>{
   const {Pool}=require('pg');const path=require('node:path');
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await signIn(page,'head@example.test');
-  const suffix=randomUUID().slice(0,8),name=`Practice Learner ${suffix}`,topic=`Fractions ${suffix}`;
+  const suffix=randomUUID().slice(0,8),name=`Practice Student ${suffix}`,topic=`Fractions ${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   // The server uses the real date, while the browser clock is fixed for the other tests, so dates here come from the real clock.
   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}),shift=(d:number)=>new Date(Date.parse(`${today}T00:00:00Z`)+d*86400000).toISOString().slice(0,10);
@@ -629,23 +645,23 @@ test('a guardian practises approved questions with their child on a phone, the c
   if(await picker.count())await expect(picker).toHaveValue(learner);
   await family.close();expect(errors).toEqual([]);expect(familyErrors).toEqual([]);
 });
-test('Early years and Fees say they are loading, not "No reports yet" or "No terms yet", while the answer is on its way',async({page})=>{
+test('Early years and Accounts say they are loading, not "No reports yet" or "No terms yet", while the answer is on its way',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   const slow=async(route:any)=>{await new Promise(resolve=>setTimeout(resolve,1500));await route.continue();};
   await page.route('**/early-years/reports?**',slow);await page.route('**/finance/terms**',slow);
   await signIn(page,'head@example.test','Early years');await page.getByRole('tab',{name:'Progress reports',exact:true}).click();
   await expect(page.getByText('Loading reports…')).toBeVisible();await expect(page.getByText('No reports yet')).toHaveCount(0);
   await expect(page.getByText('Loading reports…')).toHaveCount(0,{timeout:20000});
-  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Fees',exact:true}).click();
+  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Accounts',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'Loading'}).first()).toBeVisible();await expect(page.getByText('No terms yet')).toHaveCount(0);
   await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0,{timeout:20000});expect(errors).toEqual([]);
 });
-test('each page names itself in the browser tab, and a guardian reads dates as "8 Sept 2025", not 2025-09-08',async({page})=>{
+test('each page names itself in the browser tab, and a parent reads dates as "8 Sept 2025", not 2025-09-08',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
-  await signIn(page,'head@example.test','Fees');
-  await expect(page).toHaveTitle('Fees · Adinkra Synthetic School');
-  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Learners',exact:true}).click();
-  await expect(page).toHaveTitle('Learners · Adinkra Synthetic School');
+  await signIn(page,'head@example.test','Accounts');
+  await expect(page).toHaveTitle('Accounts · Adinkra Synthetic School');
+  await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Students',exact:true}).click();
+  await expect(page).toHaveTitle('Students · Adinkra Synthetic School');
   await page.goto('/#/settings/sharing');await expect(page).toHaveTitle('Settings · Family sharing & home practice · Adinkra Synthetic School');
   await page.getByRole('button',{name:'Sign out',exact:true}).click();await expect(page).toHaveTitle('Sign in · Veloxa SmartSchool');
   await signIn(page,'guardian@example.test');
@@ -659,12 +675,12 @@ test('each page names itself in the browser tab, and a guardian reads dates as "
   expect(errors).toEqual([]);
 });
 
-test('long lists are split into pages: staff accounts by role with search and a Manage dialog, promotion under Learners',async({page})=>{
+test('long lists are split into pages: teacher accounts with search and a Manage dialog, promotion under Students',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
-  await signIn(page,'head@example.test','Settings');await openSetting(page,'Staff accounts');
-  const suffix=randomUUID().slice(0,8),login=`teacher-${suffix}@example.test`,accounts=page.getByRole('region',{name:'Staff and family accounts',exact:true});
-  await accounts.getByRole('button',{name:'Add account',exact:true}).click();
-  const add=page.getByRole('dialog',{name:'Add an account',exact:true});await add.getByLabel('Full name',{exact:true}).fill(`Layout Teacher ${suffix}`);await add.getByLabel('Email or mobile number',{exact:true}).fill(login);await add.getByRole('combobox',{name:'Role'}).selectOption('teacher');await add.getByRole('button',{name:'Create account',exact:true}).click();
+  await signIn(page,'head@example.test','Teachers');
+  const suffix=randomUUID().slice(0,8),login=`teacher-${suffix}@example.test`,accounts=page.getByRole('region',{name:'Teacher accounts',exact:true});
+  await accounts.getByRole('button',{name:'Add a teacher',exact:true}).click();
+  const add=page.getByRole('dialog',{name:'Add a teacher',exact:true});await add.getByLabel('Full name',{exact:true}).fill(`Layout Teacher ${suffix}`);await add.getByLabel('Email or mobile number',{exact:true}).fill(login);await add.getByRole('button',{name:'Create account',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'Temporary password'})).toBeVisible();
   await accounts.getByLabel('Search accounts',{exact:true}).fill(suffix);await accounts.getByRole('button',{name:'Search',exact:true}).click();
   const row=accounts.getByRole('row').filter({hasText:`Layout Teacher ${suffix}`});await expect(row).toHaveCount(1);

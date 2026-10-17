@@ -154,7 +154,7 @@ export function EarlyYears({ schoolId, csrfToken, role, view }: Props) {
   }
   async function recordObservation(event: React.FormEvent) {
     event.preventDefault(); if (!classId || !learnerId || !selectedPolicy || !roster) return;
-    const selectedLearner = roster.items.find(item => item.id === learnerId); if (!selectedLearner) { setError('Reload the class roster and select a current learner.'); return; }
+    const selectedLearner = roster.items.find(item => item.id === learnerId); if (!selectedLearner) { setError('Reload the class roster and select a current student.'); return; }
     const chosen = observationIndicators.flatMap(item => {
       const entry = entries[item.id]; if (!entry?.status) return [];
       return [{ indicatorId: item.id, status: entry.status, ...(entry.status === 'observed' ? { descriptorId: entry.descriptorId, evidence: entry.evidence?.trim() ?? '' } : {}) }];
@@ -195,7 +195,7 @@ export function EarlyYears({ schoolId, csrfToken, role, view }: Props) {
   }
   async function loadHistory(scope = historyScope, id?: string, offset = historyOffset) {
     const selectedId = id ?? (scope === 'learner' ? learnerId : classId);
-    if (!selectedId) { setError(scope === 'learner' ? 'Select a learner to inspect history.' : 'Select a class to inspect history.'); return; }
+    if (!selectedId) { setError(scope === 'learner' ? 'Select a student to inspect history.' : 'Select a class to inspect history.'); return; }
     const query = new URLSearchParams({ [scope === 'learner' ? 'learnerId' : 'classId']: selectedId, offset: String(offset), limit: '25' });
     const current = ++historyEpoch.current;
     setHistoryBusy(true); setError(''); setCorrectionId(''); setCorrectionReason(''); setCorrectionEntries({});
@@ -223,12 +223,12 @@ export function EarlyYears({ schoolId, csrfToken, role, view }: Props) {
       {level === 'Nursery' && selectedPolicy?.specialist_name && <p className="muted">School-supplied specialist review: {selectedPolicy.specialist_name}, {selectedPolicy.specialist_qualification}; reference {selectedPolicy.specialist_review_reference}, dated {selectedPolicy.specialist_reviewed_on}. Not system-verified.</p>}
     </Card>
     {!classPage.items.length ? <Card><Empty title={`No ${level} classes`} hint="Classes appear here when the school has them and you are assigned to them."/></Card> : !classId ? <Card><Empty title="Choose a class"/></Card> : <div className="columns">
-      <Card title="Class roster" hint={roster ? `${roster.total} learner(s) on ${observedOn}` : 'Loading…'} flush>
+      <Card title="Class roster" hint={roster ? `${roster.total} student(s) on ${observedOn}` : 'Loading…'} flush>
         {roster?.items.length ? <div className="table-wrap"><table><tbody>{roster.items.map(item => <tr key={item.id} className={item.id === learnerId ? 'selected' : undefined}>
           <td>{item.full_name}<span className="sub">{item.admission_number}</span></td>
           <td className="num"><div className="row-actions"><button type="button" className="secondary" disabled={busy || historyBusy} aria-label={`History for ${item.full_name}`} onClick={() => { setLearnerId(item.id); void loadHistory('learner', item.id, 0); }}>History</button><button type="button" disabled={busy || !selectedPolicy} aria-label={`Observe ${item.full_name}`} onClick={() => { setLearnerId(item.id); changeContext(); clearObservationDraft(); setObserving(true); }}>Observe</button></div></td>
-        </tr>)}</tbody></table></div> : roster && <Empty title="No learners in this class on that date"/>}
-        {roster && roster.total > roster.limit && <div className="pager"><span>Showing {roster.offset + 1}–{Math.min(roster.offset + roster.limit, roster.total)} of {roster.total}</span><div><button type="button" className="secondary" disabled={busy || roster.offset === 0} onClick={() => { setLearnerId(''); changeContext(); setRosterOffset(Math.max(0, rosterOffset - 50)); }}>Previous learners</button><button type="button" className="secondary" disabled={busy || rosterOffset + roster.limit >= roster.total} onClick={() => { setLearnerId(''); changeContext(); setRosterOffset(rosterOffset + 50); }}>More learners</button></div></div>}
+        </tr>)}</tbody></table></div> : roster && <Empty title="No students in this class on that date"/>}
+        {roster && roster.total > roster.limit && <div className="pager"><span>Showing {roster.offset + 1}–{Math.min(roster.offset + roster.limit, roster.total)} of {roster.total}</span><div><button type="button" className="secondary" disabled={busy || roster.offset === 0} onClick={() => { setLearnerId(''); changeContext(); setRosterOffset(Math.max(0, rosterOffset - 50)); }}>Previous students</button><button type="button" className="secondary" disabled={busy || rosterOffset + roster.limit >= roster.total} onClick={() => { setLearnerId(''); changeContext(); setRosterOffset(rosterOffset + 50); }}>More students</button></div></div>}
       </Card>
       <Card title={historyLearner ? `Observations · ${historyLearner.full_name}` : 'Recent class observations'} hint="Newest first. Corrections keep every earlier version." action={historyScope === 'learner' && <button type="button" className="secondary" disabled={busy || historyBusy} onClick={() => void loadHistory('class', classId, 0)}>View class history</button>} flush>
         {historyBusy && !history ? <p role="status">Loading observations…</p> : historyList}

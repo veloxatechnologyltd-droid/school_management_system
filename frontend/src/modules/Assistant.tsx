@@ -1,20 +1,20 @@
-import React, { FormEvent, useEffect, useRef } from 'react';
+import React, { FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../lib/ui';
-import { ask, chatKey, setDraft, startOver, useChat } from '../lib/chatStore';
+import { activeChat, ask, chatKey, deleteChat, newChat, openChat, setDraft, useWorkspace } from '../lib/chatStore';
 
 const suggestions: Record<string, string[]> = {
   headteacher: ['How is Basic 6 performing this term?', 'Who was absent most last week?', 'Which classes have the lowest attendance this month?', 'How did JHS 3 do in the latest mock?', 'How much in fees is still outstanding, and which classes owe most?', 'Which support plans are due for review?'],
-  teacher: ['How is my class performing this term?', 'Which topics is my class weakest in, and what can I do?', 'Who in my class was absent most last week?', 'Which of my learners need attention right now?'],
+  teacher: ['How is my class performing this term?', 'Which topics is my class weakest in, and what can I do?', 'Who in my class was absent most last week?', 'Which of my students need attention right now?'],
 };
 const toolLabel: Record<string, string> = { school_overview: 'school overview', class_performance: 'class performance', curriculum_gaps: 'curriculum gaps', practice_materials: 'practice materials', attendance_report: 'attendance',
-  find_learner: 'learner search', learner_profile: 'learner profile', support_plans: 'support plans', mock_results: 'mock results', fees_summary: 'fees' };
+  find_learner: 'student search', learner_profile: 'student profile', support_plans: 'support plans', mock_results: 'mock results', fees_summary: 'fees' };
 
 // Inline text: **bold** and learner references [[L-…]] shown as the learner's name (names never go to the AI provider).
 function inline(text: string, people: Record<string, string>, key: string): React.ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*|\[\[L-[0-9a-f-]{36}\]\])/g).filter(Boolean).map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) return <strong key={`${key}-${i}`}>{part.slice(2, -2)}</strong>;
     const ref = part.match(/^\[\[(L-[0-9a-f-]{36})\]\]$/);
-    if (ref) return <span key={`${key}-${i}`} className="learner-chip">{people[ref[1]!] ?? 'a learner'}</span>;
+    if (ref) return <span key={`${key}-${i}`} className="learner-chip">{people[ref[1]!] ?? 'a student'}</span>;
     return <React.Fragment key={`${key}-${i}`}>{part.replace(/`/g, '')}</React.Fragment>;
   });
 }
@@ -47,47 +47,79 @@ function Rendered({ text, people }: { text: string; people: Record<string, strin
   return <>{out}</>;
 }
 
-// The school assistant: ask about classes, attendance, learners, support plans, mocks and fees in plain words.
-// The conversation is kept in this browser while the person stays signed in (see lib/chatStore.ts), so it is still here after
-// they visit another page or reload; "New conversation" clears it. Each question is answered from the school's records with the asker's own access.
-export function Assistant({ schoolId, csrfToken, role }: { schoolId: string; csrfToken: string; role: string }) {
+// Kobby AI, the school assistant: ask about classes, attendance, students, support plans, mocks and fees in plain words.
+// It is laid out like the chat apps people already know: the chats so far down the left, one conversation in the middle, the question box at the bottom.
+// Conversations are kept in this browser while the person stays signed in (see lib/chatStore.ts), so they are still here after they visit
+// another page or reload. Each question is answered from the school's records with the asker's own access.
+export function Assistant({ schoolId, csrfToken, role, displayName }: { schoolId: string; csrfToken: string; role: string; displayName: string }) {
   const key = chatKey(schoolId, csrfToken);
-  const { turns, people, used, draft, busy, error } = useChat(key);
-  const log = useRef<HTMLDivElement>(null), end = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null), opened = useRef(false);
+  const space = useWorkspace(key), chat = activeChat(space);
+  const { turns, people, used, draft, busy, error } = chat;
+  const [panel, setPanel] = useState(false), [query, setQuery] = useState(''), [confirming, setConfirming] = useState('');
+  const log = useRef<HTMLDivElement>(null), end = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null), shown = useRef('');
   useEffect(() => {
-    // Coming back to a saved chat shows its latest message without moving the page; new messages scroll smoothly into view.
-    if (!opened.current) { opened.current = true; if (log.current) log.current.scrollTop = log.current.scrollHeight; return; }
+    // Opening a conversation shows its latest message without moving the page; new messages scroll smoothly into view.
+    if (shown.current !== chat.id) { shown.current = chat.id; if (log.current) log.current.scrollTop = log.current.scrollHeight; return; }
     end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [turns, busy]);
+  }, [chat.id, turns.length, busy]);
+  // The question box grows with what is typed, up to a few lines.
+  useLayoutEffect(() => { const box = input.current; if (!box) return; box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 200)}px`; }, [draft, chat.id]);
 
   const send = (question: string) => { void ask(key, schoolId, csrfToken, question).then(() => input.current?.focus()); };
   const submit = (e: FormEvent) => { e.preventDefault(); send(draft); };
-  const restart = () => { startOver(key); input.current?.focus(); };
+  const begin = () => { newChat(key); setPanel(false); setConfirming(''); setTimeout(() => input.current?.focus(), 0); };
+  const needle = query.trim().toLowerCase();
+  const history = space.chats.filter(c => c.turns.length && (!needle || c.title.toLowerCase().includes(needle))).sort((a, b) => b.at - a.at);
+  const first = displayName.split(' ')[0] ?? '';
 
-  return <section className="assistant" aria-labelledby="assistant-title">
-    <div className="assistant-head">
-      <div><h2 id="assistant-title">Ask about your school</h2><p className="card-hint">Answers come from your school's records, limited to what your account can see. Check important figures on the page they come from.</p><p className="card-hint">{turns.length ? 'This conversation stays here while you are signed in. Start a new one any time.' : 'Your conversation is kept while you stay signed in.'}</p></div>
-      {turns.length > 0 && <button type="button" className="secondary" onClick={restart} disabled={busy}><Icon name="add_comment"/>New conversation</button>}
+  return <section className={`kobby${panel ? ' history-open' : ''}`} aria-label="Kobby AI">
+    <aside className="kobby-side" aria-label="Your chats">
+      <div className="kobby-side-top">
+        <button type="button" className="kobby-new" onClick={begin} disabled={!turns.length}><Icon name="edit_square"/>New chat</button>
+        <label className="search kobby-search"><span className="sr-only">Search your chats</span><Icon name="search"/><input type="search" aria-label="Search your chats" value={query} maxLength={80} onChange={e => setQuery(e.target.value)} placeholder="Search chats"/></label>
+      </div>
+      <nav className="kobby-list" aria-label="Chat history">
+        {history.length ? <ul>{history.map(c => <li key={c.id} className={c.id === chat.id ? 'active' : undefined}>
+          {confirming === c.id
+            ? <div className="kobby-confirm" role="group" aria-label={`Delete ${c.title}`}><span>Delete this chat?</span><button type="button" className="small" onClick={() => { deleteChat(key, c.id); setConfirming(''); }}>Delete</button><button type="button" className="secondary small" onClick={() => setConfirming('')}>Keep</button></div>
+            : <><button type="button" className="kobby-item" aria-current={c.id === chat.id ? 'true' : undefined} onClick={() => { openChat(key, c.id); setPanel(false); }}><span>{c.title}</span>{c.busy && <span className="dots" aria-label="Answering"><i/><i/><i/></span>}</button>
+              <button type="button" className="kobby-del" aria-label={`Delete chat: ${c.title}`} disabled={c.busy} onClick={() => setConfirming(c.id)}><Icon name="delete"/></button></>}
+        </li>)}</ul> : <p className="muted kobby-none">{needle ? 'No chats match your search.' : 'Your chats will appear here.'}</p>}
+      </nav>
+      <p className="kobby-privacy">Chats stay in this browser while you are signed in. Signing out clears them.</p>
+    </aside>
+    {panel && <button type="button" className="kobby-scrim" aria-label="Close your chats" onClick={() => setPanel(false)}/>}
+    <div className="kobby-main">
+      <div className="kobby-head">
+        <button type="button" className="icon-button kobby-toggle" aria-label="Show your chats" aria-expanded={panel} onClick={() => setPanel(true)}><Icon name="menu_open"/></button>
+        <h2>Kobby AI</h2>{chat.title && <span className="kobby-chat-title">{chat.title}</span>}
+      </div>
+      <div className="kobby-thread" aria-live="polite" ref={log}>
+        <div className="kobby-col">
+          {!turns.length && <div className="kobby-empty">
+            <span className="kobby-logo" aria-hidden="true"><Icon name="auto_awesome"/></span>
+            <h3>{first ? `Hi ${first}, how can I help?` : 'How can I help?'}</h3>
+            <p className="muted">Ask about your school in plain words. Answers come from your school's records, limited to what your account can see. You can follow up, for example "What can we do about it?"</p>
+            <div className="kobby-suggestions">{(suggestions[role] ?? suggestions.teacher!).map(s => <button type="button" key={s} className="kobby-suggestion" onClick={() => send(s)} disabled={busy}>{s}</button>)}</div>
+          </div>}
+          {turns.map((t, i) => t.role === 'user'
+            ? <div key={i} className="kobby-msg user"><p>{t.text}</p></div>
+            : <div key={i} className="kobby-msg assistant"><span className="kobby-avatar" aria-hidden="true"><Icon name="auto_awesome"/></span><div className="kobby-body"><Rendered text={t.text} people={people}/>
+              {used[i]?.length ? <p className="bubble-source">Checked: {[...new Set(used[i])].map(n => toolLabel[n] ?? n).join(', ')}</p> : null}</div></div>)}
+          {busy && <div className="kobby-msg assistant" role="status"><span className="kobby-avatar" aria-hidden="true"><Icon name="auto_awesome"/></span><div className="kobby-body kobby-wait"><span className="dots" aria-hidden="true"><i/><i/><i/></span> Looking through the school records…</div></div>}
+          <div ref={end}/>
+        </div>
+      </div>
+      <div className="kobby-compose">
+        {error && <p role="alert">{error}</p>}
+        <form className="kobby-form" onSubmit={submit}>
+          <label className="sr-only" htmlFor="kobby-question">Your question</label>
+          <textarea id="kobby-question" ref={input} rows={1} maxLength={4000} value={draft} placeholder="Ask Kobby AI about your school"
+            onChange={e => setDraft(key, e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!busy) send(draft); } }}/>
+          <button type="submit" className="kobby-send" aria-label="Send question" disabled={busy || !draft.trim()}><Icon name="arrow_upward"/></button>
+        </form>
+        <p className="kobby-note">Kobby AI only reads records; it cannot change anything. Student names from your records are not sent to the AI provider. Check important figures on the page they come from.</p>
+      </div>
     </div>
-    <div className="assistant-log" aria-live="polite" ref={log}>
-      {!turns.length && <div className="assistant-start">
-        <p className="muted">Try one of these, or ask in your own words. You can follow up, for example "What can we do about it?"</p>
-        <div className="assistant-suggestions">{(suggestions[role] ?? suggestions.teacher!).map(s => <button type="button" key={s} className="secondary" onClick={() => send(s)} disabled={busy}>{s}</button>)}</div>
-      </div>}
-      {turns.map((t, i) => <div key={i} className={`bubble bubble-${t.role}`}>
-        {t.role === 'user' ? <p>{t.text}</p> : <Rendered text={t.text} people={people}/>}
-        {t.role === 'assistant' && used[i]?.length ? <p className="bubble-source">Checked: {[...new Set(used[i])].map(n => toolLabel[n] ?? n).join(', ')}</p> : null}
-      </div>)}
-      {busy && <div className="bubble bubble-assistant bubble-wait" role="status"><span className="dots" aria-hidden="true"><i/><i/><i/></span> Looking through the school records…</div>}
-      <div ref={end}/>
-    </div>
-    {error && <p role="alert">{error}</p>}
-    <form className="assistant-form" onSubmit={submit}>
-      <label className="sr-only" htmlFor="assistant-question">Your question</label>
-      <textarea id="assistant-question" ref={input} rows={2} maxLength={4000} value={draft} placeholder="Ask a question, e.g. How is Basic 6 doing in Mathematics?"
-        onChange={e => setDraft(key, e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(draft); } }} disabled={busy}/>
-      <button type="submit" disabled={busy || !draft.trim()}><Icon name="send"/>Ask</button>
-    </form>
-    <p className="assistant-note">The assistant only reads records; it cannot change anything. Learner names from your records are not sent to the AI provider.</p>
   </section>;
 }

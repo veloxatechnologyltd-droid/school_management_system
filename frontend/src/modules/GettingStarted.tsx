@@ -43,18 +43,18 @@ export function GettingStarted({ schoolId, schoolName, displayName, csrfToken, c
   const steps = [
     { done: progress.years.length > 0, title: 'Add your academic year', why: 'Classes, terms and reports all belong to a school year.' },
     { done: progress.classes > 0, title: 'Create your classes', why: 'For example Nursery 1, KG 2, Primary 4 or JHS 1. Add every class you run.' },
-    { done: progress.teachers > 0, title: 'Give your teachers a sign-in', why: 'Each teacher gets a temporary password to share with them privately.', href: '#/settings/staff', go: 'Add staff' },
-    { done: progress.assignments > 0, title: 'Assign teachers to classes', why: 'A teacher only sees the classes you assign to them.', href: '#/settings/assignments', go: 'Assign teachers' },
-    { done: progress.learners > 0, title: 'Add your learners', why: 'Upload your class lists from Excel (CSV), or record learners one at a time.', href: '#/learners', go: 'Add learners' },
+    { done: progress.teachers > 0, title: 'Give your teachers a sign-in', why: 'Each teacher gets a temporary password to share with them privately.', href: '#/teachers', go: 'Add teachers' },
+    { done: progress.assignments > 0, title: 'Assign teachers to classes', why: 'A teacher only sees the classes you assign to them.', href: '#/teachers/assignments', go: 'Assign teachers' },
+    { done: progress.learners > 0, title: 'Add your students', why: 'Upload your class lists from Excel (CSV), or record students one at a time.', href: '#/students', go: 'Add students' },
   ];
   const doneCount = steps.filter(s => s.done).length, next = steps.findIndex(s => !s.done);
   const hour = Number(new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Accra', hour: '2-digit', hour12: false }));
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const dateLine = new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Accra', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const header = <PageHeader eyebrow={dateLine} title={`${greeting}, ${displayName.split(' ')[0]}`} blurb={`${schoolName}${progress.years[0] ? ` · ${progress.years[0].name}` : ''}`}
-    actions={next === -1 ? <><a className="button" href="#/attendance"><Icon name="event_available"/>Take attendance</a><a className="button secondary" href="#/fees"><Icon name="payments"/>Record payment</a><a className="button secondary" href="#/notices"><Icon name="send"/>Send notice</a></> : undefined}/>;
+    actions={next === -1 ? <><a className="button" href="#/attendance"><Icon name="event_available"/>Take attendance</a><a className="button secondary" href="#/accounts"><Icon name="payments"/>Record payment</a><a className="button secondary" href="#/notices"><Icon name="send"/>Send notice</a></> : undefined}/>;
   const stats = <div className="stats">
-    <Stat label="Learners" value={progress.enrolled} caption="Enrolled today" icon="groups"/>
+    <Stat label="Students" value={progress.enrolled} caption="Enrolled today" icon="groups"/>
     <Stat label="Classes" value={progress.yearClasses} caption={progress.years[0] ? progress.years[0].name : 'No academic year yet'} icon="meeting_room"/>
     <Stat label="Teachers" value={progress.teachers} caption="With a sign-in" icon="badge"/>
     <Stat label="Assignments" value={progress.assignments} caption="Teacher to class" icon="assignment_ind" tone={progress.assignments ? 'neutral' : 'caution'}/>
@@ -80,7 +80,7 @@ export function GettingStarted({ schoolId, schoolName, displayName, csrfToken, c
           <p className="muted">Adding classes to {progress.years[0].name}.</p>
           <div className="grid"><label>Class name<input value={newClass.name} onChange={e => setNewClass({ ...newClass, name: e.target.value })} required maxLength={80} placeholder="Primary 1"/></label>
           <label>Level<select value={newClass.level} onChange={e => setNewClass({ ...newClass, level: e.target.value })}>{levels.map(l => <option key={l}>{l}</option>)}</select></label>
-          <label>Maximum learners<input type="number" min={1} value={newClass.capacity} onChange={e => setNewClass({ ...newClass, capacity: e.target.value })} required/></label></div>
+          <label>Maximum students<input type="number" min={1} value={newClass.capacity} onChange={e => setNewClass({ ...newClass, capacity: e.target.value })} required/></label></div>
           <button disabled={busy}>{busy ? 'Saving…' : 'Add class'}</button>
           {added.length > 0 && <p role="status">Added: {added.join(', ')}. Add the next class, or move on to step 3.</p>}
         </form>}

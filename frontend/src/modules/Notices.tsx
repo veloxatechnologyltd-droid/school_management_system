@@ -34,9 +34,9 @@ export function Notices({ schoolId, csrfToken }: { schoolId: string; csrfToken: 
     await post('', { title: form.title, body: form.body, audience: form.audience, ...(form.audience === 'class' ? { classId: form.classId } : {}), ...(form.audience === 'owing' ? { termId: form.termId } : {}) });
     setForm(empty); setComposing(false); setNote('Saved as a draft. Nothing is sent until you approve it.');
   }); };
-  const approve = (n: Notice) => { if (window.confirm(`Send "${n.title}"? The guardians it reaches are fixed when you approve.`)) void act(async () => {
+  const approve = (n: Notice) => { if (window.confirm(`Send "${n.title}"? The parents it reaches are fixed when you approve.`)) void act(async () => {
     const r = await post(`/${n.id}/approve`, { version: n.version });
-    setNote(`Approved for ${r.recipients} guardian${r.recipients === 1 ? '' : 's'}; ${r.withPhone} will also get an SMS.`);
+    setNote(`Approved for ${r.recipients} parent${r.recipients === 1 ? '' : 's'}; ${r.withPhone} will also get an SMS.`);
   }); };
   const cancel = (n: Notice) => { const reason = window.prompt(`Why cancel "${n.title}"? Messages not yet sent will be stopped.`); if (reason) void act(async () => { const r = await post(`/${n.id}/cancel`, { reason }); setNote(`Cancelled. ${r.unsentStopped} unsent message${r.unsentStopped === 1 ? '' : 's'} stopped.`); }); };
   const retry = (n: Notice) => void act(async () => { const r = await post(`/${n.id}/retry-failed`, {}); setNote(`${r.requeued} failed message${r.requeued === 1 ? '' : 's'} queued again.`); });
@@ -48,16 +48,16 @@ export function Notices({ schoolId, csrfToken }: { schoolId: string; csrfToken: 
   const messages = <>{error && <p role="alert">{error}</p>}{note && <p role="status">{note}</p>}</>;
   const opened = open && notices.find(n => n.id === open.id);
 
-  return <section aria-label="Notices to guardians" className="page">
-    <PageHeader eyebrow="Communication" title="Notices" blurb="Short messages to guardians. Nothing is sent until you approve it."
+  return <section aria-label="Notices to parents" className="page">
+    <PageHeader eyebrow="Communication" title="Notices" blurb="Short messages to parents. Nothing is sent until you approve it."
       actions={<button type="button" onClick={() => { setError(''); setNote(''); setComposing(true); }}><Icon name="edit"/>New notice</button>}/>
     {!composing && !open && messages}
     <div className="stats">
       <Stat label="Drafts" value={notices.filter(n => n.status === 'draft').length} caption="Waiting for your approval" tone={notices.some(n => n.status === 'draft') ? 'caution' : 'neutral'} icon="drafts"/>
       <Stat label="Sent" value={notices.filter(n => n.status === 'approved').length} caption="Approved notices" tone="positive" icon="send"/>
-      <Stat label="Guardians reached" value={notices.filter(n => n.status === 'approved').reduce((sum, n) => sum + sentCount(n), 0)} caption="Counted once per notice" icon="family_restroom"/>
+      <Stat label="Parents reached" value={notices.filter(n => n.status === 'approved').reduce((sum, n) => sum + sentCount(n), 0)} caption="Counted once per notice" icon="family_restroom"/>
     </div>
-    <Card title="Notices to guardians" hint="Only guardians with a verified contact right receive a notice." flush>
+    <Card title="Notices to parents" hint="Only parents with a verified contact right receive a notice." flush>
       {notices.length ? <ul className="notice-list">{notices.map(n => <li key={n.id}>
         <div className="notice-head"><strong>{n.title}</strong><Pill tone={statusTone[n.status] ?? 'neutral'}>{statusName[n.status] ?? n.status}</Pill></div>
         <p>{n.body}</p>
@@ -73,7 +73,7 @@ export function Notices({ schoolId, csrfToken }: { schoolId: string; csrfToken: 
 
     {composing && <Dialog title="New notice" onClose={() => setComposing(false)}>
       {messages}
-      <p className="muted">Guardians see it in their app; those with a phone number on their account can also get an SMS.</p>
+      <p className="muted">Parents see it in their app; those with a phone number on their account can also get an SMS.</p>
       <form onSubmit={create}>
         <label>Title<input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required minLength={3} maxLength={100}/></label>
         <label>Message<textarea value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} required minLength={3} maxLength={320} rows={3}/></label>
@@ -87,7 +87,7 @@ export function Notices({ schoolId, csrfToken }: { schoolId: string; csrfToken: 
 
     {opened && open && <Dialog title={`Recipients · ${opened.title}`} drawer onClose={() => setOpen(null)}>
       {messages}
-      {open.items.length ? <div className="table-wrap"><table><thead><tr><th>Guardian</th><th>Delivery</th></tr></thead><tbody>{open.items.map(d => <tr key={d.id}><td>{d.guardian}{d.phone && <span className="sub">{d.phone}</span>}</td><td>{stateLabel[d.state] ?? d.state}{d.last_error && <span className="sub">{d.last_error}</span>}</td></tr>)}</tbody></table></div> : <Empty title="No recipients recorded"/>}
+      {open.items.length ? <div className="table-wrap"><table><thead><tr><th>Parent</th><th>Delivery</th></tr></thead><tbody>{open.items.map(d => <tr key={d.id}><td>{d.guardian}{d.phone && <span className="sub">{d.phone}</span>}</td><td>{stateLabel[d.state] ?? d.state}{d.last_error && <span className="sub">{d.last_error}</span>}</td></tr>)}</tbody></table></div> : <Empty title="No recipients recorded"/>}
     </Dialog>}
   </section>;
 }

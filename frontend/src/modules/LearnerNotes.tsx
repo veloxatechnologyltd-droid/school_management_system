@@ -6,7 +6,7 @@ export type Note = { id: string; authorRole: 'headteacher' | 'teacher' | 'guardi
   mine: boolean; canWithdraw: boolean; withdrawn: { at: string; reason: string } | null };
 const noteCategories = [['general', 'General'], ['classwork', 'Class work'], ['behaviour', 'Behaviour'], ['attendance', 'Attendance'], ['health', 'Health'], ['home', 'Home']] as const;
 const categoryLabel = (id: string) => noteCategories.find(([key]) => key === id)?.[1] ?? id;
-const roleLabel = { headteacher: 'Headteacher', teacher: 'Teacher', guardian: 'Parent or guardian' } as const;
+const roleLabel = { headteacher: 'Headteacher', teacher: 'Teacher', guardian: 'Parent or parent' } as const;
 
 // Notes on a learner between the school and the family. Staff choose whether a note is shared with the family;
 // a family's note always goes to the school. A note is never edited: its author (or the headteacher) withdraws it with a reason.
@@ -31,7 +31,7 @@ export function NotesCard({ schoolId, csrfToken, learnerId, notes, family, onCha
       <label>About<select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>{noteCategories.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
       <label className="note-body">Note<textarea value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} required minLength={3} maxLength={2000} rows={3}
         placeholder={family ? 'For example: she was unwell this week and missed her homework.' : 'What you noticed, and anything agreed.'}/></label>
-      {!family && <label className="check"><input type="checkbox" checked={form.share} onChange={e => setForm({ ...form, share: e.target.checked })}/><span>Share with the family (verified guardians will see it)</span></label>}
+      {!family && <label className="check"><input type="checkbox" checked={form.share} onChange={e => setForm({ ...form, share: e.target.checked })}/><span>Share with the family (verified parents will see it)</span></label>}
       <div className="actions"><button disabled={busy || form.body.trim().length < 3}>{family ? 'Send to the school' : 'Add note'}</button></div>
     </form>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}

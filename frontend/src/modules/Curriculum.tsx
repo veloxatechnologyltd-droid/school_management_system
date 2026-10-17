@@ -56,7 +56,7 @@ export function Curriculum({ schoolId, csrfToken, role = 'headteacher', part = '
     <HomePracticeSwitch schoolId={schoolId} csrfToken={csrfToken}/>
   </section>;
   return <section aria-label="Curriculum indicators" className="page">
-    <p className="muted">Enter the topics (indicators) your school teaches for each subject, from your curriculum documents or scheme of work. The headteacher and teachers can add them; you can retire your own, and the headteacher any. Teachers tag them on class work on the Assessment page, and Performance then shows which ones a class has not yet mastered. Approve a topic for the term on the Topics page and Claude prepares its lesson and practice. Mark codes as official only when copied from the official curriculum.</p>
+    <p className="muted">Enter the topics (indicators) your school teaches for each subject, from your curriculum documents or scheme of work. The headteacher and teachers can add them; you can retire your own, and the headteacher any. Teachers tag them on class work on the Assessment page, and Performance then shows which ones a class has not yet mastered. Approve a topic for the term on the Learning material tab and Claude prepares its lesson and practice. Mark codes as official only when copied from the official curriculum.</p>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <Card flush>
       <div className="toolbar">
@@ -93,7 +93,7 @@ function FamilySharing({ schoolId, csrfToken }: { schoolId: string; csrfToken: s
   const save = (share: boolean) => { if (!setting) return; setBusy(true); setError('');
     request<{ shareWithFamilies: boolean; version: number }>(`/schools/${schoolId}/assessment/sharing`, { method: 'PUT', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), shareWithFamilies: share, ...(setting.version ? { version: setting.version } : {}) }) })
       .then(setSetting).catch(e => setError((e as Error).message)).finally(() => setBusy(false)); };
-  return <Card title="Progress shared with families" hint="Report cards are always shown to verified guardians once published. Sharing adds each subject's monthly progress from class exercises, homework and tests, and the home-help notes teachers write in support plans.">
+  return <Card title="Progress shared with families" hint="Report cards are always shown to verified parents once published. Sharing adds each subject's monthly progress from class exercises, homework and tests, and the home-help notes teachers write in support plans.">
     {error && <p role="alert">{error}</p>}
     {setting && <div className="choice-row" role="radiogroup" aria-label="Progress shared with families">
       <label className="check"><input type="radio" name="family-sharing" checked={!setting.shareWithFamilies} disabled={busy} onChange={() => save(false)}/><span>Report cards only</span></label>
@@ -108,7 +108,7 @@ function HomePracticeSwitch({ schoolId, csrfToken }: { schoolId: string; csrfTok
   const save = (enabled: boolean) => { if (!setting) return; setBusy(true); setError('');
     request<{ enabled: boolean; version: number }>(`/schools/${schoolId}/practice/settings`, { method: 'PUT', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId: crypto.randomUUID(), enabled, ...(setting.version ? { version: setting.version } : {}) }) })
       .then(setSetting).catch(e => setError((e as Error).message)).finally(() => setBusy(false)); };
-  return <Card title="Home practice" hint="Children practise at home on a verified guardian's phone: five questions at a time on the topics they find hardest, using only questions a teacher has approved. Teachers see what was practised beside class work; it never changes continuous assessment or report cards. There are no learner logins and no marks, ranks or comparisons shown to families.">
+  return <Card title="Home practice" hint="Children practise at home on a verified parent's phone: five questions at a time on the topics they find hardest, using only questions a teacher has approved. Teachers see what was practised beside class work; it never changes continuous assessment or report cards. There are no student logins and no marks, ranks or comparisons shown to families.">
     {error && <p role="alert">{error}</p>}
     {setting && <div className="choice-row" role="radiogroup" aria-label="Home practice">
       <label className="check"><input type="radio" name="home-practice" checked={!setting.enabled} disabled={busy} onChange={() => save(false)}/><span>Off</span></label>

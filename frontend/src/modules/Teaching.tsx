@@ -214,7 +214,7 @@ export function Teaching({ schoolId, csrfToken, role, onAccessRefresh }: Props) 
 
   // A teacher's own page: the learners in each class they are assigned to.
   if (!isHeadteacher) return <section aria-labelledby="teaching-title" className="page my-classes">
-    <PageHeader id="teaching-title" eyebrow="My classes" title="My classes" blurb="Learners in the classes your headteacher assigned to you. Open a name to see their page."
+    <PageHeader id="teaching-title" eyebrow="My classes" title="My classes" blurb="Students in the classes your headteacher assigned to you. Open a name to see their page."
       actions={<button type="button" className="secondary" disabled={busy || teacherClassLoading} onClick={() => void refresh()}><Icon name="refresh"/>Refresh class access</button>}/>
     {messages}
     <Card flush>
@@ -229,10 +229,10 @@ export function Teaching({ schoolId, csrfToken, role, onAccessRefresh }: Props) 
       {teacherClassTotal > 25 && <Pager offset={teacherClassOffset} shown={teacherClassRows.length} total={teacherClassTotal} noun="classes" onMove={setTeacherClassOffset}/>}
       {teacherClassLoading && !selectedClass ? <p role="status">Loading assigned classes…</p> : !teacherClassRows.length && !selectedClass ? <Empty title={teacherClassSearch ? 'No assigned classes match this search' : 'No classes assigned for this date'} hint={teacherClassSearch ? undefined : 'Your headteacher assigns classes. Ask them if one is missing.'}/> : null}
       {selectedClass && <div className="class-roster">
-        <div className="roster-head"><div><h3>{rosterClassName || selectedClassOption?.name || 'Class roster'}</h3><p className="card-hint">{rosterDate ? `Roster on ${rosterDate} · ` : ''}{rosterTotal} learner{rosterTotal === 1 ? '' : 's'}</p></div>
-          <form onSubmit={event => { event.preventDefault(); setRosterOffset(0); setRosterSearch(rosterSearchInput.trim()); }}><label className="search"><span className="sr-only">Search this roster</span><Icon name="search"/><input type="search" aria-label="Search this roster" maxLength={120} value={rosterSearchInput} onChange={event => setRosterSearchInput(event.target.value)} placeholder="Learner name or admission number"/></label><button type="submit" className="secondary" disabled={rosterLoading}>Search roster</button></form></div>
-        {rosterLoading ? <p role="status">Checking assignment and loading the current roster…</p> : roster.length ? <ul className="roster-grid">{roster.map(row => <li key={row.enrolment_id}><span className="avatar" aria-hidden="true">{row.full_name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}</span><span><strong><a className="learner-link" href={`#/learner/${row.id}`}>{row.full_name}</a></strong><span className="sub">{row.admission_number}</span></span></li>)}</ul> : <Empty title="No learners match this roster search"/>}
-        {rosterTotal > 25 && <Pager offset={rosterOffset} shown={roster.length} total={rosterTotal} noun="learners" busy={rosterLoading} onMove={setRosterOffset}/>}
+        <div className="roster-head"><div><h3>{rosterClassName || selectedClassOption?.name || 'Class roster'}</h3><p className="card-hint">{rosterDate ? `Roster on ${rosterDate} · ` : ''}{rosterTotal} student{rosterTotal === 1 ? '' : 's'}</p></div>
+          <form onSubmit={event => { event.preventDefault(); setRosterOffset(0); setRosterSearch(rosterSearchInput.trim()); }}><label className="search"><span className="sr-only">Search this roster</span><Icon name="search"/><input type="search" aria-label="Search this roster" maxLength={120} value={rosterSearchInput} onChange={event => setRosterSearchInput(event.target.value)} placeholder="Student name or admission number"/></label><button type="submit" className="secondary" disabled={rosterLoading}>Search roster</button></form></div>
+        {rosterLoading ? <p role="status">Checking assignment and loading the current roster…</p> : roster.length ? <ul className="roster-grid">{roster.map(row => <li key={row.enrolment_id}><span className="avatar" aria-hidden="true">{row.full_name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}</span><span><strong><a className="learner-link" href={`#/learner/${row.id}`}>{row.full_name}</a></strong><span className="sub">{row.admission_number}</span></span></li>)}</ul> : <Empty title="No students match this roster search"/>}
+        {rosterTotal > 25 && <Pager offset={rosterOffset} shown={roster.length} total={rosterTotal} noun="students" busy={rosterLoading} onMove={setRosterOffset}/>}
       </div>}
     </Card>
   </section>;

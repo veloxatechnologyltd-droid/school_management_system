@@ -22,8 +22,8 @@ test.setTimeout(180_000);
 test('the head approves a topic and Claude makes it; a teacher reads and retires; a parent reports a question on a phone; the head handles the report',async({page,browser})=>{
   const owner=new Pool({host:path.resolve(__dirname,'../.local/postgres/socket'),port:55438,database:process.env.LOCAL_DB_NAME??'school_saas_local',user:process.env.USER});
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
-  await signIn(page,'head@example.test','Topics');
-  const suffix=randomUUID().slice(0,8),topic=`Fractions ${suffix}`,second=`Decimals ${suffix}`,third=`Measures ${suffix}`,fourth=`Shapes ${suffix}`,elsewhere=`Algebra ${suffix}`,className=`Topics class ${suffix}`,learnerName=`Topics Learner ${suffix}`,termName=`Topics term ${suffix}`,yearName=`Topics year ${suffix}`;
+  await signIn(page,'head@example.test','Curriculum');await page.getByRole('tab',{name:'Learning material',exact:true}).click();
+  const suffix=randomUUID().slice(0,8),topic=`Fractions ${suffix}`,second=`Decimals ${suffix}`,third=`Measures ${suffix}`,fourth=`Shapes ${suffix}`,elsewhere=`Algebra ${suffix}`,className=`Topics class ${suffix}`,learnerName=`Topics Student ${suffix}`,termName=`Topics term ${suffix}`,yearName=`Topics year ${suffix}`;
   const session=await (await page.request.get('/api/v1/auth/session')).json();
   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Africa/Accra'}),shift=(d:number)=>new Date(Date.parse(`${today}T00:00:00Z`)+d*86400000).toISOString().slice(0,10);
   async function send(method:'POST'|'PUT',route:string,body:Record<string,unknown>,status=201){const response=await page.request.fetch(`/api/v1/schools/${school}${route}`,{method,headers:{'x-csrf-token':session.csrfToken},data:{operationId:randomUUID(),...body}});expect(response.status(),await response.text()).toBe(status);return response.json();}
@@ -50,7 +50,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
 
   try {
     // ---- The headteacher approves the topic for the class and Claude makes the lesson and questions.
-    await page.reload();await expect(page.getByRole('heading',{name:'Topics',exact:true})).toBeVisible();
+    await page.reload();await page.getByRole('tab',{name:'Learning material',exact:true}).click();await expect(page.getByRole('tab',{name:'Learning material',exact:true})).toHaveAttribute('aria-selected','true');
     await page.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
     await expect(page.getByRole('checkbox',{name:`Select ${elsewhere}`})).toBeVisible();
     await page.getByRole('checkbox',{name:`Select ${topic}`}).check();await page.getByRole('checkbox',{name:`Select ${second}`}).check();await page.getByRole('checkbox',{name:`Select ${third}`}).check();await page.getByRole('checkbox',{name:`Select ${fourth}`}).check();
@@ -81,7 +81,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
 
     // ---- The class teacher sees their class's topic and not another class level's.
     const teacher=await browser.newPage();const teacherErrors:string[]=[];teacher.on('pageerror',error=>teacherErrors.push(error.message));
-    await signIn(teacher,'teacher@example.test','Topics');
+    await signIn(teacher,'teacher@example.test','Curriculum');await teacher.getByRole('tab',{name:'Learning material',exact:true}).click();
     await teacher.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
     await expect(teacher.locator('li').filter({hasText:topic}).getByText('Approved',{exact:true})).toBeVisible();
     await expect(teacher.getByRole('checkbox',{name:`Select ${elsewhere}`})).toHaveCount(0);
@@ -135,7 +135,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     const afterStudy=family.getByRole('dialog',{name:`Practice: ${third}`});await expect(afterStudy.getByText('Question 1 of 5')).toBeVisible();await family.keyboard.press('Escape');
     // The head sees the study on the learner's page, beside class work.
     await page.goto(`/#/learner/${learner}`);await expect(page.getByText('Lessons studied')).toBeVisible();await expect(page.getByText(/no check taken/)).toBeVisible();
-    await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Topics',exact:true}).click();await expect(page.getByRole('heading',{name:'Topics',exact:true})).toBeVisible();
+    await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Curriculum',exact:true}).click();await page.getByRole('tab',{name:'Learning material',exact:true}).click();await expect(page.getByRole('tab',{name:'Learning material',exact:true})).toHaveAttribute('aria-selected','true');
     // A parent can report a lesson: it stops at once, and Study is no longer offered for that topic.
     await card.locator('li').filter({hasText:fourth}).getByRole('button',{name:'Study first',exact:true}).click();
     const reported=family.getByRole('dialog',{name:`Study: ${fourth}`});await reported.getByRole('button',{name:'This looks wrong',exact:true}).click();
@@ -171,7 +171,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     await page.getByRole('button',{name:'Questions and answers',exact:true}).first().click();
     const staffLook=page.getByRole('dialog');await expect(staffLook.locator('.history-questions > li')).toHaveCount(5);await expect(staffLook.getByText("The student's answer").first()).toBeVisible();await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'Read the lesson',exact:true}).first().click();await expect(page.getByRole('dialog').getByText(/open for/)).toBeVisible();await page.keyboard.press('Escape');
-    await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Topics',exact:true}).click();await expect(page.getByRole('heading',{name:'Topics',exact:true})).toBeVisible();
+    await page.getByRole('navigation',{name:'Sections',exact:true}).getByRole('link',{name:'Curriculum',exact:true}).click();await page.getByRole('tab',{name:'Learning material',exact:true}).click();await expect(page.getByRole('tab',{name:'Learning material',exact:true})).toHaveAttribute('aria-selected','true');
 
     // ---- The teacher and the head see the report, without the parent's name, and handle it.
     await teacher.reload();await teacher.getByRole('combobox',{name:'Term',exact:true}).selectOption({label:`${termName} · ${yearName} (now)`});
@@ -191,7 +191,7 @@ test('the head approves a topic and Claude makes it; a teacher reads and retires
     const notes=teacher.locator('.card').filter({has:teacher.getByRole('heading',{name:'Learning notes',exact:true})});await expect(notes).toBeVisible();
     await expect(notes.getByText(/parents never see these/)).toBeVisible();
     const how=notes.getByLabel('How to help this student'),add=notes.getByRole('button',{name:'Add learning note',exact:true});
-    await how.fill(`Learner ${suffix} needs a front seat`);await add.click();await expect(notes.getByRole('alert')).toContainText("Leave the student's name");
+    await how.fill(`Student ${suffix} needs a front seat`);await add.click();await expect(notes.getByRole('alert')).toContainText("Leave the student's name");
     await how.fill('Feels unwell often so go gently');await add.click();await expect(notes.getByRole('alert')).toContainText('Health, family and home matters');
     const text='Short instructions and one example first';
     await how.fill(text);await notes.getByLabel(/Topic to put first/).selectOption({label:`Maths ${suffix}: ${second}`});await expect(notes.getByLabel(/Keep it first until/)).toBeVisible();await add.click();

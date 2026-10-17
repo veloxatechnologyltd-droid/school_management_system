@@ -43,14 +43,14 @@ export function ClassHomePractice({ schoolId, classId, termId, earlyYears = fals
   if (earlyYears) return <Empty title="Home practice is for Primary and JHS" hint="It is built from class exercises, homework and tests, which Nursery and KG classes do not record. These children are not offered it."/>;
   if (error) return <p role="alert">{error}</p>;
   if (!data) return <p className="muted">Loading…</p>;
-  if (!data.total) return <Empty title="No learners in this class for the term"/>;
+  if (!data.total) return <Empty title="No students in this class for the term"/>;
   return <>
     <div className="stats pad">
       <Stat label="Practising this week" value={`${data.practisingThisWeek} of ${data.total}`} caption={`Since Monday ${shortDate(data.weekStart)}`} icon="menu_book" tone={data.practisingThisWeek ? 'positive' : 'neutral'}/>
-      <Stat label="Practised this term" value={`${data.practisedThisTerm} of ${data.total}`} caption="Learners with at least one finished session" icon="history_edu"/>
+      <Stat label="Practised this term" value={`${data.practisedThisTerm} of ${data.total}`} caption="Students with at least one finished session" icon="history_edu"/>
     </div>
     {!data.enabled && <p className="muted pad">Home practice is switched off for this school. Turn it on in Settings, under Family sharing and home practice.</p>}
-    <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Topics and levels</th><th className="hide-sm">Last practised</th></tr></thead><tbody>
+    <div className="table-wrap"><table><thead><tr><th>Student</th><th>Topics and levels</th><th className="hide-sm">Last practised</th></tr></thead><tbody>
       {[...data.learners].sort((a, b) => (b.lastPracticedOn ?? '').localeCompare(a.lastPracticedOn ?? '') || a.fullName.localeCompare(b.fullName)).map(l => <tr key={l.learnerId}>
         <td><a href={`#/learner/${l.learnerId}`}>{l.fullName}</a>{l.sessionsTerm > 0 && <span className="sub">Sessions: {l.sessionsThisWeek} this week, {l.sessionsTerm} this term</span>}{l.lastPracticedOn && <span className="sub show-sm">Last practised {ago(l.lastPracticedOn)}</span>}</td>
         <td>{!l.topics.length ? <span className="muted">Not yet</span> : <ul className="plain-list">{l.topics.map((t, i) => <li key={i} className="topic-level"><span>{t.topic}</span>{level(t)}</li>)}</ul>}</td>

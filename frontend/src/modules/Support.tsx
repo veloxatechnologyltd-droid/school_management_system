@@ -16,7 +16,7 @@ export type PlanDraft = { subjectId: string; indicatorId?: string; indicatorLabe
 
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short' });
-const actions = ['Re-teach in a small group', 'Extra practice exercises', 'One-to-one help during break', 'Pair with a peer helper', 'Practice at home with the guardian', 'Meet the guardian'];
+const actions = ['Re-teach in a small group', 'Extra practice exercises', 'One-to-one help during break', 'Pair with a peer helper', 'Practice at home with the parent', 'Meet the parent'];
 const outcomes = [['improved', 'Improved', 'positive'], ['no_change', 'No change', 'caution'], ['worse', 'Worse', 'critical']] as const;
 const signed = (n: number | null) => n === null ? '–' : `${n > 0 ? '+' : ''}${n}`;
 const changeTone = (n: number | null): Tone => n === null ? 'neutral' : n >= 5 ? 'positive' : n <= -5 ? 'critical' : 'caution';
@@ -47,7 +47,7 @@ export function SupportPlanDialog({ schoolId, csrfToken, classId, termId, draft,
   // Once per dialog (development mode runs effects twice; each draft is a logged, counted run).
   const drafted = useRef(false);
   useEffect(() => { if (drafted.current) return; drafted.current = true; void draftPlan(); }, [draftPlan]);
-  const nameOf = (id: string) => roster.find(l => l.learnerId === id)?.fullName ?? 'Learner';
+  const nameOf = (id: string) => roster.find(l => l.learnerId === id)?.fullName ?? 'Student';
   const addAction = (text: string) => setForm(f => ({ ...f, action: f.action.trim() ? `${f.action.trim().replace(/\.$/, '')}. ${text}.` : `${text}.` }));
   // Learners already chosen stay at the top, so the teacher sees who is in the plan without scrolling.
   const order = useMemo(() => [...roster].sort((a, b) => Number(draft.learnerIds.includes(b.learnerId)) - Number(draft.learnerIds.includes(a.learnerId))), [roster, draft.learnerIds]);
@@ -61,11 +61,11 @@ export function SupportPlanDialog({ schoolId, csrfToken, classId, termId, draft,
       {error && <p role="alert">{error}</p>}
       {form.indicatorId && draft.indicatorLabel && <p className="muted">Topic: <strong>{draft.indicatorLabel}</strong></p>}
       <label>Subject<select value={form.subjectId} onChange={e => setForm({ ...form, subjectId: e.target.value, indicatorId: undefined })} required>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-      <fieldset className="indicator-picker"><legend>Learners ({form.learnerIds.length})</legend><div className="indicator-options">
+      <fieldset className="indicator-picker"><legend>Students ({form.learnerIds.length})</legend><div className="indicator-options">
         {order.map(l => <label key={l.learnerId} className="check"><input type="checkbox" checked={form.learnerIds.includes(l.learnerId)} onChange={() => toggle(l.learnerId)}/><span>{l.fullName}</span></label>)}</div></fieldset>
       <div className="draft-banner" role="status">{drafting ? 'Drafting a plan from the marks, missed work and attendance…'
         : ai ? <>{ai.source === 'ai' ? 'Drafted by AI from the marks, missed work, exam and attendance.' : `Drafted from the marks by simple rules${ai.note?.startsWith('ai_disabled') ? ' (AI is off for this school)' : ''}.`} Read it and change anything before you start the plan.</>
-        : form.learnerIds.length ? 'Choose the learners, then draft the plan.' : 'Tick the learners this plan is for.'}
+        : form.learnerIds.length ? 'Choose the students, then draft the plan.' : 'Tick the students this plan is for.'}
         <button type="button" className="secondary small" disabled={drafting || !form.learnerIds.length} onClick={() => void draftPlan()}>{ai ? 'Draft again' : 'Draft the plan'}</button></div>
       {ai && ai.basis.length > 0 && <details className="draft-basis"><summary>What the draft is based on</summary><ul>{ai.basis.map(b => <li key={b.learnerId}><strong>{nameOf(b.learnerId)}</strong>: recent marks {b.recent ?? '–'}%, {trendWord[b.trend] ?? b.trend}
         {b.missedWork ? `, ${b.missedWork} piece${b.missedWork === 1 ? '' : 's'} of work without a mark` : ''}, attendance {b.attendance}{b.examGap ? `, exam far ${b.examGap === 'exam_higher' ? 'above' : 'below'} class work` : ''}{b.weakTopics.length ? `. Weakest: ${b.weakTopics.join('; ')}` : ''}</li>)}</ul></details>}
@@ -73,7 +73,7 @@ export function SupportPlanDialog({ schoolId, csrfToken, classId, termId, draft,
       <label>What we will do<textarea rows={4} value={form.action} onChange={e => setForm({ ...form, action: e.target.value })} required minLength={3} maxLength={500} placeholder="e.g. Re-teach fractions in a small group on Tuesdays and Thursdays"/></label>
       <div className="chip-row">{actions.map(a => <button key={a} type="button" className="chip" onClick={() => addAction(a)}>+ {a}</button>)}</div>
       <label>Message for the family (optional)<textarea rows={2} value={form.familyNote} onChange={e => setForm({ ...form, familyNote: e.target.value })} maxLength={500} placeholder="e.g. Ten minutes of reading aloud together each evening will help."/></label>
-      <p className="muted field-hint">Shown to each learner's guardians when the school shares progress with families. Write it for one family: do not name other learners.</p>
+      <p className="muted field-hint">Shown to each student's parents when the school shares progress with families. Write it for one family: do not name other students.</p>
       <label>Responsible<select value={form.ownerMembershipId} onChange={e => setForm({ ...form, ownerMembershipId: e.target.value })} disabled={owners.length < 2}>{owners.map(o => <option key={o.membershipId} value={o.membershipId}>{o.name}{o.classTeacher ? ' (class teacher)' : ''}</option>)}</select></label>
       <div className="field-row"><label>Starts<input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} required/></label>
         <label>Review on<input type="date" value={form.reviewDate} min={addDays(form.startDate, 1)} onChange={e => setForm({ ...form, reviewDate: e.target.value })} required/></label></div>
@@ -105,7 +105,7 @@ export function SupportPlanDrawer({ schoolId, csrfToken, planId, onClose, onChan
         <p><button type="button" className="link-button" onClick={() => setPractice(true)}>{plan.resources.length ? 'Manage practice materials' : 'Add practice materials'}</button></p></>}
       {practice && plan.indicator_id && <PracticeDialog schoolId={schoolId} csrfToken={csrfToken} indicatorId={plan.indicator_id} onClose={() => { setPractice(false); void load(); }}/>}
       <h4>Marks before the plan and since</h4>
-      <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">Before</th><th className="num">Since</th><th className="num">Change</th></tr></thead><tbody>
+      <div className="table-wrap"><table><thead><tr><th>Student</th><th className="num">Before</th><th className="num">Since</th><th className="num">Change</th></tr></thead><tbody>
         {plan.evidence.learners.map(l => <tr key={l.learnerId}><td>{l.fullName}</td><td className="num">{l.before === null ? '–' : `${l.before}%`}<span className="sub">{l.beforeMarks} mark{l.beforeMarks === 1 ? '' : 's'}</span></td>
           <td className="num">{l.since === null ? '–' : `${l.since}%`}<span className="sub">{l.sinceMarks} mark{l.sinceMarks === 1 ? '' : 's'}</span></td><td className={`num tone-${changeTone(l.change)}`}>{signed(l.change)}</td></tr>)}
         <tr className="trend-total"><td>Group</td><td className="num">{plan.evidence.group.before ?? '–'}</td><td className="num">{plan.evidence.group.since ?? '–'}</td><td className={`num tone-${changeTone(plan.evidence.group.change)}`}>{signed(plan.evidence.group.change)}</td></tr></tbody></table></div>
@@ -113,7 +113,7 @@ export function SupportPlanDrawer({ schoolId, csrfToken, planId, onClose, onChan
       {onFollowUp && (() => {
         // Learners still below the pass line, or not better than before, can go straight into a new plan.
         const still = plan.evidence.learners.filter(l => (l.since ?? l.before ?? 0) < 50 || (l.change !== null && l.change <= 0));
-        return still.length > 0 && <p className="follow-up"><span className="muted">{still.length} learner{still.length === 1 ? ' is' : 's are'} still below 50% or not improving.</span>
+        return still.length > 0 && <p className="follow-up"><span className="muted">{still.length} student{still.length === 1 ? ' is' : 's are'} still below 50% or not improving.</span>
           <button type="button" className="secondary small" onClick={() => onFollowUp({ classId: plan.class_id, subjectId: plan.subject_id, indicatorId: plan.indicator_id ?? undefined, indicatorLabel: plan.indicator_code ?? plan.indicator_description ?? undefined, learnerIds: still.map(l => l.learnerId),
             concern: `Follow-up from the ${plan.subject_name}${plan.indicator_description ? ` (${plan.indicator_description})` : ''} plan started ${shortDate(plan.start_date)}: ${still.map(l => `${l.fullName} ${l.since ?? l.before ?? '–'}%`).join(', ')}.` })}>Follow-up plan</button></p>;
       })()}
@@ -135,7 +135,7 @@ export function SupportPlanDrawer({ schoolId, csrfToken, planId, onClose, onChan
 
 export function SupportList({ plans, today, showClass, onOpen }: { plans: Plan[]; today: string; showClass: boolean; onOpen: (id: string) => void }) {
   if (!plans.length) return <Empty title="No support plans here" hint="Start one from Needs attention on Trends, or from a weak indicator on Gaps."/>;
-  return <div className="table-wrap"><table><thead><tr><th>Learners</th><th>Focus</th><th>Action</th><th>Responsible</th><th>Review</th><th className="num">Change</th></tr></thead><tbody>
+  return <div className="table-wrap"><table><thead><tr><th>Students</th><th>Focus</th><th>Action</th><th>Responsible</th><th>Review</th><th className="num">Change</th></tr></thead><tbody>
     {plans.map(p => <tr key={p.id}><td><button type="button" className="link-button" onClick={() => onOpen(p.id)}>{p.learners.length > 2 ? `${p.learners.slice(0, 2).map(l => l.full_name).join(', ')} +${p.learners.length - 2}` : p.learners.map(l => l.full_name).join(', ')}</button>{showClass && <span className="sub">{p.class_name}</span>}</td>
       <td>{p.subject_name}{(p.indicator_code || p.indicator_description) && <span className="sub">{p.indicator_code ?? p.indicator_description}</span>}</td><td>{p.action}</td><td>{p.owner_name}</td><td>{reviewPill(p, today)}</td>
       <td className={`num tone-${changeTone(p.evidence.change)}`}>{signed(p.evidence.change)}<span className="sub">{p.evidence.before ?? '–'} → {p.evidence.since ?? '–'}</span></td></tr>)}</tbody></table></div>;
@@ -148,6 +148,6 @@ export function SupportDue({ schoolId }: { schoolId: string }) {
   const due = plans?.items.filter(p => p.due) ?? [];
   if (!plans || !due.length) return null;
   return <section aria-label="Support reviews due" className="page"><div className="banner"><span className="icon" aria-hidden="true">event_upcoming</span>
-    <span><strong>{due.length} support review{due.length === 1 ? ' is' : 's are'} due:</strong> {due.map(p => `${p.class_name} ${p.subject_name} (${p.learners.length === 1 ? p.learners[0]!.full_name : `${p.learners.length} learners`})`).join(', ')}.</span>
+    <span><strong>{due.length} support review{due.length === 1 ? ' is' : 's are'} due:</strong> {due.map(p => `${p.class_name} ${p.subject_name} (${p.learners.length === 1 ? p.learners[0]!.full_name : `${p.learners.length} students`})`).join(', ')}.</span>
     <a className="button secondary" href="#/progress/support">Review now</a></div></section>;
 }

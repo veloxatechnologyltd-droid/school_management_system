@@ -53,9 +53,9 @@ export function CaSheet({ schoolId, classId, termId, subjects, subjectId, onSubj
     {error && <p role="alert" className="card-body">{error}</p>}
     {!sheet ? !error && <p className="muted card-body" role="status">Loading…</p>
       : !sheet.policy ? <Empty title="No grading policy yet" hint="The headteacher sets the CA and exam weights, and the parts of the CA, in Settings."/>
-      : !rows.length ? <Empty title="No learners in this class for the term"/>
+      : !rows.length ? <Empty title="No students in this class for the term"/>
       : <>
-        <div className="table-wrap"><table className="ca-sheet"><thead><tr><th>Learner</th>
+        <div className="table-wrap"><table className="ca-sheet"><thead><tr><th>Student</th>
           {shown.map(([key, label]) => <th key={key} className="num">{label}<span className="sub">{parts[key] ? `${finalPoints(parts[key])}% of final` : 'not counted'} · {sheet.set[key]} set</span></th>)}
           {testColumns ? sheet.tests.map((t, i) => <th key={t.id} className="num">Test {i + 1}<span className="sub">{shortDate(t.held_on)} · {parts.tests && sheet.tests.length ? `${round1(finalPoints(parts.tests) / sheet.tests.length)}% of final` : 'not counted'}</span></th>)
             : <th className="num">Class tests<span className="sub">{finalPoints(parts.tests)}% of final · {sheet.tests.length} set</span></th>}
@@ -73,8 +73,8 @@ export function CaSheet({ schoolId, classId, termId, subjects, subjectId, onSubj
               <td className="num"><Pct value={r.total}/></td>
               <td>{r.gap ? <Pill tone={r.gap.direction === 'exam_higher' ? 'caution' : 'info'}>{`Exam ${Math.round(Math.abs(r.gap.difference))} pts ${r.gap.direction === 'exam_higher' ? 'higher' : 'lower'}`}</Pill>
                 : r.exam === null ? <span className="muted">No exam yet</span> : CA_PART_KEYS.reduce((n, key) => n + r.parts[key].marked, 0) < 3 ? <span className="muted">Too little class work</span> : <span className="muted">In line</span>}</td></tr>; })}</tbody></table></div>
-        <p className="muted card-body">CA comes from each learner's marks in each part, weighted as the school sets it. A part with no marks for a learner is left out and the others count for more, so check the "of" counts. The total uses the CA saved for the report card where there is one; it is saved from class work when the exam marks are saved on the Exam scores tab.
-          {' '}{flagged.length ? `${flagged.length} learner${flagged.length === 1 ? ' has' : 's have'}` : 'Nobody has'} an exam 20 or more points away from their class work (with at least 3 marks). That is worth a quiet look, for example a bad exam day, missed class work, or work done with help. It is not proof of anything.</p>
+        <p className="muted card-body">CA comes from each student's marks in each part, weighted as the school sets it. A part with no marks for a student is left out and the others count for more, so check the "of" counts. The total uses the CA saved for the report card where there is one; it is saved from class work when the exam marks are saved on the Exam scores tab.
+          {' '}{flagged.length ? `${flagged.length} student${flagged.length === 1 ? ' has' : 's have'}` : 'Nobody has'} an exam 20 or more points away from their class work (with at least 3 marks). That is worth a quiet look, for example a bad exam day, missed class work, or work done with help. It is not proof of anything.</p>
       </>}
   </>;
 }

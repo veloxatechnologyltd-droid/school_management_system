@@ -132,7 +132,7 @@ export function Collection({ schoolId, csrfToken, role }: Props) {
   const currentEvents = detail?.events.filter(row => row.date === detail.date) ?? [];
   const olderEvents = detail?.events.filter(row => row.date < detail.date) ?? [];
   const historyTotal = Math.max(detail?.history.eventTotal ?? 0, detail?.history.caseTotal ?? 0);
-  const selectedCollector = detail?.collectors.find(row => `guardian:${row.id}` === collectorSource);
+  const selectedCollector = detail?.collectors.find(row => `parent:${row.id}` === collectorSource);
   const selectedException = approvedCases.find(row => `case:${row.id}` === collectorSource);
   const releasePayload = detail && {
     learnerVersion: detail.learner.version,
@@ -163,7 +163,7 @@ export function Collection({ schoolId, csrfToken, role }: Props) {
   async function voidEvent(row: EventRow) {
     const reason = voidReasons[row.id]?.trim() ?? '';
     if (reason.length < 3) return;
-    await write(`collection:event:${row.id}:void`, { version: row.version, reason }, `/schools/${schoolId}/collection/events/${row.id}/void`, 'Release record voided as a correction. This does not confirm physical return of the learner.');
+    await write(`collection:event:${row.id}:void`, { version: row.version, reason }, `/schools/${schoolId}/collection/events/${row.id}/void`, 'Release record voided as a correction. This does not confirm physical return of the student.');
   }
 
   function renderCase(row: CaseRow, allowReview: boolean) {
@@ -188,7 +188,7 @@ export function Collection({ schoolId, csrfToken, role }: Props) {
       <strong>{row.learner_name} · {row.admission_number} · {row.class_name ?? 'No current class'}</strong><span>{row.collector_name} · {row.date} · Released {when(row.released_at)} · Staff verification: {row.verification_reason}</span>
       {row.exception_id && <span>One-time exception used. It remains consumed if this event is voided.</span>}
       {row.voided_at && <span>Voided {when(row.voided_at)} · Correction reason: {row.void_reason} · This does not confirm physical return.</span>}
-      {allowCorrection && headteacher && !row.voided_at && <details><summary>Correct mistaken release record</summary><p className="muted">Voiding corrects the record only. It does not establish that the learner returned to school or that physical custody changed.</p><label>Correction reason<input minLength={3} maxLength={500} value={voidReasons[row.id] ?? ''} onChange={event => setVoidReasons(current => ({ ...current, [row.id]: event.target.value }))} /></label><button type="button" className="secondary" disabled={busy || (voidReasons[row.id]?.trim().length ?? 0) < 3} onClick={() => void voidEvent(row)}>Void mistaken release record</button></details>}
+      {allowCorrection && headteacher && !row.voided_at && <details><summary>Correct mistaken release record</summary><p className="muted">Voiding corrects the record only. It does not establish that the student returned to school or that physical custody changed.</p><label>Correction reason<input minLength={3} maxLength={500} value={voidReasons[row.id] ?? ''} onChange={event => setVoidReasons(current => ({ ...current, [row.id]: event.target.value }))} /></label><button type="button" className="secondary" disabled={busy || (voidReasons[row.id]?.trim().length ?? 0) < 3} onClick={() => void voidEvent(row)}>Void mistaken release record</button></details>}
     </li>;
   }
 
@@ -208,34 +208,34 @@ export function Collection({ schoolId, csrfToken, role }: Props) {
     {!selectedId && messages}
     <div className="columns pickup">
     <Card flush>
-      <div className="card-head"><div><h3 id="collection-title">Learner collection</h3><p className="card-hint">Today’s roster{total ? ` · ${total} learners` : ''}</p></div></div>
+      <div className="card-head"><div><h3 id="collection-title">Student collection</h3><p className="card-hint">Today’s roster{total ? ` · ${total} students` : ''}</p></div></div>
       <div className="toolbar">
         <form onSubmit={searchSubmit}>
-          <label className="search"><span className="sr-only">Search learners</span><Icon name="search"/><input type="search" aria-label="Search learners" maxLength={120} value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Learner name or admission number" /></label>
+          <label className="search"><span className="sr-only">Search students</span><Icon name="search"/><input type="search" aria-label="Search students" maxLength={120} value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Student name or admission number" /></label>
           <button type="submit" className="secondary" disabled={loading || busy}>Search collection roster</button>
         </form>
-        <label><input type="checkbox" checked={includeHistory} disabled={loading || busy} onChange={event => toggleHistory(event.target.checked)} /> Include learners with collection history</label>
+        <label><input type="checkbox" checked={includeHistory} disabled={loading || busy} onChange={event => toggleHistory(event.target.checked)} /> Include students with collection history</label>
       </div>
-      {loading && !learners.length ? <p role="status">Loading today’s roster…</p> : learners.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Class</th></tr></thead><tbody>{learners.map(row => <tr key={row.id} className={row.id === selectedId ? 'selected' : undefined}>
+      {loading && !learners.length ? <p role="status">Loading today’s roster…</p> : learners.length ? <div className="table-wrap"><table><thead><tr><th>Student</th><th>Class</th></tr></thead><tbody>{learners.map(row => <tr key={row.id} className={row.id === selectedId ? 'selected' : undefined}>
         <td><button type="button" className="link-button" disabled={busy} onClick={() => { void selectLearner(row.id); setTimeout(() => document.getElementById('collection-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}>{row.full_name}</button><span className="sub">{row.admission_number}</span></td>
         <td>{row.class_name ?? <Pill tone="neutral">No current class</Pill>}</td>
-      </tr>)}</tbody></table></div> : <Empty title={search ? 'No learners match this search' : 'No learners on today’s roster'}/>}
-      <div className="pager" aria-label="Collection roster pages"><span>{total === 0 ? '0 learners' : `Showing ${offset + 1}–${Math.min(offset + learners.length, total)} of ${total}`}</span><div><button type="button" className="secondary" disabled={loading || busy || offset === 0} onClick={() => { clearSelection(); setOffset(Math.max(0, offset - 25)); }}>Previous learners</button><button type="button" className="secondary" disabled={loading || busy || offset + learners.length >= total} onClick={() => { clearSelection(); setOffset(offset + 25); }}>Next learners</button></div></div>
+      </tr>)}</tbody></table></div> : <Empty title={search ? 'No students match this search' : 'No students on today’s roster'}/>}
+      <div className="pager" aria-label="Collection roster pages"><span>{total === 0 ? '0 students' : `Showing ${offset + 1}–${Math.min(offset + learners.length, total)} of ${total}`}</span><div><button type="button" className="secondary" disabled={loading || busy || offset === 0} onClick={() => { clearSelection(); setOffset(Math.max(0, offset - 25)); }}>Previous students</button><button type="button" className="secondary" disabled={loading || busy || offset + learners.length >= total} onClick={() => { clearSelection(); setOffset(offset + 25); }}>Next students</button></div></div>
     </Card>
     <div id="collection-detail" className="card"><div className="card-body">
-    {!selectedId && <Empty title="Choose a learner" hint="Tap a name to see who may collect them today and record the hand-over."/>}
+    {!selectedId && <Empty title="Choose a student" hint="Tap a name to see who may collect them today and record the hand-over."/>}
     {selectedId && messages}
     {detailLoading && <p role="status">Loading current collectors and collection history…</p>}
     {detail && <div>
       <h3 className="detail-title">{detail.learner.full_name}</h3><p className="muted">Admission number {detail.learner.admission_number} · {detail.learner.class_name ?? 'No current class'} · Current school date {detail.date}</p>
-      {detail.learner.class_name === null ? <p role="status">This learner has no current class. Collection activity is history-only; a new release or collector request cannot be recorded.</p> : liveRelease ? <p role="status">An active release is already recorded for this learner today. A headteacher may correct a mistaken record; voiding it does not confirm physical return.</p> : <>
+      {detail.learner.class_name === null ? <p role="status">This student has no current class. Collection activity is history-only; a new release or collector request cannot be recorded.</p> : liveRelease ? <p role="status">An active release is already recorded for this student today. A headteacher may correct a mistaken record; voiding it does not confirm physical return.</p> : <>
         <h4>Record release</h4>
-        {detail.collectors.length || approvedCases.length ? <label>Authorized collector / one-time exception<select value={collectorSource} disabled={busy} onChange={event => { setCollectorSource(event.target.value); setReleaseConfirmed(false); }}><option value="">Choose an authorized collector or approved exception</option>{detail.collectors.map(row => <option key={`guardian:${row.id}`} value={`guardian:${row.id}`}>Verified pickup: {row.collector_name}</option>)}{approvedCases.map(row => <option key={`case:${row.id}`} value={`case:${row.id}`}>Approved one-time exception: {row.collector_name}</option>)}</select></label> : <p>No current pickup authorization or approved exception is available.</p>}
+        {detail.collectors.length || approvedCases.length ? <label>Authorized collector / one-time exception<select value={collectorSource} disabled={busy} onChange={event => { setCollectorSource(event.target.value); setReleaseConfirmed(false); }}><option value="">Choose an authorized collector or approved exception</option>{detail.collectors.map(row => <option key={`parent:${row.id}`} value={`parent:${row.id}`}>Verified pickup: {row.collector_name}</option>)}{approvedCases.map(row => <option key={`case:${row.id}`} value={`case:${row.id}`}>Approved one-time exception: {row.collector_name}</option>)}</select></label> : <p>No current pickup authorization or approved exception is available.</p>}
         {collectorSource && <>
           <p className="muted">{selectedCollector ? 'The selected collector has a current verified pickup right.' : selectedException ? 'This approved exception is one-use and will remain consumed even if a release record is later voided.' : ''}</p>
           <label>Staff verification reason<input minLength={3} maxLength={500} value={verificationReason} disabled={busy} onChange={event => { setVerificationReason(event.target.value); setReleaseConfirmed(false); }} /></label>
-          <label><input type="checkbox" checked={releaseConfirmed} disabled={busy} onChange={event => setReleaseConfirmed(event.target.checked)} /> I confirmed the collector’s identity in person and am handing the learner into their care now.</label>
-          <button type="button" disabled={busy || !releasePayload || verificationReason.trim().length < 3 || !releaseConfirmed || Boolean(detail.events.some(event => event.date === detail.date && !event.voided_at))} onClick={() => void release()}>Record learner release</button>
+          <label><input type="checkbox" checked={releaseConfirmed} disabled={busy} onChange={event => setReleaseConfirmed(event.target.checked)} /> I confirmed the collector’s identity in person and am handing the student into their care now.</label>
+          <button type="button" disabled={busy || !releasePayload || verificationReason.trim().length < 3 || !releaseConfirmed || Boolean(detail.events.some(event => event.date === detail.date && !event.voided_at))} onClick={() => void release()}>Record student release</button>
         </>}
       </>}
 
@@ -246,11 +246,11 @@ export function Collection({ schoolId, csrfToken, role }: Props) {
       </form></details>}
 
       <h4>Unexpected collector requests · {detail.date}</h4>
-      {currentCases.length ? <ul className="history">{currentCases.map(row => renderCase(row, true))}</ul> : <p>No unexpected collector requests recorded for this learner today.</p>}
+      {currentCases.length ? <ul className="history">{currentCases.map(row => renderCase(row, true))}</ul> : <p>No unexpected collector requests recorded for this student today.</p>}
       {olderCases.length > 0 && <details><summary>Earlier collector requests on this history page ({olderCases.length})</summary><ul className="history">{olderCases.map(row => renderCase(row, true))}</ul></details>}
 
       <h4>Release history · {detail.date}</h4>
-      {currentEvents.length ? <ul className="history">{currentEvents.map(row => renderEvent(row, true))}</ul> : <p>No collection releases recorded for this learner today.</p>}
+      {currentEvents.length ? <ul className="history">{currentEvents.map(row => renderEvent(row, true))}</ul> : <p>No collection releases recorded for this student today.</p>}
       {olderEvents.length > 0 && <details><summary>Earlier release records on this history page ({olderEvents.length})</summary><ul className="history">{olderEvents.map(row => renderEvent(row, true))}</ul></details>}
       <div className="actions" aria-label="Collection history pages"><button type="button" className="secondary" disabled={busy || detailLoading || detailOffset === 0} onClick={() => void selectLearner(detail.learner.id, Math.max(0, detailOffset - 25))}>Previous history</button><span className="muted">{historyTotal === 0 ? '0 historical records' : `History page ${Math.floor(detailOffset / 25) + 1} · ${detail.history.eventTotal} releases and ${detail.history.caseTotal} requests`}</span><button type="button" className="secondary" disabled={busy || detailLoading || detailOffset + detail.history.limit >= historyTotal} onClick={() => void selectLearner(detail.learner.id, detailOffset + 25)}>Next history</button></div>
     </div>}

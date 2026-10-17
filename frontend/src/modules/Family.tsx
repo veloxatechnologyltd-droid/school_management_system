@@ -67,7 +67,7 @@ export function Family({ schoolId, csrfToken, section }: { schoolId: string; csr
 
   if (!children) return <>{header}<p role="status">Loading…</p></>;
   // A parent whose link is still being verified waits here, so the way to look again is on this screen.
-  const refresh = <button type="button" className="secondary" aria-label="Refresh guardian records" onClick={() => setRev(n => n + 1)}><Icon name="refresh"/>Refresh</button>;
+  const refresh = <button type="button" className="secondary" aria-label="Refresh parent records" onClick={() => setRev(n => n + 1)}><Icon name="refresh"/>Refresh</button>;
   if (!child) return <>{header}{error && <p role="alert">{error}</p>}<Card><Empty title="No children linked yet" hint="Once the school verifies your link to a child, their records appear here.">{refresh}</Empty></Card></>;
 
   const fallback = <p role="status">Loading…</p>;

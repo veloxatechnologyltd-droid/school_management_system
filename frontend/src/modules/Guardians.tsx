@@ -8,12 +8,12 @@ type GuardianLink = { id: string; learner_id: string; learner_name: string; guar
 type GuardianLinkPage = { items: GuardianLink[]; total: number; offset: number; limit: number };
 type LearnerChoice = { id: string; full_name: string; admission_number: string };
 type LearnerPage = { items: LearnerChoice[]; total: number };
-type Props = { schoolId: string; csrfToken: string; role: Role };
+type Props = { schoolId: string; csrfToken: string; role: Role; tabs?: React.ReactNode };
 type Rights = Pick<GuardianLink, 'academic' | 'billing' | 'pickup' | 'contact'>;
 
 const rightNames: [keyof Rights, string][] = [['academic', 'Academic records'], ['billing', 'Billing information'], ['pickup', 'Collection and pickup'], ['contact', 'School contact']];
 // The headteacher's guardian rights page. Families use the family area (Family.tsx).
-export function Guardians({ schoolId, csrfToken, role }: Props) {
+export function Guardians({ schoolId, csrfToken, role, tabs }: Props) {
   const isHeadteacher = role === 'headteacher';
   const [candidates, setCandidates] = useState<GuardianCandidate[]>([]);
   const [links, setLinks] = useState<GuardianLink[]>([]);
@@ -123,7 +123,7 @@ export function Guardians({ schoolId, csrfToken, role }: Props) {
     event.preventDefault();
     if (!selectedLearner || !selectedGuardian || !Object.values(rights).some(Boolean)) return;
     const payload = { learnerId: selectedLearner, guardianMembershipId: selectedGuardian, ...rights };
-    if (await mutate('guardian-link:create', payload, `/schools/${schoolId}/guardian-links`, 'Guardian link created as pending verification.')) {
+    if (await mutate('guardian-link:create', payload, `/schools/${schoolId}/guardian-links`, 'Parent link created as pending verification.')) {
       setSelectedGuardian(''); setRights({ academic: false, billing: false, pickup: false, contact: false }); setLinking(false);
     }
   }
@@ -131,7 +131,7 @@ export function Guardians({ schoolId, csrfToken, role }: Props) {
   async function linkAction(link: GuardianLink, action: 'verify' | 'revoke') {
     const reason = reasons[link.id]?.[action].trim() ?? '';
     const payload = { version: link.version, reason };
-    if (await mutate(`guardian-link:${link.id}:${action}`, payload, `/schools/${schoolId}/guardian-links/${link.id}/${action}`, `Guardian link ${action === 'verify' ? 'verified' : 'revoked'}.`)) {
+    if (await mutate(`guardian-link:${link.id}:${action}`, payload, `/schools/${schoolId}/guardian-links/${link.id}/${action}`, `Parent link ${action === 'verify' ? 'verified' : 'revoked'}.`)) {
       setReasons(previous => ({ ...previous, [link.id]: { verify: '', revoke: '' } })); setReviewing('');
     }
   }
@@ -145,44 +145,45 @@ export function Guardians({ schoolId, csrfToken, role }: Props) {
 
   if (!isHeadteacher) return null;
 
-  return <section aria-label="Guardians" className="page">
-    <PageHeader id="guardians-title" eyebrow="People" title="Guardians" blurb="Who may see each child’s records, pay fees, collect them and receive notices."
-      actions={<><button type="button" disabled={loading} onClick={() => { setError(''); setNotice(''); setLinking(true); }}><Icon name="person_add"/>Link a guardian</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void refresh()}>Refresh guardian records</button></>}/>
+  return <section aria-label="Parents" className="page">
+    <PageHeader id="parents-title" eyebrow="People" title="Parents" blurb="Who may see each child’s records, pay fees, collect them and receive notices."
+      actions={<><button type="button" disabled={loading} onClick={() => { setError(''); setNotice(''); setLinking(true); }}><Icon name="person_add"/>Link a parent</button><button type="button" className="secondary" disabled={busy || loading} onClick={() => void refresh()}>Refresh parent records</button></>}/>
+    {tabs}
     {!linking && !reviewing && messages}
-    {loading ? <p role="status">Loading guardian records…</p> : <>
+    {loading ? <p role="status">Loading parent records…</p> : <>
       <div className="stats">
-        <Stat label="Guardian links" value={linksTotal} caption={linksSearch ? 'Matching this search' : 'Every link ever recorded'} icon="family_restroom"/>
+        <Stat label="Parent links" value={linksTotal} caption={linksSearch ? 'Matching this search' : 'Every link ever recorded'} icon="family_restroom"/>
         <Stat label="Awaiting verification" value={links.filter(pending).length} caption="In the list below" tone={links.some(pending) ? 'caution' : 'neutral'} icon="pending_actions"/>
-        <Stat label="Guardian accounts" value={candidates.length} caption="Active sign-ins you can link" icon="badge"/>
+        <Stat label="Parent accounts" value={candidates.length} caption="Active sign-ins you can link" icon="badge"/>
       </div>
-      <Card title="Guardian rights" hint="Each right is granted separately and only counts once you verify it." flush>
+      <Card title="Parent rights" hint="Each right is granted separately and only counts once you verify it." flush>
         <div className="toolbar">
           <form onSubmit={event => { event.preventDefault(); const term = linksSearchInput.trim(); setLinksOffset(0); if (linksOffset === 0 && term === linksSearch) void loadLinks(true, 0); setLinksSearch(term); }}>
-            <label className="search"><span className="sr-only">Search guardian links</span><Icon name="search"/><input type="search" aria-label="Search guardian links" value={linksSearchInput} maxLength={120} onChange={event => setLinksSearchInput(event.target.value)} placeholder="Learner or guardian name"/></label>
+            <label className="search"><span className="sr-only">Search parent links</span><Icon name="search"/><input type="search" aria-label="Search parent links" value={linksSearchInput} maxLength={120} onChange={event => setLinksSearchInput(event.target.value)} placeholder="Student or parent name"/></label>
             <button type="submit" className="secondary" disabled={busy}>Search links</button>
           </form>
         </div>
-        {links.length ? <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="hide-sm">Guardian</th><th className="hide-sm">Rights</th><th>Status</th><th></th></tr></thead><tbody>{links.map(link => <tr key={link.id}>
+        {links.length ? <div className="table-wrap"><table><thead><tr><th>Student</th><th className="hide-sm">Parent</th><th className="hide-sm">Rights</th><th>Status</th><th></th></tr></thead><tbody>{links.map(link => <tr key={link.id}>
           <td>{link.learner_name}<span className="sub show-sm">{link.guardian_name}</span></td>
           <td className="hide-sm">{link.guardian_name}</td>
           <td className="hide-sm"><div className="pill-row">{rightsText(link).map(name => <Pill key={name} tone="info">{name}</Pill>)}</div></td>
           <td>{statusPill(link)}<span className="sub hide-sm">{link.revocation_reason ?? link.verification_reason ?? ''}</span></td>
           <td className="num"><button type="button" className="secondary" aria-label={`Review ${link.learner_name} – ${link.guardian_name}`} onClick={() => { setError(''); setNotice(''); setReviewing(link.id); }}>Review</button></td>
-        </tr>)}</tbody></table></div> : <Empty title={linksSearch ? 'No guardian links match this search' : 'No guardian links yet'} hint={linksSearch ? undefined : 'Link a guardian’s sign-in to a learner, then verify it.'}/>}
-        <div className="pager" aria-label="Guardian link pages"><span>{linksTotal === 0 ? '0 guardian links' : `Showing ${linksOffset + 1}–${Math.min(linksOffset + links.length, linksTotal)} of ${linksTotal} guardian links`}</span><div><button type="button" className="secondary" disabled={busy || linksLoading || linksOffset === 0} onClick={() => setLinksOffset(Math.max(0, linksOffset - 25))}>Previous guardian links</button><button type="button" className="secondary" disabled={busy || linksLoading || linksOffset + links.length >= linksTotal} onClick={() => setLinksOffset(linksOffset + 25)}>Next guardian links</button></div></div>
+        </tr>)}</tbody></table></div> : <Empty title={linksSearch ? 'No parent links match this search' : 'No parent links yet'} hint={linksSearch ? undefined : 'Link a parent’s sign-in to a student, then verify it.'}/>}
+        <div className="pager" aria-label="Parent link pages"><span>{linksTotal === 0 ? '0 parent links' : `Showing ${linksOffset + 1}–${Math.min(linksOffset + links.length, linksTotal)} of ${linksTotal} parent links`}</span><div><button type="button" className="secondary" disabled={busy || linksLoading || linksOffset === 0} onClick={() => setLinksOffset(Math.max(0, linksOffset - 25))}>Previous parent links</button><button type="button" className="secondary" disabled={busy || linksLoading || linksOffset + links.length >= linksTotal} onClick={() => setLinksOffset(linksOffset + 25)}>Next parent links</button></div></div>
       </Card>
     </>}
 
-    {linking && <Dialog title="Link a guardian" onClose={() => setLinking(false)}>
+    {linking && <Dialog title="Link a parent" onClose={() => setLinking(false)}>
       {messages}
       <form onSubmit={createLink}>
-        <div className="actions"><label>Search learners<input type="search" value={learnerSearchInput} maxLength={120} onChange={event => setLearnerSearchInput(event.target.value)} placeholder="Name or admission number"/></label><button type="button" className="secondary" disabled={busy || learnerSearchInput.trim() === learnerSearch} onClick={() => { setLearnerOffset(0); setLearnerSearch(learnerSearchInput.trim()); }}>Search learners</button></div>
-        <label>Learner<select value={selectedLearner} onChange={event => { const id = event.target.value; setSelectedLearner(id); setSelectedLearnerChoice(learnerRows.find(learner => learner.id === id) ?? null); }} required><option value="">Choose a learner on this page</option>{selectedLearnerChoice && !learnerRows.some(learner => learner.id === selectedLearner) && <option value={selectedLearnerChoice.id}>{selectedLearnerChoice.full_name} · {selectedLearnerChoice.admission_number} (selected)</option>}{learnerRows.map(learner => <option key={learner.id} value={learner.id}>{learner.full_name} · {learner.admission_number}</option>)}</select></label>
-        <div className="actions"><span className="muted">{learnerTotal === 0 ? '0 learners' : `Showing ${learnerOffset + 1}–${Math.min(learnerOffset + learnerRows.length, learnerTotal)} of ${learnerTotal}`}</span><button type="button" className="secondary" disabled={busy || learnerOffset === 0} onClick={() => setLearnerOffset(Math.max(0, learnerOffset - 25))}>Previous learners</button><button type="button" className="secondary" disabled={busy || learnerOffset + learnerRows.length >= learnerTotal} onClick={() => setLearnerOffset(learnerOffset + 25)}>Next learners</button></div>
-        <label>Existing active guardian<select value={selectedGuardian} onChange={event => setSelectedGuardian(event.target.value)} required><option value="">Choose a guardian account</option>{candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.display_name}</option>)}</select></label>
+        <div className="actions"><label>Search students<input type="search" value={learnerSearchInput} maxLength={120} onChange={event => setLearnerSearchInput(event.target.value)} placeholder="Name or admission number"/></label><button type="button" className="secondary" disabled={busy || learnerSearchInput.trim() === learnerSearch} onClick={() => { setLearnerOffset(0); setLearnerSearch(learnerSearchInput.trim()); }}>Search students</button></div>
+        <label>Student<select value={selectedLearner} onChange={event => { const id = event.target.value; setSelectedLearner(id); setSelectedLearnerChoice(learnerRows.find(learner => learner.id === id) ?? null); }} required><option value="">Choose a student on this page</option>{selectedLearnerChoice && !learnerRows.some(learner => learner.id === selectedLearner) && <option value={selectedLearnerChoice.id}>{selectedLearnerChoice.full_name} · {selectedLearnerChoice.admission_number} (selected)</option>}{learnerRows.map(learner => <option key={learner.id} value={learner.id}>{learner.full_name} · {learner.admission_number}</option>)}</select></label>
+        <div className="actions"><span className="muted">{learnerTotal === 0 ? '0 students' : `Showing ${learnerOffset + 1}–${Math.min(learnerOffset + learnerRows.length, learnerTotal)} of ${learnerTotal}`}</span><button type="button" className="secondary" disabled={busy || learnerOffset === 0} onClick={() => setLearnerOffset(Math.max(0, learnerOffset - 25))}>Previous students</button><button type="button" className="secondary" disabled={busy || learnerOffset + learnerRows.length >= learnerTotal} onClick={() => setLearnerOffset(learnerOffset + 25)}>Next students</button></div>
+        <label>Existing active parent<select value={selectedGuardian} onChange={event => setSelectedGuardian(event.target.value)} required><option value="">Choose a parent account</option>{candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.display_name}</option>)}</select></label>
         <fieldset><legend>Rights requested for this link</legend>{rightNames.map(([key, label]) => <label key={key}><input type="checkbox" checked={rights[key]} onChange={event => setRights(previous => ({ ...previous, [key]: event.target.checked }))}/>{label}</label>)}</fieldset>
-        <p className="muted">The link starts as pending. Nothing is visible to the guardian until you verify it.</p>
-        <div className="actions"><button disabled={busy || !Object.values(rights).some(Boolean)}>Create pending guardian link</button><button type="button" className="secondary" onClick={() => setLinking(false)}>Cancel</button></div>
+        <p className="muted">The link starts as pending. Nothing is visible to the parent until you verify it.</p>
+        <div className="actions"><button disabled={busy || !Object.values(rights).some(Boolean)}>Create pending parent link</button><button type="button" className="secondary" onClick={() => setLinking(false)}>Cancel</button></div>
       </form>
     </Dialog>}
 
@@ -196,8 +197,8 @@ export function Guardians({ schoolId, csrfToken, role }: Props) {
         <li><strong>{pending(reviewed) ? 'Pending verification' : `Verified ${when(reviewed.verified_at)}`}</strong>{reviewed.verification_reason && <span>Verification reason: {reviewed.verification_reason}</span>}</li>
         {reviewed.revoked_at && <li><strong>Revoked {when(reviewed.revoked_at)}</strong>{reviewed.revocation_reason && <span>Revocation reason: {reviewed.revocation_reason}</span>}</li>}
       </ul>
-      {pending(reviewed) && <form onSubmit={event => { event.preventDefault(); void linkAction(reviewed, 'verify'); }}><h4>Verify</h4><label>Reviewed verification reason<input value={reasons[reviewed.id]?.verify ?? ''} onChange={event => setReasons(prev => ({ ...prev, [reviewed.id]: { verify: event.target.value, revoke: prev[reviewed.id]?.revoke ?? '' } }))} minLength={3} maxLength={500} required placeholder="How you confirmed this person"/></label><button disabled={busy}>Verify guardian link</button></form>}
-      {!reviewed.revoked_at && <form onSubmit={event => { event.preventDefault(); void linkAction(reviewed, 'revoke'); }}><h4>Revoke</h4><p className="muted">To change rights, revoke this link and create a new one. The history stays.</p><label>Revocation reason<input value={reasons[reviewed.id]?.revoke ?? ''} onChange={event => setReasons(prev => ({ ...prev, [reviewed.id]: { verify: prev[reviewed.id]?.verify ?? '', revoke: event.target.value } }))} minLength={3} maxLength={500} required/></label><button className="secondary" disabled={busy}>Revoke guardian link</button></form>}
+      {pending(reviewed) && <form onSubmit={event => { event.preventDefault(); void linkAction(reviewed, 'verify'); }}><h4>Verify</h4><label>Reviewed verification reason<input value={reasons[reviewed.id]?.verify ?? ''} onChange={event => setReasons(prev => ({ ...prev, [reviewed.id]: { verify: event.target.value, revoke: prev[reviewed.id]?.revoke ?? '' } }))} minLength={3} maxLength={500} required placeholder="How you confirmed this person"/></label><button disabled={busy}>Verify parent link</button></form>}
+      {!reviewed.revoked_at && <form onSubmit={event => { event.preventDefault(); void linkAction(reviewed, 'revoke'); }}><h4>Revoke</h4><p className="muted">To change rights, revoke this link and create a new one. The history stays.</p><label>Revocation reason<input value={reasons[reviewed.id]?.revoke ?? ''} onChange={event => setReasons(prev => ({ ...prev, [reviewed.id]: { verify: prev[reviewed.id]?.verify ?? '', revoke: event.target.value } }))} minLength={3} maxLength={500} required/></label><button className="secondary" disabled={busy}>Revoke parent link</button></form>}
     </Dialog>}
   </section>;
 }

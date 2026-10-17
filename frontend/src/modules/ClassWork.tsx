@@ -97,8 +97,8 @@ export function ClassWork({ schoolId, csrfToken, classId, className, termId, sub
       </form>
     </Dialog>}
     {marking && <Dialog title={`${marking.assessment.title} · out of ${marking.assessment.max_mark}`} onClose={() => setMarking(null)}>
-      <p className="muted">{marking.assessment.subject_name} · {kindLabel(marking.assessment.kind)} · {shortDate(marking.assessment.held_on)}. Leave a box empty if the learner did not take it.</p>
-      <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Mark</th></tr></thead><tbody>{marking.items.map(row => <tr key={row.learnerId}><td>{row.fullName}{row.left && <> <Pill>left</Pill></>}</td>
+      <p className="muted">{marking.assessment.subject_name} · {kindLabel(marking.assessment.kind)} · {shortDate(marking.assessment.held_on)}. Leave a box empty if the student did not take it.</p>
+      <div className="table-wrap"><table><thead><tr><th>Student</th><th>Mark</th></tr></thead><tbody>{marking.items.map(row => <tr key={row.learnerId}><td>{row.fullName}{row.left && <> <Pill>left</Pill></>}</td>
         <td><input type="number" min={0} max={marking.assessment.max_mark} step="0.5" aria-label={`${row.fullName} mark`} value={marks[row.learnerId] ?? (row.mark ?? '')} onChange={e => setMarks({ ...marks, [row.learnerId]: e.target.value })}/></td></tr>)}</tbody></table></div>
       <div className="actions"><button disabled={busy} onClick={saveMarks}>Save marks</button></div>
     </Dialog>}

@@ -45,8 +45,8 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
     try { setData(await request<Profile>(`/schools/${schoolId}/learners/${learnerId}/profile${termId ? `?termId=${termId}` : ''}`)); setError(''); } catch (e) { setError((e as Error).message); }
   }, [schoolId, learnerId, termId]);
   useEffect(() => { setData(null); void load(); }, [load]);
-  const back = () => history.length > 1 ? history.back() : (location.hash = role === 'headteacher' ? '#/learners' : '#/progress');
-  if (error && !data) return <section className="page"><PageHeader eyebrow="Learner" title="Learner unavailable" blurb={error} actions={<button type="button" className="secondary" onClick={back}><Icon name="arrow_back"/>Back</button>}/></section>;
+  const back = () => history.length > 1 ? history.back() : (location.hash = role === 'headteacher' ? '#/students' : '#/progress');
+  if (error && !data) return <section className="page"><PageHeader eyebrow="Student" title="Student unavailable" blurb={error} actions={<button type="button" className="secondary" onClick={back}><Icon name="arrow_back"/>Back</button>}/></section>;
   if (!data) return <p role="status">Loading…</p>;
 
   const { learner: l, termWork: tw, attendance: att } = data;
@@ -60,8 +60,8 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
   const canPlan = !!data.currentClass && !!data.term && data.term.startDate <= data.today && data.term.endDate >= data.today;
   const hasOpenPlan = (subject: string) => openPlans.some(p => p.subject === subject);
   const facts = [l.admissionNumber, data.currentClass ? data.currentClass.name : 'Not currently enrolled', l.dateOfBirth ? `${ageOn(l.dateOfBirth, data.today)} years (born ${date(l.dateOfBirth)})` : null, l.sex === 'female' ? 'Girl' : l.sex === 'male' ? 'Boy' : null].filter(Boolean).join(' · ');
-  return <section className="page learner-page" aria-label={`Learner ${l.fullName}`}>
-    <PageHeader eyebrow="Learner" title={l.fullName} blurb={facts}
+  return <section className="page learner-page" aria-label={`Student ${l.fullName}`}>
+    <PageHeader eyebrow="Student" title={l.fullName} blurb={facts}
       actions={<><button type="button" className="secondary" onClick={back}><Icon name="arrow_back"/>Back</button>
         {data.terms.length > 0 && <label className="inline-field">Term<select value={data.term?.id ?? ''} onChange={e => setTermId(e.target.value)}>{data.terms.map(t => <option key={t.id} value={t.id}>{t.name} · {t.yearName}</option>)}</select></label>}</>}/>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
@@ -98,7 +98,7 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
       </div>
       <div className="stack">
         <Card title="Family">
-          {!data.guardians.length ? <p className="muted">No guardian linked yet.{role === 'headteacher' ? ' Link one on the Guardians page.' : ''}</p>
+          {!data.guardians.length ? <p className="muted">No parent linked yet.{role === 'headteacher' ? ' Link one on the Parents page.' : ''}</p>
             : <ul className="plain-list">{data.guardians.map((g, i) => <li key={i}><strong>{g.name}</strong>{!g.verified && <> <Pill tone="caution">not verified</Pill></>}
               <span className="sub">{g.rights.map(r => rightLabel[r] ?? r).join(', ')}{g.phone ? ` · ${g.phone}` : ''}</span></li>)}</ul>}
         </Card>

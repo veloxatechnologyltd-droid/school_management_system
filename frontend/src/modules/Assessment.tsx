@@ -121,7 +121,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     const cas = grid.flatMap(row => { const ca = classCa?.[row.learnerId]?.ca; return !row.locked && ca != null && ca !== row.ca ? [{ learnerId: row.learnerId, kind: 'ca' as const, score: ca }] : []; });
     if (!exams.length && !cas.length) throw new Error('Nothing to save: enter an exam mark, or record class work marks first.');
     const result = await send<{ written: number }>(`/assessment/classes/${classId}/scores`, 'POST', { termId, subjectId, scores: [...cas, ...exams] });
-    await loadGrid(); setMessage(`Saved ${exams.length} exam mark(s)${cas.length ? ` and the CA from class work for ${cas.length} learner(s)` : ''} (${result.written} score(s) written).`);
+    await loadGrid(); setMessage(`Saved ${exams.length} exam mark(s)${cas.length ? ` and the CA from class work for ${cas.length} student(s)` : ''} (${result.written} score(s) written).`);
   });
   const reopen = (row: GridRow) => { const reason = window.prompt(`Why is ${row.fullName}'s published report being corrected? This is recorded.`); if (!reason || reason.trim().length < 3) return;
     void act(async () => { await send(`/assessment/classes/${classId}/reopen`, 'POST', { termId, learnerId: row.learnerId, reason }); await loadGrid(); setMessage(`${row.fullName}'s report is open for correction. Fix the scores, then publish the corrected report.`); }); };
@@ -162,16 +162,16 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
     setPrinting(r.items);
   });
   const preview = () => void act(async () => { setResults((await request<{ items: Result[] }>(`/schools/${schoolId}/assessment/classes/${classId}/results?termId=${termId}`)).items); });
-  const publish = () => { if (!window.confirm('Publish terminal reports for this class? Scores will be locked and guardians can see them.')) return;
+  const publish = () => { if (!window.confirm('Publish terminal reports for this class? Scores will be locked and parents can see them.')) return;
     void act(async () => {
       const incomplete = results.filter(r => !r.complete).length;
-      if (incomplete && !window.confirm(`${incomplete} learner(s) have missing scores. Publish their incomplete reports anyway?`)) return;
+      if (incomplete && !window.confirm(`${incomplete} student(s) have missing scores. Publish their incomplete reports anyway?`)) return;
       const r = await send<{ published: number }>(`/assessment/classes/${classId}/publish`, 'POST', { termId, acknowledgeIncomplete: incomplete > 0 });
       await loadGrid(); setMessage(`Published ${r.published} report(s).`);
     }); };
 
   const resultsTable = results.length > 0 && <>
-    <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">Position</th><th className="num">Average</th><th>Subjects</th></tr></thead><tbody>{results.map(r => <tr key={r.learnerId}><td>{r.fullName}{!r.complete && <> <Pill tone="caution">Missing scores</Pill></>}</td><td className="num">{r.position ?? '–'}</td><td className="num">{r.complete ? r.average : '–'}</td><td>{r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr><th>Student</th><th className="num">Position</th><th className="num">Average</th><th>Subjects</th></tr></thead><tbody>{results.map(r => <tr key={r.learnerId}><td>{r.fullName}{!r.complete && <> <Pill tone="caution">Missing scores</Pill></>}</td><td className="num">{r.position ?? '–'}</td><td className="num">{r.complete ? r.average : '–'}</td><td>{r.subjects.map(s => `${s.name}: ${s.total ?? '–'}${s.grade ? ` (${s.grade})` : ''}`).join(' · ')}</td></tr>)}</tbody></table></div>
     <div className="actions card-actions"><button disabled={busy} onClick={publish}>Publish terminal reports</button></div></>;
   // Mock exams are a JHS matter (BECE preparation).
   const isJhs = (classes.find(c => c.id === classId)?.level ?? 'JHS') === 'JHS';
@@ -203,7 +203,7 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
           {caWeightNow > 0 && <fieldset className="ca-parts"><legend>What the CA is made of (% of the final score)</legend>
             {caPartLabels.map(([key, , long]) => <label key={key}>{long}<input type="number" min={0} max={caWeightNow} step={0.5} value={policyForm.parts[key]} onChange={e => setPolicyForm({ ...policyForm, parts: { ...policyForm.parts, [key]: e.target.value } })} required/>
               {key === 'tests' && partPoints.tests > 0 && <span className="sub">Two tests count {Math.round(partPoints.tests * 5) / 10} each</span>}</label>)}
-            <p className={partsTotal === caWeightNow ? 'muted' : 'field-error'}>Total {partsTotal} of {caWeightNow}. For example, with the CA at 50%: class exercises 15, homework 15 and class tests 20 (two tests at 10 each). Put 0 for a part your school does not count. If a learner has no marks in a part, that part is skipped for them and the other parts count for more.</p></fieldset>}
+            <p className={partsTotal === caWeightNow ? 'muted' : 'field-error'}>Total {partsTotal} of {caWeightNow}. For example, with the CA at 50%: class exercises 15, homework 15 and class tests 20 (two tests at 10 each). Put 0 for a part your school does not count. If a student has no marks in a part, that part is skipped for them and the other parts count for more.</p></fieldset>}
           <label>Grade bands (one per line: minimum score, grade, remark)<textarea rows={6} value={policyForm.bands} onChange={e => setPolicyForm({ ...policyForm, bands: e.target.value })} required/></label>
           <label>Where this policy comes from<input value={policyForm.sourceNote} onChange={e => setPolicyForm({ ...policyForm, sourceNote: e.target.value })} required minLength={3} placeholder="e.g. School policy memo, September 2026"/></label><button disabled={busy}>Save policy</button></form>
       </Card></SetupWrap>}
@@ -215,9 +215,9 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
       : tab === 'mocks' && isJhs ? <Mocks key={classId} schoolId={schoolId} csrfToken={csrfToken} classId={classId} termId={termId} subjects={subjects} mode="record"/>
       : tab === 'ca' ? <CaSheet schoolId={schoolId} classId={classId} termId={termId} subjects={subjects} subjectId={workSubject} onSubject={setWorkSubject}/>
       : tab === 'scores' ? <>
-        <div className="toolbar"><label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">Choose a subject</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label><span className="count">{grid.length} learner{grid.length === 1 ? '' : 's'}</span></div>
-        {grid.length > 0 && subjectId ? <><p className="muted card-body">Enter each learner's exam mark out of 100. The continuous assessment comes from the class work recorded on the Class work tab{policy ? ` (CA ${policy.ca_weight}%, exam ${policy.exam_weight}%)` : ''}, so it cannot be typed here; it is saved with the exam marks.</p>
-          <div className="table-wrap"><table><thead><tr><th>Learner</th><th className="num">CA from class work<span className="sub">out of 100</span></th><th>Exam (0–100)</th><th className="num hide-sm">Total</th>{head && <th>Published report</th>}</tr></thead><tbody>
+        <div className="toolbar"><label>Subject<select value={subjectId} onChange={e => setSubjectId(e.target.value)}><option value="">Choose a subject</option>{subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label><span className="count">{grid.length} student{grid.length === 1 ? '' : 's'}</span></div>
+        {grid.length > 0 && subjectId ? <><p className="muted card-body">Enter each student's exam mark out of 100. The continuous assessment comes from the class work recorded on the Class work tab{policy ? ` (CA ${policy.ca_weight}%, exam ${policy.exam_weight}%)` : ''}, so it cannot be typed here; it is saved with the exam marks.</p>
+          <div className="table-wrap"><table><thead><tr><th>Student</th><th className="num">CA from class work<span className="sub">out of 100</span></th><th>Exam (0–100)</th><th className="num hide-sm">Total</th>{head && <th>Published report</th>}</tr></thead><tbody>
           {grid.map(row => { const ca = caFor(row), fromWork = classCa?.[row.learnerId], examText = edits[`${row.learnerId}:exam`] ?? (row.exam ?? ''), exam = examText === '' ? null : Number(examText);
             const caNote = row.locked ? 'report published' : !fromWork?.ca && fromWork?.ca !== 0 ? (row.ca === null ? 'no class work marked yet' : 'entered earlier · no class work marked') : `${fromWork.assessments} mark${fromWork.assessments === 1 ? '' : 's'}${row.ca === fromWork.ca ? ' · saved' : row.ca === null ? ' · saved with exam' : ` · was ${row.ca}, saved with exam`}`;
             return <tr key={row.learnerId}><td>{row.fullName}</td>
@@ -227,21 +227,21 @@ export function Assessment({ schoolId, csrfToken, role, view }: { schoolId: stri
               {head && <td>{row.locked ? <button type="button" className="secondary" disabled={busy} onClick={() => reopen(row)}>Correct this report</button> : row.published ? <button type="button" disabled={busy} onClick={() => reissue(row)}>Publish corrected report</button> : '–'}</td>}</tr>; })}</tbody></table></div>
           {grid.some(row => !row.locked) ? <div className="actions card-actions"><button disabled={busy || !policy} onClick={saveScores}>Save exam scores</button></div>
             : <p className="muted card-body">Every report in this class is published, so these marks are locked.{head ? ' Use "Correct this report" to change one.' : ''}</p>}</>
-          : <Empty title={subjectId ? 'No learners in this class' : 'Choose a subject'} hint={subjectId ? undefined : 'Pick the subject whose exam marks you are entering.'}/>}
+          : <Empty title={subjectId ? 'No students in this class' : 'Choose a subject'} hint={subjectId ? undefined : 'Pick the subject whose exam marks you are entering.'}/>}
       </> : tab === 'remarks' ? (remarks.length > 0 ? <>
-        <p className="muted">{head ? 'Class teachers fill conduct, attitude, interest and their remark; you add the headteacher\'s remark. Locked once the report is published.' : 'Conduct, attitude, interest and your remark for each learner. Locked once the report is published.'}</p>
+        <p className="muted">{head ? 'Class teachers fill conduct, attitude, interest and their remark; you add the headteacher\'s remark. Locked once the report is published.' : 'Conduct, attitude, interest and your remark for each student. Locked once the report is published.'}</p>
         {remarkNote && <p role="status">{remarkNote}</p>}
-        <div className="table-wrap"><table className="remarks-table"><thead><tr><th>Learner</th>{remarkFields.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead><tbody>
+        <div className="table-wrap"><table className="remarks-table"><thead><tr><th>Student</th>{remarkFields.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead><tbody>
           {remarks.map(row => <tr key={row.learnerId}><td>{row.fullName}{row.locked && <> <Pill>published</Pill></>}{remarkRun?.drafts[row.learnerId] !== undefined && <> <Pill tone="info">draft, not saved</Pill></>}</td>{remarkFields.map(([field, label]) => {
             const key = `${row.learnerId}:${field}`, readOnly = row.locked || (field === 'headRemark' && !head);
             const long = field.endsWith('emark'), props = { 'aria-label': `${row.fullName} ${label}`, maxLength: long ? 300 : 120, value: remarkEdits[key] ?? row[field] ?? '', onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setRemarkEdits({ ...remarkEdits, [key]: e.target.value }) };
             return <td key={field} className={long ? 'remark-cell' : undefined}>{readOnly ? (row[field] ?? '–') : long ? <textarea rows={2} {...props}/> : <input {...props}/>}</td>;
           })}</tr>)}</tbody></table></div>
         <div className="actions card-actions"><button disabled={busy} onClick={saveRemarks}>Save remarks</button>{remarks.some(r => !r.locked && !r.teacherRemark) && <button className="secondary" disabled={busy} onClick={suggestRemarks}><Icon name="auto_awesome"/>Suggest remarks</button>}</div></>
-        : <Empty title="No learners in this class" hint="Remarks appear once learners are enrolled."/>)
+        : <Empty title="No students in this class" hint="Remarks appear once students are enrolled."/>)
       : <div className="card-body">
         <h4>This class</h4>
-        <p className="muted">{head ? 'Look at the results, then publish the terminal reports. Publishing locks the scores and shows the reports to guardians.' : 'Reports the headteacher has published for this class and term.'}</p>
+        <p className="muted">{head ? 'Look at the results, then publish the terminal reports. Publishing locks the scores and shows the reports to parents.' : 'Reports the headteacher has published for this class and term.'}</p>
         <div className="actions">{head && <button className="secondary" disabled={busy} onClick={preview}>Preview results</button>}<button className="secondary" disabled={busy} onClick={openReportCards}><Icon name="description"/>Report cards</button></div>
         {resultsTable}
         {head && <><h4>Whole school or one level</h4><p className="muted">Print every published report card for the term, one per page.</p>

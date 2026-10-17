@@ -113,7 +113,7 @@ export function Attendance({ schoolId, csrfToken, role, accessRefresh }: Props) 
     <PageHeader id="attendance-title" eyebrow="Daily register" title="Attendance" blurb="One dated register per class. Changes after submission need a reason."/>
     {error && (register || !classId) && <p role="alert">{error}</p>}{notice && <p role="status" aria-live="polite">{notice}</p>}
     {register && <div className="stats">
-      <Stat label="Present" value={count('present')} caption={`of ${register.items.length} learners`} tone="positive"/>
+      <Stat label="Present" value={count('present')} caption={`of ${register.items.length} students`} tone="positive"/>
       <Stat label="Late" value={count('late')} tone="caution"/>
       <Stat label="Absent" value={count('absent')} caption={count('excused') ? `${count('excused')} excused` : undefined} tone="critical"/>
       <Stat label="Not marked" value={count('unmarked')} tone={count('unmarked') ? 'caution' : 'neutral'}/>
@@ -126,10 +126,10 @@ export function Attendance({ schoolId, csrfToken, role, accessRefresh }: Props) 
           {(head || classes.length > 6 || classSearch) && <form onSubmit={e => { e.preventDefault(); setClassSearch(classSearchInput.trim()); setClassId(''); }}><label className="search"><Icon name="search"/><input aria-label="Find a class" value={classSearchInput} onChange={e => setClassSearchInput(e.target.value)} placeholder="Find a class" /></label><button className="secondary" type="submit" disabled={busy}>Find class</button></form>}
         </div>
         {!register ? <Empty title={!classId ? 'Choose a class' : error ? 'This register cannot open' : 'Loading register…'} hint={!classId ? 'Pick a class and date to open its register.' : error || undefined}/> : <>
-          <div className="card-head"><div><h3>{register.className} · {register.date}</h3><p className="card-hint">Status: {register.status}. {register.status==='draft'?'Every currently enrolled learner appears once.':'The roster captured for this register is retained.'}</p></div>
+          <div className="card-head"><div><h3>{register.className} · {register.date}</h3><p className="card-hint">Status: {register.status}. {register.status==='draft'?'Every currently enrolled student appears once.':'The roster captured for this register is retained.'}</p></div>
             <div className="actions"><Pill tone={statusTone[register.status]}>{register.status}</Pill>{!locked && count('unmarked') > 0 && <button type="button" className="secondary" disabled={busy} onClick={() => setRegister({ ...register, items: register.items.map(item => item.mark === 'unmarked' ? { ...item, mark: 'present' } : item) })}>Mark the rest present</button>}</div></div>
           {register.rosterSource==='legacy_marks'&&<p role="status">This older roster was recovered from saved marks. Review it against school records; original submission-time names and membership may be incomplete.</p>}
-          {!register.items.length ? <Empty title="No learners in this register"/> : <div className="table-wrap"><table><thead><tr><th>Learner</th><th>Mark</th></tr></thead><tbody>{register.items.map(row => <tr key={row.id}>
+          {!register.items.length ? <Empty title="No students in this register"/> : <div className="table-wrap"><table><thead><tr><th>Student</th><th>Mark</th></tr></thead><tbody>{register.items.map(row => <tr key={row.id}>
             <td><span>{row.full_name}</span><span className="sub">{row.admission_number}</span></td>
             <td><div className="mark-group" role="group" aria-label={`Attendance for ${row.full_name}`}>{markNames.map(([mark, name]) => <button key={mark} type="button" className={`m-${mark}`} aria-pressed={row.mark === mark} disabled={busy || locked} onClick={() => setMark(row.id, mark)}>{name}</button>)}</div></td>
           </tr>)}</tbody></table></div>}
