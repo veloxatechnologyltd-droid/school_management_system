@@ -616,7 +616,7 @@ export default function Landing() {
   };
   return <div className="lp" onClick={jump}>
     <nav className={`lp-nav ${solid ? 'solid' : 'on-blue'}`} aria-label="Main">
-      <a className="lp-brand" href="#"><span className="logo" aria-hidden="true">V</span>Veloxa SmartSchool</a>
+      <a className="lp-brand" href="#"><span className="logo" aria-hidden="true">V</span>Veloxa<span className="lp-brand-rest"> SmartSchool</span></a>
       <div className="lp-links"><a href="#schools">Schools</a><a href="#families">Parents</a><a href="#pricing">Pricing</a></div>
       <div className="lp-nav-cta"><a className="lp-signin" href="#/signin">Sign in</a><a className="lp-btn small" href={START}>Start free</a></div>
     </nav>

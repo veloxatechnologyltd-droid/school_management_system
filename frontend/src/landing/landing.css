@@ -39,6 +39,7 @@
 .lp-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;color:var(--ink);text-decoration:none}
 .lp-brand .logo{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--accent);color:#fff;font-weight:800}
 .lp-links{display:flex;gap:28px;margin-left:24px}
+.lp-brand,.lp-signin,.lp-nav .lp-btn{min-height:44px;white-space:nowrap}.lp-signin{display:inline-flex;align-items:center;padding:0 4px}
 .lp-links a,.lp-signin{color:var(--ink);text-decoration:none;font-weight:500;font-size:15px}
 .lp-links a:hover,.lp-signin:hover{color:var(--accent)}
 .lp-nav-cta{margin-left:auto;display:flex;align-items:center;gap:18px}
@@ -223,7 +224,6 @@
 .lp-note.staff{background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:6px}
 .lp-note.family{justify-self:end;background:var(--accent);color:#fff;border-bottom-right-radius:6px}.lp-note.family small{color:#d6e3fb}
 .lp-kwame-phone{position:sticky;top:96px}
-@media (max-width:1000px){.lp-proof{grid-template-columns:1fr}}
 .lp-phone{background:var(--night);color:var(--on-night);border-radius:40px;padding:22px 20px 24px;border:6px solid #23335a;box-shadow:var(--e3);max-width:380px;margin:0 auto;min-height:540px;display:flex;flex-direction:column}
 .lp-phone-top{display:flex;justify-content:space-between;align-items:center;font-weight:600;margin:4px 4px 12px}
 .lp-phone .ui-dots i{width:10px;height:10px}
@@ -349,7 +349,7 @@
   .lp-stack{width:min(440px,92%);transform:rotateX(48deg) rotateZ(-28deg)}
   .lp-layer{transform:none}.lp-layer.l1{transform:translateZ(60px)}.lp-layer.l2{transform:translateZ(110px)}.lp-layer.l3{transform:translateZ(170px)}
   .lp .lp-fees{height:auto}.lp-fees .lp-sticky{position:static;min-height:0}
-  .lp-fees-grid,.lp-ask-head,.lp-kwame-grid,.lp-price-grid{grid-template-columns:1fr}
+  .lp-fees-grid,.lp-ask-head,.lp-kwame-grid,.lp-price-grid,.lp-proof{grid-template-columns:1fr}
   .lp-kwame-phone{position:static}
   .lp .lp-day{height:auto}.lp-day .lp-sticky{position:static;min-height:0}
   .lp-day-view{overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -361,7 +361,8 @@
 }
 @media (max-width:600px){
   .lp-nav{height:60px;gap:12px}.lp-brand{font-size:15px}.lp-signin{font-size:14px}
-  .lp-nav-cta{gap:12px}
+  .lp-nav-cta{gap:8px}.lp .lp-nav .lp-btn.small{height:44px;padding:0 14px}
+  .lp-brand{gap:8px}.lp-brand .logo{width:28px;height:28px}
   .lp-hero h1{font-size:44px}
   .lp-cta-row .lp-btn{flex:1 1 100%}
   .lp-stack{width:80%;margin-right:8%}
@@ -369,7 +370,17 @@
   .lp-card{width:min(86vw,360px);padding:20px}
   .lp-thread{min-height:360px}.lp-msg{font-size:15px}
   .lp-phone{border-radius:32px;min-height:500px}
+  .lp-split{height:auto;min-height:44px;font-size:11px}.lp-split span{white-space:normal;text-align:center;line-height:1.2;padding:4px}
   .lp-calc-out strong{font-size:22px}.lp-calc-out .wide strong{font-size:30px}
+}
+
+/* Small phones: the top bar keeps the logo, "Veloxa", Sign in and Start free on one line. */
+@media (max-width:420px){.lp-brand-rest{display:none}}
+
+/* Touch screens: every link and slider is at least 44 px tall. */
+@media (pointer:coarse){
+  .lp .lp-calc input[type=range]{height:44px}
+  .lp-footer-links a,.lp-footer-meta a{min-height:44px}
 }
 
 /* Reduced motion: everything rests in its finished state, nothing is pinned. */
