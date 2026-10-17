@@ -19,7 +19,7 @@ const login = (label) => {
 const ACCOUNTS = { head: login('Headteacher'), teacher: login('Class teacher'), parent: login('Parent') };
 // The hosted demo school has home practice switched off, so the parent's screens are captured from the local demo school
 // (npm run dev:demo, or the API on school_demo behind the dev server). Its password is the public demo loader password.
-const LOCAL = { base: 'http://127.0.0.1:5178', email: 'parent@sunrise.demo', password: 'Demo-school-2026!' };
+const LOCAL = { base: process.env.DEMO_LOCAL_WEB ?? 'http://127.0.0.1:5178', email: 'parent@sunrise.demo', password: 'Demo-school-2026!' };
 
 const DESKTOP = { width: 1100, height: 720 };
 const PHONE = { width: 390, height: 780 };
