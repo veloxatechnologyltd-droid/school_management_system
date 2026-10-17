@@ -8,10 +8,16 @@ import { ProgressService } from '../assessment/progress.service';
 import { SupportService } from '../assessment/support.service';
 import { MocksService } from '../assessment/mocks.service';
 import { FinanceService } from '../finance/finance.service';
-import { LearnerNoteDto, WithdrawNoteDto } from './profile.dto';
+import { LearnerDetailsDto, LearnerNoteDto, WithdrawNoteDto } from './profile.dto';
+import { cleanPhone, cleanValues, clean, needContactName, storeDetails } from '../../core/details';
 
 type Note = { id: string; author_membership_id: string; author_role: string; author_name: string; category: string; body: string; shared_with_family: boolean; created_at: string;
   withdrawn_at: string | null; withdrawal_reason: string | null };
+
+const detailRules = { nationality: { label: 'Nationality', min: 2, max: 60 }, home_address: { label: 'Home address', min: 3, max: 200 }, previous_school: { label: 'Previous school', min: 2, max: 120 },
+  health_notes: { label: 'Health notes', min: 3, max: 500 }, emergency_name: { label: 'Emergency contact name', min: 2, max: 120 }, emergency_relationship: { label: 'Relationship', min: 2, max: 40 } };
+// What each role may read. A teacher sees what keeps a child safe in class; religion, nationality and the home address are the head's.
+const teacherDetails = ['previousSchool','bloodGroup','healthNotes','emergencyName','emergencyRelationship','emergencyPhone'] as const;
 
 @Injectable()
 export class LearnerProfileService {
@@ -55,6 +61,13 @@ export class LearnerProfileService {
       [actor.schoolId,current.class_id,today])).rows.map(r => r.name as string) : [];
     const application = head ? (await client.query('SELECT id,created_at,start_date::text FROM admissions WHERE school_id=$1 AND learner_id=$2',[actor.schoolId,learnerId])).rows[0] ?? null : null;
 
+    const detailRow = (await client.query(`SELECT nationality,religion,home_address,previous_school,blood_group,health_notes,emergency_name,emergency_relationship,emergency_phone,version,updated_at
+      FROM learner_details WHERE school_id=$1 AND learner_id=$2`,[actor.schoolId,learnerId])).rows[0];
+    const allDetails = {nationality:detailRow?.nationality ?? null,religion:detailRow?.religion ?? null,homeAddress:detailRow?.home_address ?? null,previousSchool:detailRow?.previous_school ?? null,
+      bloodGroup:detailRow?.blood_group ?? null,healthNotes:detailRow?.health_notes ?? null,emergencyName:detailRow?.emergency_name ?? null,emergencyRelationship:detailRow?.emergency_relationship ?? null,emergencyPhone:detailRow?.emergency_phone ?? null};
+    const details = {version:detailRow?.version ?? 0,updatedAt:detailRow?.updated_at ?? null,canEdit:head,
+      ...(head ? allDetails : Object.fromEntries(teacherDetails.map(k => [k,allDetails[k]])))};
+
     const termWork = term ? await this.progress.learnerTerm(client,actor,learnerId,term.id) : null;
     const history = await this.progress.learnerProgress(client,actor,learnerId,'term');
     const reports = (await client.query(`SELECT DISTINCT ON (r.term_id) r.term_id,t.name AS term_name,y.name AS year_name,r.revision,r.published_at,r.snapshot->'class'->>'name' AS class_name,
@@ -80,10 +93,24 @@ export class LearnerProfileService {
       terms:terms.map(t => ({id:t.id,name:t.name,yearName:t.year_name})),term:term ? {id:term.id,name:term.name,yearName:term.year_name,startDate:term.start_date,endDate:term.end_date} : null,
       attendance:attendance ? {marked:attendance.marked,present:attendance.present,late:attendance.late,absent:attendance.absent,excused:attendance.excused,
         rate:attendance.marked ? Math.round(attendance.present * 1000 / attendance.marked) / 10 : null,absentDays:(attendance.absent_days ?? []).slice(0,10),days} : null,
-      classTeachers,application:application ? {id:application.id as string,receivedOn:String(new Date(application.created_at).toISOString()).slice(0,10),startDate:application.start_date as string} : null,
+      details,classTeachers,application:application ? {id:application.id as string,receivedOn:String(new Date(application.created_at).toISOString()).slice(0,10),startDate:application.start_date as string} : null,
       termWork,history:{buckets:history.buckets,subjects:history.subjects},reports,plans,mock,
       fees:head ? await this.finance.learnerFees(client,actor.schoolId,learnerId) : undefined,
       notes:await this.notes(client,actor,learnerId)};
+  }
+
+  // The headteacher records a student's optional details, whole: a field left empty is cleared. The audit event names the fields
+  // that changed and never their values, because religion and health are sensitive.
+  saveDetails(client: PoolClient, actor: Actor, learnerId: string, body: LearnerDetailsDto) {
+    return command(client,actor,body.operationId,'learner.details',{learnerId,...body},async () => {
+      await this.learners.learner(client,actor.schoolId,learnerId);
+      const values = {...cleanValues(detailRules,{nationality:body.nationality,home_address:body.homeAddress,previous_school:body.previousSchool,health_notes:body.healthNotes,
+        emergency_name:body.emergencyName,emergency_relationship:body.emergencyRelationship}),religion:clean(body.religion),blood_group:clean(body.bloodGroup),emergency_phone:cleanPhone(body.emergencyPhone)};
+      needContactName(values);
+      const saved = await storeDetails(client,'learner_details','learner_id',actor.schoolId,learnerId,body.version,values);
+      if (saved.changed.length) await audit(client,actor,'learner.details.updated',learnerId,{fields:saved.changed,version:saved.version});
+      return {version:saved.version};
+    });
   }
 
   // Staff see every note on the learner; a guardian sees the notes the school shared with the family and their own.

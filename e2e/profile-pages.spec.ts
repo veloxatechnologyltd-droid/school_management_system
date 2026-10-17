@@ -36,6 +36,30 @@ test('a student and a staff member each have a full page: who they are, a summar
   await expect(rail).toContainText('Admission no.');await expect(rail).toContainText('Fees owing');await expect(rail.getByRole('link',{name:'Parents',exact:true})).toBeVisible();
   await expect(rail.getByRole('button',{name:'Print student record',exact:true})).toBeVisible();
   await expect(page.locator('.student-record')).toBeHidden();
+
+  // ---- Optional details: nothing is required, a gap shows as "Not recorded" to the head, and religion and health are optional.
+  await expect(page.locator('.facts-grid').filter({hasText:'Religion'}).locator('.not-recorded').first()).toBeVisible();
+  await page.getByRole('button',{name:'Edit',exact:true}).first().click();
+  const detailsDialog=page.getByRole('dialog',{name:'Details for Efua Profile',exact:true});
+  await expect(detailsDialog).toContainText('Religion, blood group and health notes are optional');
+  await detailsDialog.getByLabel('Home address',{exact:true}).fill('House 7, Millennium City, Kasoa');
+  await detailsDialog.getByRole('button',{name:'Save details',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Details saved.'})).toBeVisible();
+  await expect(page.locator('.facts-grid').filter({hasText:'House 7, Millennium City, Kasoa'})).toContainText('Religion');
+  await page.getByRole('button',{name:'Edit',exact:true}).first().click();
+  await detailsDialog.getByLabel('Name',{exact:true}).fill('Kojo Profile');await detailsDialog.getByLabel('Mobile number',{exact:true}).fill('12345');
+  await detailsDialog.getByRole('button',{name:'Save details',exact:true}).click();
+  await expect(detailsDialog.getByRole('alert')).toContainText('Ghana mobile number');
+  await detailsDialog.getByLabel('Mobile number',{exact:true}).fill('024 555 1111');await detailsDialog.getByRole('combobox',{name:'Religion',exact:true}).selectOption('Muslim');
+  await detailsDialog.getByRole('textbox',{name:'Health notes',exact:true}).fill('Allergic to groundnuts');await detailsDialog.getByRole('button',{name:'Save details',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Details saved.'})).toBeVisible();
+  const health=page.locator('.card').filter({has:page.getByRole('heading',{name:'Health and emergency contact',exact:true})});
+  await expect(health).toContainText('Allergic to groundnuts');await expect(health).toContainText('Kojo Profile');
+  await expect(health.getByRole('link',{name:'024 555 1111',exact:true})).toHaveAttribute('href','tel:+233245551111');
+  await expect(page.locator('.facts-grid').filter({hasText:'Religion'})).toContainText('Muslim');
+  // The printed record has the address and the contact, never religion or health.
+  const printed=await page.locator('.student-record').evaluate(element=>element.textContent??'');
+  expect(printed).toContain('House 7, Millennium City, Kasoa');expect(printed).toContain('Kojo Profile');expect(printed).not.toContain('Muslim');expect(printed).not.toContain('groundnuts');
   const tab=(name:string)=>page.getByRole('tab',{name,exact:true});
   await tab('Attendance').click();await expect(page.getByText('No registers recorded for this term yet')).toBeVisible();
   await tab('Fees').click();await expect(page.getByRole('button',{name:'Open in Accounts',exact:true})).toBeVisible();await expect(page.locator('.stat').filter({hasText:'Owing'})).toContainText('GH₵ 500.00');
@@ -62,6 +86,16 @@ test('a student and a staff member each have a full page: who they are, a summar
   const staffRail=page.getByRole('complementary',{name:'Summary and account actions',exact:true});
   await staffRail.getByRole('button',{name:'Reset password',exact:true}).click();
   await expect(page.locator('.credentials')).toContainText(`joyce-${suffix}@example.test`);await expect(page.locator('.credentials code')).not.toBeEmpty();await page.getByRole('button',{name:'I have copied it',exact:true}).click();
+  // The head records job details; a staff number belongs to one person.
+  expect((await page.request.put(`/api/v1/schools/${sid}/accounts/${teacherM}/details`,{headers:{'x-csrf-token':csrf},data:{operationId:randomUUID(),version:0,staffNumber:'SIS-A-009'}})).status()).toBe(200);
+  await staffRail.getByRole('button',{name:'Edit details',exact:true}).click();
+  const staffDialog=page.getByRole('dialog',{name:'Details for Joyce Accounts',exact:true});
+  await staffDialog.getByLabel('Job title',{exact:true}).fill('School accountant');await staffDialog.getByLabel('Staff number',{exact:true}).fill('sis-a-009');await staffDialog.getByLabel('Date joined',{exact:true}).fill('2022-01-10');
+  await staffDialog.getByRole('button',{name:'Save details',exact:true}).click();
+  await expect(staffDialog.getByRole('alert')).toContainText('already used');
+  await staffDialog.getByLabel('Staff number',{exact:true}).fill('SIS-A-010');await staffDialog.getByRole('button',{name:'Save details',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Details saved.'})).toBeVisible();
+  await expect(page.locator('.person-card')).toContainText('School accountant');await expect(page.locator('.person-card')).toContainText('SIS-A-010');await expect(staffRail).toContainText('10 Jan 2022');
   await staffRail.getByRole('button',{name:'Add a phone number',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Phone number for Joyce Accounts',exact:true});await dialog.getByLabel(/Mobile number/).fill('024 555 9876');await dialog.getByRole('button',{name:'Save phone number',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'Phone number saved for Joyce Accounts.'})).toBeVisible();
@@ -83,6 +117,8 @@ test('a student and a staff member each have a full page: who they are, a summar
   await expect(teacher.getByRole('heading',{name:schoolName,exact:true})).toBeVisible();
   await teacher.goto(`/#/learner/${learner}`);await expect(teacher.getByRole('heading',{name:'Student details',exact:true})).toBeVisible();
   await expect(teacher.locator('.person-card')).toContainText('Efua Profile');await expect(teacher.locator('.person-card')).not.toContainText('Owes');
+  await expect(teacher.getByRole('heading',{name:'Health and emergency contact',exact:true})).toBeVisible();await expect(teacher.getByText('Allergic to groundnuts')).toBeVisible();
+  await expect(teacher.getByText('Muslim')).toHaveCount(0);await expect(teacher.getByText('Millennium City')).toHaveCount(0);await expect(teacher.getByRole('button',{name:'Edit',exact:true})).toHaveCount(0);
   await expect(teacher.getByRole('tab',{name:'Fees',exact:true})).toHaveCount(0);await expect(teacher.getByRole('link',{name:'Open the application',exact:true})).toHaveCount(0);
   await expect(teacher.getByRole('link',{name:'Parents',exact:true})).toHaveCount(0);await expect(teacher.getByText('Fees owing')).toHaveCount(0);
   await teacher.goto(`/#/teacher/${teacherM}`);await expect(teacher.getByRole('heading',{name:'Teacher details',exact:true})).toHaveCount(0);

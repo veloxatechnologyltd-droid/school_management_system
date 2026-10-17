@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Empty, Icon, PageHeader, Pill, Stat, Tabs, Tone, when } from '../lib/ui';
-import { ProfileCard, QuickAction, QuickActions, SummaryCard } from '../lib/profile';
+import { DetailGroup, DetailsDialog, ProfileCard, QuickAction, QuickActions, SummaryCard, notRecorded } from '../lib/profile';
 import { SchoolLogo } from '../lib/logo';
 import { localPhone } from '../lib/dates';
 import { Step, stepNames } from '../lib/admissions';
@@ -24,6 +24,8 @@ type Profile = {
   guardians: { name: string; verified: boolean; rights: string[]; phone?: string | null }[];
   terms: { id: string; name: string; yearName: string }[]; term: { id: string; name: string; yearName: string; startDate: string; endDate: string } | null;
   attendance: { marked: number; present: number; late: number; absent: number; excused: number; rate: number | null; absentDays: string[]; days: { day: string; mark: string }[] } | null;
+  details: { version: number; updatedAt: string | null; canEdit: boolean; nationality?: string | null; religion?: string | null; homeAddress?: string | null; previousSchool?: string | null; bloodGroup?: string | null;
+    healthNotes?: string | null; emergencyName?: string | null; emergencyRelationship?: string | null; emergencyPhone?: string | null };
   classTeachers: string[]; application: { id: string; receivedOn: string; startDate: string } | null;
   termWork: { policy: { caWeight: number; examWeight: number; parts: Record<PartKey, number> } | null; subjects: SubjectTerm[] } | null;
   history: { buckets: { key: string; label: string }[]; subjects: { subjectId: string; name: string; points: { key: string; assessmentAverage: number | null; termResult: number | null }[] }[] };
@@ -43,6 +45,14 @@ function ageOn(dob: string, today: string) { const [y, m, d] = dob.split('-').ma
 const rightLabel: Record<string, string> = { academic: 'reports', billing: 'fees', pickup: 'pickup', contact: 'contact' };
 const dayName = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
 const markText: Record<string, [string, Tone]> = { present: ['Present', 'neutral'], late: ['Late', 'caution'], absent: ['Absent', 'critical'], excused: ['Excused', 'info'] };
+// The optional details the head records. Religion, blood group and health notes are sensitive, so they sit apart and say so.
+const learnerGroups: DetailGroup[] = [
+  { title: 'About the student', fields: [{ key: 'nationality', label: 'Nationality', maxLength: 60, placeholder: 'Ghanaian' }, { key: 'previousSchool', label: 'Previous school', maxLength: 120 }, { key: 'homeAddress', label: 'Home address', maxLength: 200, wide: true }] },
+  { title: 'Emergency contact', note: 'Someone to call if the parent cannot be reached.', fields: [{ key: 'emergencyName', label: 'Name', maxLength: 120 }, { key: 'emergencyRelationship', label: 'Relationship', maxLength: 40, placeholder: 'Uncle' }, { key: 'emergencyPhone', label: 'Mobile number', kind: 'tel', maxLength: 40, placeholder: '024 123 4567' }] },
+  { title: 'Sensitive details (optional)', note: 'Religion, blood group and health notes are optional. Record them only if the family has agreed to share them with the school, and leave them empty otherwise.',
+    fields: [{ key: 'religion', label: 'Religion', kind: 'select', options: ['Christian', 'Muslim', 'Traditional', 'Other'] }, { key: 'bloodGroup', label: 'Blood group', kind: 'select', options: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] },
+      { key: 'healthNotes', label: 'Health notes', kind: 'textarea', maxLength: 500, placeholder: 'Allergies, conditions or medicine the school should know about', wide: true }] },
+];
 type TabId = 'overview' | 'academics' | 'attendance' | 'notes' | 'fees' | 'history';
 
 
@@ -58,7 +68,7 @@ function Flags({ s }: { s: SubjectTerm }) {
 // (subject by subject, term by term, report cards, support plans), attendance, notes and home practice, fees and history.
 export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId: string; csrfToken: string; role: string; learnerId: string }) {
   const [termId, setTermId] = useState(''); const [data, setData] = useState<Profile | null>(null); const [error, setError] = useState('');
-  const [planFor, setPlanFor] = useState(''); const [message, setMessage] = useState(''); const [tab, setTab] = useState<TabId>('overview');
+  const [planFor, setPlanFor] = useState(''); const [message, setMessage] = useState(''); const [tab, setTab] = useState<TabId>('overview'); const [editing, setEditing] = useState(false);
   const [school, setSchool] = useState<{ name: string; motto?: string | null; address?: string | null; phone?: string | null } | null>(null);
   const [decisions, setDecisions] = useState<{ step: Step; at: string; by: string | null; reason: string | null }[] | null>(null);
   const load = useCallback(async () => {
@@ -95,6 +105,14 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
   // "Basic 5 · Primary" says something; "JHS 1 · JHS" does not.
   const classText = data.currentClass ? `${data.currentClass.name}${data.currentClass.level && !data.currentClass.name.toLowerCase().startsWith(data.currentClass.level.toLowerCase()) ? ` · ${data.currentClass.level}` : ''}` : 'Not currently enrolled';
   const teachers = data.classTeachers.join(', ') || 'Not assigned yet';
+  // A missing detail shows as "Not recorded" to the head, so a gap is easy to spot, and is left out for everyone else.
+  const d = data.details;
+  const row = (label: string, value?: React.ReactNode, wide = false) => value || head ? <div key={label} className={wide ? 'wide' : undefined}><dt>{label}</dt><dd>{value || notRecorded}</dd></div> : null;
+  const contact = d.emergencyName ? `${d.emergencyName}${d.emergencyRelationship ? ` · ${d.emergencyRelationship}` : ''}` : null;
+  const saveDetails = async (values: Record<string, string>, operationId: string) => {
+    await request(`/schools/${schoolId}/learners/${l.id}/details`, { method: 'PUT', headers: { 'x-csrf-token': csrfToken }, body: JSON.stringify({ operationId, version: d.version, ...values }) });
+    setEditing(false); setMessage('Details saved.'); await load();
+  };
 
   const parentList = !data.guardians.length ? <p className="muted">No parent linked yet.{head ? ' Link one on the Parents page.' : ''}</p>
     : <ul className="plain-list">{data.guardians.map((g, i) => <li key={i}><strong>{g.name}</strong>{!g.verified && <> <Pill tone="caution">not verified</Pill></>}
@@ -112,6 +130,7 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
 
   const actions: QuickAction[] = [
     { icon: 'edit_note', label: 'Add a note', onClick: () => setTab('notes') },
+    ...(head ? [{ icon: 'edit', label: 'Edit details', onClick: () => { setMessage(''); setEditing(true); } }] : []),
     ...(planSubject ? [{ icon: 'volunteer_activism', label: `Plan support in ${planSubject.name}`, onClick: () => { setMessage(''); setPlanFor(planSubject.subjectId); } }] : []),
     { icon: 'print', label: 'Print student record', onClick: () => window.print() },
     ...(head && data.application ? [{ icon: 'assignment_ind', label: 'Open the application', href: `#/admission/${data.application.id}` }] : []),
@@ -144,7 +163,7 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
             <Stat label="Support plans" value={openPlans.length} caption={openPlans.some(p => p.due) ? 'A review is due' : openPlans.length ? 'Open' : 'None open'} icon="volunteer_activism" tone={openPlans.some(p => p.due) ? 'caution' : 'neutral'}/>
           </div>
           <div className="cards-2">
-            <Card title="Student information">
+            <Card title="Student information" action={head ? <button type="button" className="secondary small" onClick={() => { setMessage(''); setEditing(true); }}><Icon name="edit"/>Edit</button> : undefined}>
               <dl className="facts-grid">
                 <div><dt>Full name</dt><dd>{l.fullName}</dd></div>
                 <div><dt>Date of birth</dt><dd>{l.dateOfBirth ? `${date(l.dateOfBirth)} (${age} years)` : 'Not recorded'}</dd></div>
@@ -153,16 +172,25 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
                 <div><dt>Class</dt><dd>{classText}</dd></div>
                 <div><dt>Enrolled since</dt><dd>{first ? date(first.startDate) : '–'}</dd></div>
                 {data.term && <div><dt>Academic year</dt><dd>{data.term.yearName}</dd></div>}
-                <div><dt>Class history</dt><dd>{data.enrolments.length} class{data.enrolments.length === 1 ? '' : 'es'}</dd></div>
+                {row('Nationality', d.nationality)}{row('Religion', d.religion)}{row('Previous school', d.previousSchool)}{row('Home address', d.homeAddress, true)}
               </dl>
             </Card>
             <Card title="Parents and guardians">{parentList}</Card>
           </div>
+          <div className="cards-2">
+            {(head || d.bloodGroup || d.healthNotes || d.emergencyName) && <Card title="Health and emergency contact" hint={head ? 'All optional. Recorded only if the family agrees to share it.' : 'Recorded by the school to keep the child safe.'}>
+              <dl className="facts-grid">
+                {row('Blood group', d.bloodGroup)}{row('Emergency contact', contact)}
+                {d.emergencyPhone && <div><dt>Contact phone</dt><dd><a href={`tel:${d.emergencyPhone}`}>{localPhone(d.emergencyPhone)}</a></dd></div>}
+                {row('Health notes', d.healthNotes, true)}
+              </dl>
+            </Card>}
           <Card title="Worth a look this term" hint="Marks that are dropping or low, or an exam far from class work.">
             {!lookAt.length ? <p className="muted">Nothing flagged this term.</p>
               : <ul className="plain-list">{lookAt.map(s => <li key={s.subjectId}><strong>{s.name}</strong> <span className="pill-row"><Flags s={s}/>
                 {hasOpenPlan(s.name) && <Pill tone="info">Plan open</Pill>}</span></li>)}</ul>}
           </Card>
+          </div>
         </>}
 
         {tab === 'academics' && <>
@@ -263,9 +291,11 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
       <h4>Student</h4>
       <dl className="doc-facts"><div><dt>Name</dt><dd>{l.fullName}</dd></div><div><dt>Admission number</dt><dd>{l.admissionNumber}</dd></div>
         <div><dt>Date of birth</dt><dd>{l.dateOfBirth ? `${date(l.dateOfBirth)} (${age} years)` : 'Not recorded'}</dd></div><div><dt>Sex</dt><dd>{sexText ?? 'Not recorded'}</dd></div>
-        <div><dt>Class</dt><dd>{classText}</dd></div><div><dt>Enrolled since</dt><dd>{first ? date(first.startDate) : '–'}</dd></div></dl>
+        <div><dt>Class</dt><dd>{classText}</dd></div><div><dt>Enrolled since</dt><dd>{first ? date(first.startDate) : '–'}</dd></div>
+        {d.nationality && <div><dt>Nationality</dt><dd>{d.nationality}</dd></div>}{d.previousSchool && <div><dt>Previous school</dt><dd>{d.previousSchool}</dd></div>}{d.homeAddress && <div><dt>Home address</dt><dd>{d.homeAddress}</dd></div>}</dl>
       <h4>Parents and guardians</h4>
       {data.guardians.length ? <ul className="plain-list">{data.guardians.map((g, i) => <li key={i}>{g.name}{g.phone ? ` · ${localPhone(g.phone)}` : ''}</li>)}</ul> : <p>None linked.</p>}
+      {contact && <p>Emergency contact: {contact}{d.emergencyPhone ? ` · ${localPhone(d.emergencyPhone)}` : ''}</p>}
       <h4>Classes</h4>
       <table className="doc-history"><tbody>{data.enrolments.map((e, i) => <tr key={i}><td>{e.className}</td><td>From {date(e.startDate)}{e.endDate ? ` to ${date(e.endDate)}` : ' · now'}</td></tr>)}</tbody></table>
       {att?.marked ? <><h4>Attendance, {data.term?.name}</h4><p>{att.present} of {att.marked} days present ({att.late} late), {att.absent} absent, {att.excused} excused.</p></> : null}
@@ -273,6 +303,9 @@ export function LearnerPage({ schoolId, csrfToken, role, learnerId }: { schoolId
         <table className="doc-history"><thead><tr><th>Subject</th><th>CA</th><th>Exam</th><th>Total</th></tr></thead><tbody>{subjects.map(s => <tr key={s.subjectId}><td>{s.name}</td><td>{s.recordedCa ?? s.ca ?? '–'}</td><td>{s.exam ?? '–'}</td><td>{s.total ?? '–'}</td></tr>)}</tbody></table></>}
     </article>
 
+    {editing && <DetailsDialog title={`Details for ${l.fullName}`} intro="Everything here is optional. A field left empty is cleared." groups={learnerGroups} onSave={saveDetails} onClose={() => setEditing(false)}
+      values={{ nationality: d.nationality, previousSchool: d.previousSchool, homeAddress: d.homeAddress, emergencyName: d.emergencyName, emergencyRelationship: d.emergencyRelationship,
+        emergencyPhone: d.emergencyPhone ? localPhone(d.emergencyPhone) : '', religion: d.religion, bloodGroup: d.bloodGroup, healthNotes: d.healthNotes }}/>}
     {planFor && data.currentClass && data.term && <SupportPlanDialog schoolId={schoolId} csrfToken={csrfToken} classId={data.currentClass.id} termId={data.term.id}
       draft={{ subjectId: planFor, learnerIds: [l.id], concern: '' }} subjects={subjects.map(s => ({ id: s.subjectId, name: s.name }))} roster={[{ learnerId: l.id, fullName: l.fullName }]}
       onClose={() => setPlanFor('')} onSaved={() => { setPlanFor(''); setMessage('Support plan started. It appears under Support plans and on the Performance page.'); void load(); }}/>}

@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { Access } from '../../core/access';
 import { LearnerProfileService } from './profile.service';
-import { LearnerNoteDto, ProfileQueryDto, WithdrawNoteDto } from './profile.dto';
+import { LearnerDetailsDto, LearnerNoteDto, ProfileQueryDto, WithdrawNoteDto } from './profile.dto';
 
 const staff = ['headteacher','teacher'];
 @Controller('api/v1/schools/:schoolId')
@@ -11,6 +11,11 @@ export class LearnerProfileController {
   @Get('learners/:learnerId/profile')
   profile(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('learnerId',new ParseUUIDPipe()) learnerId: string,@Query() query: ProfileQueryDto) {
     return this.access.school(req,schoolId,staff,(client,actor) => this.profiles.profile(client,actor,learnerId,query.termId));
+  }
+  // The headteacher records the optional details; teachers only read the ones that keep a child safe.
+  @Put('learners/:learnerId/details')
+  details(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('learnerId',new ParseUUIDPipe()) learnerId: string,@Body() body: LearnerDetailsDto) {
+    return this.access.school(req,schoolId,['headteacher'],(client,actor) => this.profiles.saveDetails(client,actor,learnerId,body),true);
   }
   @Post('learners/:learnerId/notes')
   addNote(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('learnerId',new ParseUUIDPipe()) learnerId: string,@Body() body: LearnerNoteDto) {

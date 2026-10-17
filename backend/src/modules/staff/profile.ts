@@ -1,5 +1,9 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PoolClient } from 'pg';
+import { Actor } from '../../core/access';
+import { audit, command } from '../../core/commands';
+import { clean, cleanPhone, cleanValues, needContactName, storeDetails } from '../../core/details';
+import { StaffDetailsDto } from './details.dto';
 
 // One staff member's page for the headteacher: who they are, the classes they teach, what they have done lately and the
 // history of their sign-in. Everything here is read from records the school already keeps; nothing is stored for the page.
@@ -53,6 +57,8 @@ const doing: Record<string, (m: Meta, cls: string) => string> = {
   'account.phone_set': () => 'Changed a phone number',
   'account.revoked': () => 'Removed someone\'s access',
   'learner.corrected': () => 'Corrected a student\'s details',
+  'learner.details.updated': () => 'Updated a student\'s details',
+  'staff.details.updated': () => 'Updated a staff member\'s details',
   'learner.transferred': () => 'Moved a student to another class',
   'learner.withdrawn': () => 'Withdrew a student',
   'learners.promotion.completed': () => 'Completed year-end promotion',
@@ -125,8 +131,15 @@ export async function memberProfile(client: PoolClient, schoolId: string, member
   const account = (await client.query(`SELECT action,created_at,actor_membership_id FROM audit_events WHERE school_id=$1 AND target_id=$2 AND action IN ('account.created','account.password_reset','account.phone_set','account.revoked') ORDER BY created_at DESC,id LIMIT 20`, [schoolId, member.user_id])).rows
     .map(e => ({ at: e.created_at as string, by: names.get(e.actor_membership_id) ?? null, text: ({ 'account.created': 'Sign-in created', 'account.password_reset': 'Temporary password reset', 'account.phone_set': 'Phone number changed', 'account.revoked': 'Access removed' } as Record<string, string>)[e.action]! }));
 
+  const detail = (await client.query(`SELECT staff_number,job_title,qualification,licence_number,date_joined::text AS date_joined,employment_type,subjects,home_address,emergency_name,emergency_relationship,emergency_phone,version,updated_at
+    FROM staff_details WHERE school_id=$1 AND membership_id=$2`, [schoolId, membershipId])).rows[0];
+  const details = { version: detail?.version ?? 0, updatedAt: detail?.updated_at ?? null, staffNumber: detail?.staff_number ?? null, jobTitle: detail?.job_title ?? null, qualification: detail?.qualification ?? null,
+    licenceNumber: detail?.licence_number ?? null, dateJoined: detail?.date_joined ?? null, employmentType: detail?.employment_type ?? null, subjects: detail?.subjects ?? null, homeAddress: detail?.home_address ?? null,
+    emergencyName: detail?.emergency_name ?? null, emergencyRelationship: detail?.emergency_relationship ?? null, emergencyPhone: detail?.emergency_phone ?? null };
+
   return {
     today,
+    details,
     member: { userId: member.user_id as string, membershipId: member.membership_id as string, name: member.display_name as string, login: member.login as string, role: member.role as string, phone: member.phone as string | null, revokedAt: member.revoked_at as string | null, mustChangePassword: member.must_change_password as boolean },
     classes: assignments.map(a => ({ id: a.id as string, classId: a.class_id as string, className: a.class_name as string, level: a.level as string, yearName: a.year_name as string, startDate: a.start_date as string, endDate: a.end_date as string,
       status: a.status, students: a.students as number, reason: a.grant_reason as string, endedReason: a.revocation_reason as string | null })),
@@ -134,4 +147,25 @@ export async function memberProfile(client: PoolClient, schoolId: string, member
     account,
     activity: await memberActivity(client, schoolId, membershipId, 0, 8),
   };
+}
+
+const detailRules = { staff_number: { label: 'Staff number', min: 1, max: 30 }, job_title: { label: 'Job title', min: 2, max: 60 }, qualification: { label: 'Qualification', min: 2, max: 120 },
+  licence_number: { label: 'Licence number', min: 2, max: 40 }, subjects: { label: 'Subjects', min: 2, max: 200 }, home_address: { label: 'Home address', min: 3, max: 200 },
+  emergency_name: { label: 'Emergency contact name', min: 2, max: 120 }, emergency_relationship: { label: 'Relationship', min: 2, max: 40 } };
+
+// The headteacher records a staff member's optional details, whole: a field left empty is cleared. The audit event names the
+// fields that changed, not their values.
+export function saveMemberDetails(client: PoolClient, actor: Actor, membershipId: string, body: StaffDetailsDto) {
+  return command(client, actor, body.operationId, 'staff.details', { membershipId, ...body }, async () => {
+    if (!(await client.query('SELECT 1 FROM staff_list() WHERE membership_id=$1 AND role<>\'guardian\'', [membershipId])).rowCount) throw new NotFoundException('Staff member unavailable');
+    const values = { ...cleanValues(detailRules, { staff_number: body.staffNumber, job_title: body.jobTitle, qualification: body.qualification, licence_number: body.licenceNumber, subjects: body.subjects,
+      home_address: body.homeAddress, emergency_name: body.emergencyName, emergency_relationship: body.emergencyRelationship }),
+      date_joined: clean(body.dateJoined), employment_type: clean(body.employmentType), emergency_phone: cleanPhone(body.emergencyPhone) };
+    needContactName(values);
+    let saved: { version: number; changed: string[] };
+    try { saved = await storeDetails(client, 'staff_details', 'membership_id', actor.schoolId, membershipId, body.version, values, ['date_joined']); }
+    catch (error) { if ((error as { code?: string }).code === '23505') throw new ConflictException('That staff number is already used by someone else'); throw error; }
+    if (saved.changed.length) await audit(client, actor, 'staff.details.updated', membershipId, { fields: saved.changed, version: saved.version });
+    return { version: saved.version };
+  });
 }

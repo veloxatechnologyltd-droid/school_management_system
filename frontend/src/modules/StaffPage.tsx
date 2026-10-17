@@ -1,13 +1,16 @@
 import React, { FormEvent, useCallback, useEffect, useState } from 'react';
 import { request } from '../lib/api';
 import { Card, Dialog, Empty, Icon, PageHeader, Pager, Pill, Stat, Tabs, Tone, when } from '../lib/ui';
-import { ProfileCard, QuickAction, QuickActions, SummaryCard } from '../lib/profile';
+import { DetailGroup, DetailsDialog, ProfileCard, QuickAction, QuickActions, SummaryCard, notRecorded } from '../lib/profile';
 import { localPhone } from '../lib/dates';
 
 type ClassRow = { id: string; classId: string; className: string; level: string; yearName: string; startDate: string; endDate: string; status: 'current' | 'upcoming' | 'finished' | 'ended'; students: number; reason: string; endedReason: string | null };
 type Feed = { items: { id: string; at: string; text: string }[]; total: number; offset: number; limit: number };
+type Details = { version: number; updatedAt: string | null; staffNumber: string | null; jobTitle: string | null; qualification: string | null; licenceNumber: string | null; dateJoined: string | null; employmentType: string | null;
+  subjects: string | null; homeAddress: string | null; emergencyName: string | null; emergencyRelationship: string | null; emergencyPhone: string | null };
 type Staff = {
   today: string;
+  details: Details;
   member: { userId: string; membershipId: string; name: string; login: string; role: string; phone: string | null; revokedAt: string | null; mustChangePassword: boolean };
   classes: ClassRow[];
   summary: { classes: number; students: number; highlights: { label: string; value: number }[]; moneyPesewas: number | null };
@@ -17,6 +20,15 @@ type Staff = {
 type Credentials = { label: string; email: string; temporaryPassword: string };
 type TabId = 'overview' | 'classes' | 'activity';
 
+// The optional details the head records for a staff member; every field may stay empty.
+const staffGroups: DetailGroup[] = [
+  { title: 'Job', fields: [{ key: 'jobTitle', label: 'Job title', maxLength: 60, placeholder: 'Class teacher' }, { key: 'staffNumber', label: 'Staff number', maxLength: 30 },
+    { key: 'employmentType', label: 'Employment type', kind: 'select', options: ['Full time', 'Part time', 'Contract', 'Volunteer'] }, { key: 'dateJoined', label: 'Date joined', kind: 'date' },
+    { key: 'qualification', label: 'Qualification', maxLength: 120, placeholder: 'B.Ed. Basic Education' }, { key: 'licenceNumber', label: 'Teaching licence number', maxLength: 40 },
+    { key: 'subjects', label: 'Subjects taught or duties', maxLength: 200, wide: true }] },
+  { title: 'Contact and emergency', fields: [{ key: 'homeAddress', label: 'Home address', maxLength: 200, wide: true }, { key: 'emergencyName', label: 'Emergency contact name', maxLength: 120 },
+    { key: 'emergencyRelationship', label: 'Relationship', maxLength: 40 }, { key: 'emergencyPhone', label: 'Emergency contact mobile', kind: 'tel', maxLength: 40, placeholder: '024 123 4567' }] },
+];
 const roleNames: Record<string, string> = { teacher: 'Teacher', frontdesk: 'Front desk', accountant: 'Accountant', headteacher: 'Headteacher' };
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 const accraDay = (iso: string) => new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Africa/Accra' });
@@ -42,7 +54,7 @@ function FeedList({ items }: { items: Feed['items'] }) {
 export function StaffPage({ schoolId, csrfToken, role, membershipId }: { schoolId: string; csrfToken: string; role: string; membershipId: string }) {
   const [data, setData] = useState<Staff | null>(null); const [error, setError] = useState(''); const [tab, setTab] = useState<TabId>('overview');
   const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false); const [credentials, setCredentials] = useState<Credentials | null>(null);
-  const [dialog, setDialog] = useState<'phone' | 'remove' | null>(null); const [phone, setPhone] = useState('');
+  const [dialog, setDialog] = useState<'phone' | 'remove' | 'details' | null>(null); const [phone, setPhone] = useState('');
   const [feed, setFeed] = useState<Feed | null>(null); const [offset, setOffset] = useState(0);
   const headers = { 'x-csrf-token': csrfToken };
   const load = useCallback(async () => {
@@ -68,6 +80,12 @@ export function StaffPage({ schoolId, csrfToken, role, membershipId }: { schoolI
   const current = data.classes.filter(c => c.status === 'current');
   const created = data.account.find(a => a.text === 'Sign-in created');
   const phoneLink = m.phone ? <a href={`tel:${m.phone}`}>{localPhone(m.phone)}</a> : 'Not recorded';
+  const d = data.details, contact = d.emergencyName ? `${d.emergencyName}${d.emergencyRelationship ? ` · ${d.emergencyRelationship}` : ''}` : null;
+  const row = (label: string, value?: React.ReactNode, wide = false) => <div key={label} className={wide ? 'wide' : undefined}><dt>{label}</dt><dd>{value || notRecorded}</dd></div>;
+  const saveDetails = async (values: Record<string, string>, operationId: string) => {
+    await request(`/schools/${schoolId}/accounts/${m.membershipId}/details`, { method: 'PUT', headers, body: JSON.stringify({ operationId, version: d.version, ...values }) });
+    setDialog(null); setNotice('Details saved.'); await load();
+  };
 
   const reset = () => void act(async () => {
     const result = await request<{ temporaryPassword: string }>(`/schools/${schoolId}/accounts/${m.userId}/reset-password`, { method: 'POST', headers, body: '{}' });
@@ -83,6 +101,7 @@ export function StaffPage({ schoolId, csrfToken, role, membershipId }: { schoolI
   });
   const actions: QuickAction[] = [
     ...(manage ? [{ icon: 'lock_reset', label: 'Reset password', onClick: reset, disabled: busy }, { icon: 'call', label: m.phone ? 'Change phone number' : 'Add a phone number', onClick: () => { setError(''); setPhone(m.phone ?? ''); setDialog('phone'); }, disabled: busy }] : []),
+    ...(role === 'headteacher' ? [{ icon: 'edit', label: 'Edit details', onClick: () => { setError(''); setNotice(''); setDialog('details'); }, disabled: busy }] : []),
     ...(isTeacher && !m.revokedAt ? [{ icon: 'assignment_ind', label: 'Class assignments', href: '#/teachers/assignments' }] : []),
     ...(manage ? [{ icon: 'person_off', label: 'Remove access', onClick: () => { setError(''); setDialog('remove'); }, disabled: busy, tone: 'danger' as const }] : []),
   ];
@@ -98,6 +117,7 @@ export function StaffPage({ schoolId, csrfToken, role, membershipId }: { schoolI
     {credentials && <div role="status" className="credentials"><strong>{credentials.label}</strong><p>Sign in with: {credentials.email}<br/>Temporary password: <code>{credentials.temporaryPassword}</code></p><p className="muted">Shown once. Share it privately.</p><button type="button" className="secondary" onClick={() => setCredentials(null)}>I have copied it</button></div>}
     <ProfileCard name={m.name} kind={kind} pills={status}
       facts={[{ label: 'Sign-in', value: m.login, wide: true }, { label: 'Phone', value: phoneLink },
+        ...(d.jobTitle ? [{ label: 'Job title', value: d.jobTitle }] : []), ...(d.staffNumber ? [{ label: 'Staff number', value: d.staffNumber }] : []),
         ...(isTeacher ? [{ label: 'Classes now', value: current.length ? current.map(c => c.className).join(', ') : 'None' }, { label: 'Students', value: String(data.summary.students) }] : [{ label: 'Role', value: kind }])]}/>
     <div className="profile-layout">
       <div className="profile-main">
@@ -119,6 +139,20 @@ export function StaffPage({ schoolId, csrfToken, role, membershipId }: { schoolI
               {!current.length ? <p className="muted">Not teaching any class today. Assign one on the Class assignments tab of Teachers.</p>
                 : <ul className="plain-list">{current.map(c => <li key={c.id}><strong>{c.className}</strong><span className="sub">{c.students} student{c.students === 1 ? '' : 's'} · until {day(c.endDate)}</span></li>)}</ul>}
             </Card> : <Card title="What this role does"><p className="muted">{({ frontdesk: 'Records applications and admissions, links parents to students, and releases students at pick-up.', accountant: 'Records payments, bills students and prints receipts.', headteacher: 'Runs the school: people, classes, assessment, reports and settings.' } as Record<string, string>)[m.role] ?? ''}</p></Card>}
+          </div>
+          <div className="cards-2">
+            <Card title="Professional details" action={role === 'headteacher' ? <button type="button" className="secondary small" onClick={() => { setError(''); setNotice(''); setDialog('details'); }}><Icon name="edit"/>Edit</button> : undefined}>
+              <dl className="facts-grid">
+                {row('Job title', d.jobTitle)}{row('Staff number', d.staffNumber)}{row('Employment', d.employmentType)}{row('Date joined', d.dateJoined ? day(d.dateJoined) : null)}
+                {row('Qualification', d.qualification)}{row('Teaching licence', d.licenceNumber)}{row('Subjects or duties', d.subjects, true)}
+              </dl>
+            </Card>
+            <Card title="Contact and emergency" hint="All optional.">
+              <dl className="facts-grid">
+                {row('Home address', d.homeAddress, true)}{row('Emergency contact', contact)}
+                {d.emergencyPhone ? <div><dt>Contact phone</dt><dd><a href={`tel:${d.emergencyPhone}`}>{localPhone(d.emergencyPhone)}</a></dd></div> : row('Contact phone', null)}
+              </dl>
+            </Card>
           </div>
           <Card title="Recent activity" action={data.activity.total > data.activity.items.length ? <button type="button" className="secondary small" onClick={() => setTab('activity')}>View all</button> : undefined}>
             {!data.activity.items.length ? <Empty title="Nothing recorded yet" hint="What this person does in the app appears here."/> : <FeedList items={data.activity.items}/>}
@@ -146,7 +180,9 @@ export function StaffPage({ schoolId, csrfToken, role, membershipId }: { schoolI
           { icon: 'badge', label: 'Role', value: kind },
           { icon: 'mail', label: 'Sign-in', value: m.login },
           { icon: 'call', label: 'Phone', value: phoneLink },
+          ...(d.jobTitle ? [{ icon: 'work', label: 'Job title', value: d.jobTitle }] : []),
           { icon: 'verified_user', label: 'Status', value: statusLabel },
+          ...(d.dateJoined ? [{ icon: 'event', label: 'Joined', value: day(d.dateJoined) }] : []),
           ...(isTeacher ? [{ icon: 'school', label: 'Classes now', value: String(data.summary.classes) }, { icon: 'groups', label: 'Students', value: String(data.summary.students) }] : []),
           ...(created ? [{ icon: 'calendar_month', label: 'Sign-in created', value: day(created.at) }] : []),
         ]}/>
@@ -161,6 +197,9 @@ export function StaffPage({ schoolId, csrfToken, role, membershipId }: { schoolI
         <div className="actions"><button disabled={busy}>Save phone number</button><button type="button" className="secondary" onClick={() => setDialog(null)}>Cancel</button></div>
       </form>
     </Dialog>}
+    {dialog === 'details' && <DetailsDialog title={`Details for ${m.name}`} intro="Everything here is optional. A field left empty is cleared." groups={staffGroups} onSave={saveDetails} onClose={() => setDialog(null)}
+      values={{ jobTitle: d.jobTitle, staffNumber: d.staffNumber, employmentType: d.employmentType, dateJoined: d.dateJoined, qualification: d.qualification, licenceNumber: d.licenceNumber, subjects: d.subjects,
+        homeAddress: d.homeAddress, emergencyName: d.emergencyName, emergencyRelationship: d.emergencyRelationship, emergencyPhone: d.emergencyPhone ? localPhone(d.emergencyPhone) : '' }}/>}
     {dialog === 'remove' && <Dialog title={`Remove ${m.name}'s access`} onClose={() => setDialog(null)}>
       {error && <p role="alert">{error}</p>}
       <p>{m.name} will no longer be able to sign in to this school. What they recorded stays as it was.</p>

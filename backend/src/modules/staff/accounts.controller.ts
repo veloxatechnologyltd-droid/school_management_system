@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, DefaultValuePipe, Get, NotFoundException, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, DefaultValuePipe, Get, NotFoundException, Param, ParseIntPipe, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { IsIn, IsString, MaxLength, MinLength } from 'class-validator';
 import { Request } from 'express';
 import { randomBytes } from 'node:crypto';
@@ -8,7 +8,8 @@ import { audit } from '../../core/commands';
 import { normalizeGhanaPhone } from '../notices/sms.provider';
 import { PhoneDto } from '../notices/notices.dto';
 import { hashPassword } from '../identity/identity.controller';
-import { memberActivity, memberProfile } from './profile';
+import { memberActivity, memberProfile, saveMemberDetails } from './profile';
+import { StaffDetailsDto } from './details.dto';
 
 class NewAccountDto {
   @IsString() @MinLength(2) @MaxLength(120) name!: string;
@@ -53,6 +54,10 @@ export class AccountsController {
       if (!(await client.query('SELECT 1 FROM staff_list() WHERE membership_id=$1 AND role<>\'guardian\'',[membershipId])).rowCount) throw new NotFoundException('Staff member unavailable');
       return memberActivity(client,schoolId,membershipId,Math.max(0,offset),25);
     });
+  }
+  @Put(':membershipId/details')
+  details(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Param('membershipId',new ParseUUIDPipe()) membershipId: string,@Body() body: StaffDetailsDto) {
+    return this.run(req,schoolId,true,(client,actor) => saveMemberDetails(client,actor,membershipId,body));
   }
   @Post()
   create(@Req() req: Request,@Param('schoolId',new ParseUUIDPipe()) schoolId: string,@Body() body: NewAccountDto) {

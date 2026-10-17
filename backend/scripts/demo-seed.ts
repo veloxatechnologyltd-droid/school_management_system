@@ -6,6 +6,7 @@ import { localConfig } from '../src/core/database';
 import { demoQuestionSets, playDemoWeek } from './demo-practice';
 import { playApplications } from './demo-admissions';
 import { playTimetable } from './demo-timetable';
+import { playDetails } from './demo-details';
 
 // Loads a realistic Ghanaian basic school into the local demo database (LOCAL_DB_NAME=school_demo) for client
 // demonstrations. Accounts and the school row are inserted directly; everything else goes through the running API
@@ -181,6 +182,8 @@ async function main() {
       learners.push({ id: a.learner_id, name: p.name, classIndex: p.classIndex, enrolmentId: detail.enrolments[0]?.id, guardian: guardians[p.family], ability: clamp(normal(63, 13), 30, 96), chronic: chance(0.035) });
     });
     learners.sort((a, b) => a.classIndex - b.classIndex || a.name.localeCompare(b.name));
+    step('Optional details: addresses, emergency contacts, a few health notes, staff job details');
+    await playDetails(head, learners.map(l => ({ id: l.id, name: l.name, guardian: l.guardian?.name })), staff.map(s => ({ membershipId: membership[s.key]!, name: s.name, role: s.role })));
     const parentChildren = learners.filter(l => l.guardian?.email === `parent@${DOMAIN}`);
     if (parentChildren[0]) parentChildren[0].chronic = false;
     // A few new applications still waiting for a decision, so the Applications tab has work in it.

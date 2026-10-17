@@ -580,3 +580,7 @@ table.compact th,table.compact td{padding:10px 12px}table.compact th{letter-spac
 .tt-print{display:none}
 @page timetable{size:A4 landscape;margin:10mm}
 @media print{.tt-print{display:block}.tt-print .tt-page{page:timetable;break-after:page}.tt-print .tt-page:last-child{break-after:auto}.tt-print .tt-grid{min-width:0;border-spacing:3px}.tt-print .tt-grid th,.tt-print .tt-grid td{border:0;height:auto;padding:0}.tt-print .tt-cell{min-height:44px;padding:4px 6px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.tt-print .tt-cell strong{font-size:12px}.tt-print .doc-head{margin-bottom:8px}}
+
+.not-recorded{color:var(--ink-3);font-weight:500}
+.details-group{border:1px solid var(--line);border-radius:12px;padding:6px 16px 4px;margin:0 0 14px;min-width:0}.details-group legend{font-weight:700;font-size:14px;padding:0 6px}.details-group>p{margin:4px 0 8px}
+.details-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 16px}.details-grid .wide{grid-column:1/-1}

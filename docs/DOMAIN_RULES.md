@@ -8,9 +8,11 @@ Admissions: enquiry/application → review → offered/waitlisted/declined → a
 
 Keep multiple guardian links with verified academic/billing/pickup/contact rights. Do not require national identity documents or sensitive demographic fields without a documented purpose. Archive/transfer/withdraw learners through effective-dated records. Promotion previews next-year enrolments and preserves previous classes/reports; never increment a class number in place.
 
+Student details (nationality, home address, previous school, emergency contact, blood group, health notes, religion) are optional and only the headteacher records them, saved whole with a version check. Religion, blood group and health notes are sensitive: never required, recorded only if the family agrees, and never sent to AI. Religion, nationality and address are headteacher-only; a teacher sees previous school, blood group, health notes and emergency contact for students in a class they teach today. The audit event names the fields that changed, never their values, and the printed student record leaves out religion and health.
+
 Nursery/KG observations capture date, educator, reviewed indicator/rubric and evidence. Report narrative progress, not a universal exam rank. Nursery care/development expectations require specialist review. Authorized collection records the verified collector, time and releasing staff; unexpected pickup goes to designated staff. Payment authority is not collection authority.
 
-**Acceptance:** duplicate import/promotion replay creates no duplicate enrolment; a mid-term transfer preserves history; revoked/restricted guardians lose access; unauthorized pickup is blocked; a KG report has appropriate observations without inherited A1–F9 bands.
+**Acceptance:** duplicate import/promotion replay creates no duplicate enrolment; a mid-term transfer preserves history; revoked/restricted guardians lose access; unauthorized pickup is blocked; a teacher never receives religion or home address and cannot edit details, and a stale save is refused; a KG report has appropriate observations without inherited A1–F9 bands.
 
 ## 2. Attendance and follow-up
 
@@ -65,7 +67,7 @@ Messages: draft → approved → queued → processing → delivered/failed/unkn
 
 Provider-accepted is not delivered; delivered is not read. Use approved templates, quiet hours, contact preferences and applicable opt-outs. Automation requires explicit bounded configuration; AI cannot enable sending. Do not assume WhatsApp access or current provider rules. Direct government/WAEC integrations require authorized specifications; start with reviewed exports only when formats are confirmed.
 
-Staff employment records are separate from login roles. Teaching assignments are effective-dated. Timetable draft → conflict validation → published version; reject overlapping teacher/class/room bookings. Start with manual scheduling, not the demo's solver.
+Staff employment records are separate from login roles. Optional staff details (job title, staff number, qualification, teaching licence, date joined, employment type, subjects, address, emergency contact) are recorded by the headteacher only; a staff number is unique within a school. Teaching assignments are effective-dated. Timetable draft → conflict validation → published version; reject overlapping teacher/class/room bookings. Start with manual scheduling, not the demo's solver.
 
 **Acceptance:** recipient rights revoked while queued prevent delivery; stale notices are reviewed/cancelled; retries do not blindly resend uncertain operations; teacher/class/room conflicts are visible; no unauthorized staff detail leaks through search or exports.
 
